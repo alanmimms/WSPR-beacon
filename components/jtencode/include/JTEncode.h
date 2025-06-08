@@ -23,11 +23,6 @@
 
 #ifndef JTENCODE_H
 #define JTENCODE_H
-
-#include "int.h"
-#include "rs_common.h"
-#include "nhash.h"
-
 #include <stdint.h>
 
 
@@ -35,7 +30,7 @@ template<unsigned SPACING, auto DELAY, unsigned long DEFAULT_FREQ, unsigned MSGS
 class JTEncoder {
 public:
   static inline const uint16_t spacing = SPACING;
-  static inline const typeof(DELAY) delay = DELAY;
+  static inline const auto delay = DELAY;
 
   JTEncoder(uint32_t txFreq = DEFAULT_FREQ)
     : freq(txFreq)
@@ -49,6 +44,9 @@ protected:
   virtual void bitPacking(uint8_t *bitsP);
   virtual void interleave(uint8_t *s);
   uint8_t txBuf[MSGSIZE];
+  int8_t power;
+  char  callsign[12];
+  char locator[7];
 };
 
 
