@@ -1,116 +1,51 @@
-/*
- * JTEncode.h - JT65/JT9/WSPR/FSQ encoder library for ESP32
- *
- * Copyright (C) 2015-2021 Jason Milldrum <milldrum@gmail.com>
- *
- * Based on the algorithms presented in the WSJT software suite.
- * Thanks to Andy Talbot G4JNT for the whitepaper on the WSPR encoding
- * process that helped me to understand all of this.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#ifndef JT_ENCODE_H
+#define JT_ENCODE_H
 
-#ifndef JTENCODE_H
-#define JTENCODE_H
 #include <stdint.h>
 
-
-template<unsigned SPACING, auto DELAY, unsigned long DEFAULT_FREQ, unsigned MSGSIZE>
+/**
+ * @brief Abstract base class for all JT/WSPR/FSQ encoding modes.
+ * @tparam TONE_SPACING Tone spacing in Hz.
+ * @tparam SYMBOL_PERIOD_MS Symbol period in milliseconds.
+ * @tparam DEFAULT_FREQ Default transmission frequency in Hz.
+ * @tparam TX_BUFFER_SIZE The size of the final symbol buffer.
+ */
+template<uint16_t TONE_SPACING, uint16_t SYMBOL_PERIOD_MS, uint32_t DEFAULT_FREQ, int TX_BUFFER_SIZE>
 class JTEncoder {
 public:
-  static inline const uint16_t spacing = SPACING;
-  static inline const auto delay = DELAY;
+  // Mode-specific constants
+  static constexpr uint16_t ToneSpacing = TONE_SPACING;
+  static constexpr uint16_t SymbolPeriod = SYMBOL_PERIOD_MS;
+  static constexpr int TxBufferSize = TX_BUFFER_SIZE;
+  
+  // Public member variables for simple access
+  uint32_t txFreq;
+  uint8_t symbols[TxBufferSize];
 
-  JTEncoder(uint32_t txFreq = DEFAULT_FREQ)
-    : freq(txFreq)
-  {}
-
-  virtual void encode() = 0;
-  uint32_t freq;
+  explicit JTEncoder(uint32_t frequency = DEFAULT_FREQ) : txFreq(frequency) {}
+  virtual ~JTEncoder() = default;
 
 protected:
-  virtual void mergeSyncVector(const uint8_t *g) = 0;
-  virtual void bitPacking(uint8_t *bitsP);
-  virtual void interleave(uint8_t *s);
-  uint8_t txBuf[MSGSIZE];
-  int8_t power;
-  char  callsign[12];
-  char locator[7];
+  // Internal buffer for the bit-packing stage
+  uint8_t packedData[20];
 };
 
+// --- WSPR Encoder ---
 
-class WSPREncoder: JTEncoder<146, 683, 14097200UL, 162> {
+class WSPREncoder : public JTEncoder<146, 683, 14097000UL + 1500, 162> {
 public:
-  virtual void encode(const char *callP, const char *locP, const uint8_t dbm);
-
-protected:
-  void messagePrep(const char *callP, const char *locP, const uint8_t dbm);
-};
-
-/*
-class JTEncoder<174, 576, 14078700UL, 85, 206>: JT9Encoder;
-class JTEncoder<269, 371, 14078300UL, 126>: JT65Encoder;
-class JTEncoder<437, 229, 14078500UL, 207, 206>: JT4Encoder;
-class JTEncoder<625, 159, 14075000UL, 79, 174>: FT8Encoder;
-class JTEncoder<879, std::tuple(500, 333, 222, 167), 14078300UL, 0>: FSQEncoder;
-
-  void jt65_encode(const char * msg, uint8_t * symbols);
-  void jt9_encode(const char * message, uint8_t * symbols);
-  void jt4_encode(const char * message, uint8_t * symbols);
-  void wspr_encode(const char * call, const char * loc, const int8_t dbm, uint8_t * symbols);
-  void fsq_encode(const char * from_call, const char * message, uint8_t * symbols);
-  void fsq_dir_encode(const char * from_call, const char * to_call,
-		      const char cmd, const char * message, uint8_t * symbols);
-  void ft8_encode(const char * message, uint8_t * symbols);
-  void latlon_to_grid(float lat, float lon, char* ret_grid);
-
+  using JTEncoder::JTEncoder; // Inherit constructor
+  void encode(const char* callsign, const char* locator, int8_t powerDbm);
 
 private:
-  uint8_t jt_code(char);
-  uint8_t ft_code(char);
-  uint8_t wspr_code(char);
-  uint8_t gray_code(uint8_t);
-  int8_t hex2int(char);
-  void jt_message_prep(char *);
-  void ft_message_prep(char *);
-  void wspr_message_prep(char *, char *, int8_t);
-  void jt65_bit_packing(char *, uint8_t *);
-  void jt9_bit_packing(char *, uint8_t *);
-  void wspr_bit_packing(uint8_t *);
-  void ft8_bit_packing(char*, uint8_t*);
-  void jt65_interleave(uint8_t *);
-  void jt9_interleave(uint8_t *);
-  void wspr_interleave(uint8_t *);
-  void jt9_packbits(uint8_t *, uint8_t *);
-  void jt_gray_code(uint8_t *, uint8_t);
-  void ft8_encode(uint8_t*, uint8_t*);
-  void jt65_merge_sync_vector(uint8_t *, uint8_t *);
-  void jt9_merge_sync_vector(uint8_t *, uint8_t *);
-  void jt4_merge_sync_vector(uint8_t *, uint8_t *);
-  void wspr_merge_sync_vector(uint8_t *, uint8_t *);
-  void ft8_merge_sync_vector(uint8_t*, uint8_t*);
-  void convolve(uint8_t *, uint8_t *, uint8_t, uint8_t);
-  void rs_encode(uint8_t *, uint8_t *);
-  void encode_rs_int(void *,data_t *, data_t *);
-  void free_rs_int(void *);
-  void * init_rs_int(int, int, int, int, int, int);
-  uint8_t crc8(const char *);
-  void pad_callsign(char *);
-  void * rs_inst;
+  void packBits();
+  void convolveSymbols();
+  void interleave();
+
+  // WSPR-specific data stored for the encoding process
   char callsign[12];
   char locator[7];
-  int8_t power;
+  int8_t powerDbm;
 };
-*/
-#endif
+
+#endif // JT_ENCODE_H
