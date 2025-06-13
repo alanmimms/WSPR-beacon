@@ -3,3 +3,4 @@
 secrets.h
 sdkconfig.old
 build/
+sdkconfig
