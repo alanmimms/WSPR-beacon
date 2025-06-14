@@ -1,4 +1,4 @@
-#include "RSEncode.h"
+#include "RSEncode.h" // Include the RSEncode class header
 #include <iostream>
 #include <vector>
 #include <string>
@@ -19,16 +19,14 @@ void printVector(const std::string& label, const std::vector<uint8_t>& vec) {
 }
 
 int main() {
-  std::cout << "Starting RSEncode Tests..." << std::endl;
+  std::cout << "Starting RSEncode Class Tests..." << std::endl;
 
   // --- Test Case 1: Basic RS(7,3) Encoding (symsize=3, nn=7, nroots=4) ---
-  // Parameters: symsize=3, gfpoly=0x7 -> CORRECTED TO 0xB, fcr=1, prim=1, nroots=4, pad=0
+  // Parameters: symsize=3, gfpoly=0xB, fcr=1, prim=1, nroots=4, pad=0
   // Message length (nn - nroots - pad) = 7 - 4 - 0 = 3 data symbols
   std::cout << "\n--- Test Case 1: Basic RS(7,3) Encoding ---" << std::endl;
   try {
-    // Corrected gfpoly from 0x7 to 0xB (x^3 + x + 1 is primitive for GF(8))
-    RSEncode encode1(3, 0xB, 1, 1, 4, 0); // RS(7,3) -> 3 data, 4 parity
-
+    RSEncode encode1(3, 0xB, 1, 1, 4, 0); // Corrected gfpoly to 0xB
     std::vector<uint8_t> data1 = {0x01, 0x02, 0x03}; // Exactly 3 data symbols
     std::vector<uint8_t> parity1; // Will be resized by encode
 
@@ -38,8 +36,7 @@ int main() {
     printVector("Generated Parity", parity1);
     std::cout << "Parity size: " << parity1.size() << std::endl;
     // Expected parity values for GF(8) RS(7,3) with these parameters can be verified.
-    // E.g., for {01 02 03}, parity might be {31 01 04 77} with Phil Karn's example values
-    // (values can differ based on specific GF implementation and generator polynomial derivation).
+    // (Values can differ based on specific GF implementation and generator polynomial derivation).
 
   } catch (const std::exception& e) {
     std::cerr << "Test Case 1 failed: " << e.what() << std::endl;
@@ -49,8 +46,7 @@ int main() {
   // --- Test Case 2: Encoding with empty data ---
   std::cout << "\n--- Test Case 2: Encoding with Empty Data ---" << std::endl;
   try {
-    // Corrected gfpoly from 0x7 to 0xB
-    RSEncode encode2(3, 0xB, 1, 1, 4, 0);
+    RSEncode encode2(3, 0xB, 1, 1, 4, 0); // Corrected gfpoly to 0xB
     std::vector<uint8_t> emptyData = {};
     std::vector<uint8_t> parity2;
 
@@ -69,13 +65,12 @@ int main() {
 
   // --- Test Case 3: Encoding with padded block (RS(15,10) with 2 pad) ---
   // symsize=4 (2^4-1 = 15 symbols max)
-  // gfpoly=0x13 (x^4 + x + 1) -> This is a correct primitive polynomial for GF(16)
+  // gfpoly=0x13 (x^4 + x + 1)
   // nroots=5 (15-10=5) -> 10 data symbols, 5 parity symbols
   // pad=2 -> actual data symbols = 15 - 5 - 2 = 8
   std::cout << "\n--- Test Case 3: Encoding with Padding (RS(15,8) data, 5 parity) ---" << std::endl;
   try {
     RSEncode encode3(4, 0x13, 0, 1, 5, 2); // Parameters for GF(16)
-
     std::vector<uint8_t> data3 = {0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8}; // 8 data symbols
     std::vector<uint8_t> parity3;
 
@@ -94,8 +89,7 @@ int main() {
   // --- Test Case 4: Data vector too long (should still encode based on num_data_symbols) ---
   std::cout << "\n--- Test Case 4: Data Vector Too Long (truncation check) ---" << std::endl;
   try {
-    // Corrected gfpoly from 0x7 to 0xB
-    RSEncode encode4(3, 0xB, 1, 1, 4, 0); // Expects 3 data symbols
+    RSEncode encode4(3, 0xB, 1, 1, 4, 0); // Corrected gfpoly to 0xB
     std::vector<uint8_t> longData = {0x10, 0x11, 0x12, 0x13, 0x14}; // 5 symbols, only first 3 should be used
     std::vector<uint8_t> parity4;
 
@@ -103,7 +97,6 @@ int main() {
 
     printVector("Input Data (full)", longData);
     printVector("Generated Parity", parity4);
-    // Accessing nn, nroots, pad using getter methods
     std::cout << "Note: Only first " << (encode4.getNN() - encode4.getNRoots() - encode4.getPad()) << " data symbols should have been used for encoding." << std::endl;
 
   } catch (const std::exception& e) {
@@ -114,8 +107,7 @@ int main() {
   // --- Test Case 5: Data vector too short (should encode, padding with implied zeros) ---
   std::cout << "\n--- Test Case 5: Data Vector Too Short ---" << std::endl;
   try {
-    // Corrected gfpoly from 0x7 to 0xB
-    RSEncode encode5(3, 0xB, 1, 1, 4, 0); // Expects 3 data symbols
+    RSEncode encode5(3, 0xB, 1, 1, 4, 0); // Corrected gfpoly to 0xB
     std::vector<uint8_t> shortData = {0x0A}; // Only 1 symbol
     std::vector<uint8_t> parity5;
 
@@ -150,10 +142,8 @@ int main() {
     std::cout << "Caught expected exception: " << e.what() << std::endl;
   }
   // Test non-primitive polynomial (now using 0x7, which is NOT primitive for symsize 3)
-  // For symsize 3, GF(8), 0x7 is x^3 + x^2 + x + 1, which is reducible (e.g., (x+1)(x^2+1)).
-  // This should now correctly throw.
+  std::cout << "  Testing non-primitive gfpoly (0x7 for symsize 3): ";
   try {
-    std::cout << "  Testing non-primitive gfpoly (0x7 for symsize 3): ";
     RSEncode invalidEncode(3, 0x7, 1, 1, 4, 0); // This should now correctly throw
     std::cout << "ERROR: Expected exception for non-primitive polynomial, but none thrown." << std::endl;
   } catch (const std::runtime_error& e) {
