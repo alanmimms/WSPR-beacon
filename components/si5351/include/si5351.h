@@ -5,7 +5,7 @@
 
 class Si5351 {
 public:
-    // --- Public Nested Types ---
+    // --- Public Nested Types for clarity ---
     enum class PLL {
         A,
         B
@@ -23,10 +23,10 @@ public:
     };
 
     enum class DriveStrength {
-        _2MA = 0x00, // ~2.2 dBm
-        _4MA = 0x01, // ~7.5 dBm
-        _6MA = 0x02, // ~9.5 dBm
-        _8MA = 0x03, // ~10.7 dBm
+        MA_2 = 0x00, // ~2.2 dBm
+        MA_4 = 0x01, // ~7.5 dBm
+        MA_6 = 0x02, // ~9.5 dBm
+        MA_8 = 0x03, // ~10.7 dBm
     };
 
     struct PLLConfig {
@@ -43,7 +43,7 @@ public:
         RDiv rdiv;
     };
 
-    // --- Constructor ---
+    // --- Constructor & Destructor ---
     explicit Si5351(int32_t correction = 0, uint8_t sdaPin = 21, uint8_t sclPin = 22);
     ~Si5351();
 
@@ -55,10 +55,10 @@ public:
     void setupCLK0(int32_t fclk, DriveStrength driveStrength);
     void setupCLK2(int32_t fclk, DriveStrength driveStrength);
     void enableOutputs(uint8_t enabled);
-    void calc(int32_t fclk, PLLConfig* pllConf, OutputConfig* outConf);
-    void calcIQ(int32_t fclk, PLLConfig* pllConf, OutputConfig* outConf);
-    void setupPLL(PLL pll, PLLConfig* conf);
-    int setupOutput(uint8_t output, PLL pllSource, DriveStrength driveStrength, OutputConfig* conf, uint8_t phaseOffset);
+    void calc(int32_t fclk, PLLConfig& pllConf, OutputConfig& outConf);
+    void calcIQ(int32_t fclk, PLLConfig& pllConf, OutputConfig& outConf);
+    void setupPLL(PLL pll, const PLLConfig& conf);
+    int setupOutput(uint8_t output, PLL pllSource, DriveStrength driveStrength, const OutputConfig& conf, uint8_t phaseOffset);
 
 private:
     // --- Private Methods ---
