@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.16)
 project(JtEncodeTests CXX)
 
 # Add the parent directory (components/jtencode) to include paths,
-# as it contains RSEncode.h, RSEncode.cpp, jtencode_util.h, and jtencode_util.cpp.
+# as it contains RSEncode.h, RSEncode.cpp, jtencode-util.h, and jtencode-util.cpp.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 
@@ -39,7 +39,7 @@ add_executable(test-rsencode
 set(JT_ENCODE_TEST_MAIN_SRCS "jtencode-test-main.cpp")
 
 # Define the source files for the jtCode utility.
-# Changed from jtencode_util.cpp to jtencode-util.cpp
+# Changed from jtencode-util.cpp to jtencode-util.cpp
 set(JT_CODE_UTIL_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/../jtencode-util.cpp")
 
 # Include RSEncode.cpp as a source for this executable, as you anticipate

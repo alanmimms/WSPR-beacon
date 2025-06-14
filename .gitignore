@@ -3,4 +3,4 @@
 secrets.h
 sdkconfig.old
 build/
-sdkconfig
+managed_components/

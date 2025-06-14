@@ -1,24 +1,24 @@
 // vim: set ai et ts=4 sw=4:
 
-#include <si5351.h>
+#include "si5351.h"
 #include "sdkconfig.h"
+#include "freertos/FreeRTOS.h"
 #include "driver/i2c_master.h"
 
-// Private procedures.
-static void si5351WriteBulk(uint8_t baseaddr,
-			    int32_t P1, int32_t P2, int32_t P3,
-			    uint8_t divBy4, si5351RDiv_t rdiv);
+// Hardware Defines - change these to match your hardware setup
+#define I2C_PORT        I2C_NUM_0
+#define I2C_MASTER_SDA  (gpio_num_t)21
+#define I2C_MASTER_SCL  (gpio_num_t)22
+
+// Private procedures
 static uint8_t si5351Write(uint8_t reg, uint8_t data);
+static void si5351WriteBulk(uint8_t baseaddr, int32_t P1, int32_t P2, int32_t P3, uint8_t divBy4, si5351RDiv_t rdiv);
 
 
 // See http://www.silabs.com/Support%20Documents/TechnicalDocs/AN619.pdf
 enum {
     SI5351_REGISTER_0_DEVICE_STATUS                       = 0,
-    SI5351_REGISTER_1_INTERRUPT_STATUS_STICKY             = 1,
-    SI5351_REGISTER_2_INTERRUPT_STATUS_MASK               = 2,
     SI5351_REGISTER_3_OUTPUT_ENABLE_CONTROL               = 3,
-    SI5351_REGISTER_9_OEB_PIN_ENABLE_CONTROL              = 9,
-    SI5351_REGISTER_15_PLL_INPUT_SOURCE                   = 15,
     SI5351_REGISTER_16_CLK0_CONTROL                       = 16,
     SI5351_REGISTER_17_CLK1_CONTROL                       = 17,
     SI5351_REGISTER_18_CLK2_CONTROL                       = 18,
@@ -27,65 +27,12 @@ enum {
     SI5351_REGISTER_21_CLK5_CONTROL                       = 21,
     SI5351_REGISTER_22_CLK6_CONTROL                       = 22,
     SI5351_REGISTER_23_CLK7_CONTROL                       = 23,
-    SI5351_REGISTER_24_CLK3_0_DISABLE_STATE               = 24,
-    SI5351_REGISTER_25_CLK7_4_DISABLE_STATE               = 25,
     SI5351_REGISTER_42_MULTISYNTH0_PARAMETERS_1           = 42,
-    SI5351_REGISTER_43_MULTISYNTH0_PARAMETERS_2           = 43,
-    SI5351_REGISTER_44_MULTISYNTH0_PARAMETERS_3           = 44,
-    SI5351_REGISTER_45_MULTISYNTH0_PARAMETERS_4           = 45,
-    SI5351_REGISTER_46_MULTISYNTH0_PARAMETERS_5           = 46,
-    SI5351_REGISTER_47_MULTISYNTH0_PARAMETERS_6           = 47,
-    SI5351_REGISTER_48_MULTISYNTH0_PARAMETERS_7           = 48,
-    SI5351_REGISTER_49_MULTISYNTH0_PARAMETERS_8           = 49,
     SI5351_REGISTER_50_MULTISYNTH1_PARAMETERS_1           = 50,
-    SI5351_REGISTER_51_MULTISYNTH1_PARAMETERS_2           = 51,
-    SI5351_REGISTER_52_MULTISYNTH1_PARAMETERS_3           = 52,
-    SI5351_REGISTER_53_MULTISYNTH1_PARAMETERS_4           = 53,
-    SI5351_REGISTER_54_MULTISYNTH1_PARAMETERS_5           = 54,
-    SI5351_REGISTER_55_MULTISYNTH1_PARAMETERS_6           = 55,
-    SI5351_REGISTER_56_MULTISYNTH1_PARAMETERS_7           = 56,
-    SI5351_REGISTER_57_MULTISYNTH1_PARAMETERS_8           = 57,
     SI5351_REGISTER_58_MULTISYNTH2_PARAMETERS_1           = 58,
-    SI5351_REGISTER_59_MULTISYNTH2_PARAMETERS_2           = 59,
-    SI5351_REGISTER_60_MULTISYNTH2_PARAMETERS_3           = 60,
-    SI5351_REGISTER_61_MULTISYNTH2_PARAMETERS_4           = 61,
-    SI5351_REGISTER_62_MULTISYNTH2_PARAMETERS_5           = 62,
-    SI5351_REGISTER_63_MULTISYNTH2_PARAMETERS_6           = 63,
-    SI5351_REGISTER_64_MULTISYNTH2_PARAMETERS_7           = 64,
-    SI5351_REGISTER_65_MULTISYNTH2_PARAMETERS_8           = 65,
-    SI5351_REGISTER_66_MULTISYNTH3_PARAMETERS_1           = 66,
-    SI5351_REGISTER_67_MULTISYNTH3_PARAMETERS_2           = 67,
-    SI5351_REGISTER_68_MULTISYNTH3_PARAMETERS_3           = 68,
-    SI5351_REGISTER_69_MULTISYNTH3_PARAMETERS_4           = 69,
-    SI5351_REGISTER_70_MULTISYNTH3_PARAMETERS_5           = 70,
-    SI5351_REGISTER_71_MULTISYNTH3_PARAMETERS_6           = 71,
-    SI5351_REGISTER_72_MULTISYNTH3_PARAMETERS_7           = 72,
-    SI5351_REGISTER_73_MULTISYNTH3_PARAMETERS_8           = 73,
-    SI5351_REGISTER_74_MULTISYNTH4_PARAMETERS_1           = 74,
-    SI5351_REGISTER_75_MULTISYNTH4_PARAMETERS_2           = 75,
-    SI5351_REGISTER_76_MULTISYNTH4_PARAMETERS_3           = 76,
-    SI5351_REGISTER_77_MULTISYNTH4_PARAMETERS_4           = 77,
-    SI5351_REGISTER_78_MULTISYNTH4_PARAMETERS_5           = 78,
-    SI5351_REGISTER_79_MULTISYNTH4_PARAMETERS_6           = 79,
-    SI5351_REGISTER_80_MULTISYNTH4_PARAMETERS_7           = 80,
-    SI5351_REGISTER_81_MULTISYNTH4_PARAMETERS_8           = 81,
-    SI5351_REGISTER_82_MULTISYNTH5_PARAMETERS_1           = 82,
-    SI5351_REGISTER_83_MULTISYNTH5_PARAMETERS_2           = 83,
-    SI5351_REGISTER_84_MULTISYNTH5_PARAMETERS_3           = 84,
-    SI5351_REGISTER_85_MULTISYNTH5_PARAMETERS_4           = 85,
-    SI5351_REGISTER_86_MULTISYNTH5_PARAMETERS_5           = 86,
-    SI5351_REGISTER_87_MULTISYNTH5_PARAMETERS_6           = 87,
-    SI5351_REGISTER_88_MULTISYNTH5_PARAMETERS_7           = 88,
-    SI5351_REGISTER_89_MULTISYNTH5_PARAMETERS_8           = 89,
-    SI5351_REGISTER_90_MULTISYNTH6_PARAMETERS             = 90,
-    SI5351_REGISTER_91_MULTISYNTH7_PARAMETERS             = 91,
-    SI5351_REGISTER_92_CLOCK_6_7_OUTPUT_DIVIDER           = 92,
     SI5351_REGISTER_165_CLK0_INITIAL_PHASE_OFFSET         = 165,
     SI5351_REGISTER_166_CLK1_INITIAL_PHASE_OFFSET         = 166,
     SI5351_REGISTER_167_CLK2_INITIAL_PHASE_OFFSET         = 167,
-    SI5351_REGISTER_168_CLK3_INITIAL_PHASE_OFFSET         = 168,
-    SI5351_REGISTER_169_CLK4_INITIAL_PHASE_OFFSET         = 169,
-    SI5351_REGISTER_170_CLK5_INITIAL_PHASE_OFFSET         = 170,
     SI5351_REGISTER_177_PLL_RESET                         = 177,
     SI5351_REGISTER_183_CRYSTAL_INTERNAL_LOAD_CAPACITANCE = 183
 };
@@ -98,99 +45,74 @@ typedef enum {
 
 static int32_t si5351Correction;
 
-static i2c_master_bus_handle busH;
-static i2c_master_dev_handle_t si5351H;
+// Use modern ESP-IDF I2C driver handles
+static i2c_master_bus_handle_t busHandle;
+static i2c_master_dev_handle_t si5351Handle;
 
 
-static void i2cInit(void) {
-  i2c_master_bus_config_t busCfg = {
-    .clk_source = I2C_CLK_SRC_DEFAULT,
+static void i2cInit() {
+  i2c_master_bus_config_t busConfig = {
     .i2c_port = I2C_PORT,
     .sda_io_num = I2C_MASTER_SDA,
-    .sda_pullup_en = true,
     .scl_io_num = I2C_MASTER_SCL,
-    .scl_pullup_en = true,
-    .master.clk_speed = 100*1000,
+    .clk_source = I2C_CLK_SRC_DEFAULT,
     .glitch_ignore_cnt = 7,
+    .intr_priority = 0,
+    .trans_queue_depth = 0,
+    .flags = {
+        .enable_internal_pullup = true
+    }
   };
 
-  ESP_ERROR_CHECK(i2c_new_master_bus(&busCfg, &busH));
+  ESP_ERROR_CHECK(i2c_new_master_bus(&busConfig, &busHandle));
 
-  i2c_device_config_t devCfg = {
-    .scl_speed_hz = 100*1000,
+  i2c_device_config_t devConfig = {
+    .dev_addr_length = I2C_ADDR_BIT_LEN_7,
     .device_address = SI5351_ADDRESS,
+    .scl_speed_hz = 100000,
   };
   
-  ESP_ERROR_CHECK(i2c_master_bus_add_device(busH, &devCfg, &si5351H));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device(busHandle, &devConfig, &si5351Handle));
 }
 
 
-/**
- * @brief Initializes Si5351. Call this function before doing anything else.
- * Allows to use only CLK0 and CLK2.
- * 
- * @param correction is the difference of actual frequency an desired frequency @ 100 MHz.
- * It can be measured at lower frequencies and scaled linearly.
- * E.g. if you get 10_000_097 Hz instead of 10_000_000 Hz, `correction` is 97*10 = 970
- */
 void si5351_Init(int32_t correction) {
     i2cInit();
 
     si5351Correction = correction;
 
-    // Disable all outputs by setting CLKx_DIS high
-    si5351_write(SI5351_REGISTER_3_OUTPUT_ENABLE_CONTROL, 0xFF);
+    si5351Write(SI5351_REGISTER_3_OUTPUT_ENABLE_CONTROL, 0xFF);
 
-    // Power down all output drivers
-    si5351_write(SI5351_REGISTER_16_CLK0_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_17_CLK1_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_18_CLK2_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_19_CLK3_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_20_CLK4_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_21_CLK5_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_22_CLK6_CONTROL, 0x80);
-    si5351_write(SI5351_REGISTER_23_CLK7_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_16_CLK0_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_17_CLK1_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_18_CLK2_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_19_CLK3_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_20_CLK4_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_21_CLK5_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_22_CLK6_CONTROL, 0x80);
+    si5351Write(SI5351_REGISTER_23_CLK7_CONTROL, 0x80);
 
-    // Set the load capacitance for the XTAL
     si5351CrystalLoad_t crystalLoad = SI5351_CRYSTAL_LOAD_10PF;
-    si5351_write(SI5351_REGISTER_183_CRYSTAL_INTERNAL_LOAD_CAPACITANCE, crystalLoad);
+    si5351Write(SI5351_REGISTER_183_CRYSTAL_INTERNAL_LOAD_CAPACITANCE, crystalLoad);
 }
 
-/**
- * @brief Sets the multiplier for given PLL
- * 
- * @param pll 
- * @param conf 
- */
 void si5351_SetupPLL(si5351PLL_t pll, si5351PLLConfig_t* conf) {
     int32_t P1, P2, P3;
     int32_t mult = conf->mult;
     int32_t num = conf->num;
     int32_t denom = conf->denom;
 
+    if (denom == 0) return; // Avoid division by zero
     P1 = 128 * mult + (128 * num)/denom - 512;
-    // P2 = 128 * num - denom * ((128 * num)/denom);
     P2 = (128 * num) % denom;
     P3 = denom;
 
-    // Get the appropriate base address for the PLL registers
     uint8_t baseaddr = (pll == SI5351_PLL_A ? 26 : 34);
-    si5351_writeBulk(baseaddr, P1, P2, P3, 0, si5351RDiv_t::SI5351_R_DIV_1);
+    si5351WriteBulk(baseaddr, P1, P2, P3, 0, si5351RDiv_t::SI5351_R_DIV_1);
 
-    // Reset both PLLs
-    si5351_write(SI5351_REGISTER_177_PLL_RESET, (1<<7) | (1<<5) );
+    si5351Write(SI5351_REGISTER_177_PLL_RESET, (1<<7) | (1<<5) );
 }
 
-/**
- * @brief Configures PLL source, drive strength, multisynth divider, Rdivider and phaseOffset.
- * 
- * @param output 
- * @param pllSource 
- * @param driveStrength 
- * @param conf 
- * @param phaseOffset 
- * @return int Returns 0 on success, != 0 otherwise.
- */
 int si5351_SetupOutput(uint8_t output, si5351PLL_t pllSource, si5351DriveStrength_t driveStrength, si5351OutputConfig_t* conf, uint8_t phaseOffset) {
     int32_t div = conf->div;
     int32_t num = conf->num;
@@ -198,29 +120,26 @@ int si5351_SetupOutput(uint8_t output, si5351PLL_t pllSource, si5351DriveStrengt
     uint8_t divBy4 = 0;
     int32_t P1, P2, P3;
 
-    if(output > 2) {
+    if (output > 2) {
         return 1;
     }
 
-    if((!conf->allowIntegerMode) && ((div < 8) || ((div == 8) && (num == 0)))) {
-        // div in { 4, 6, 8 } is possible only in integer mode
+    if ((!conf->allowIntegerMode) && ((div < 8) || ((div == 8) && (num == 0)))) {
         return 2;
     }
 
-    if(div == 4) {
-        // special DIVBY4 case, see AN619 4.1.3
+    if (div == 4) {
         P1 = 0;
         P2 = 0;
         P3 = 1;
         divBy4 = 0x3;
     } else {
+        if (denom == 0) return 3; // Avoid division by zero
         P1 = 128 * div + ((128 * num)/denom) - 512;
-        // P2 = 128 * num - denom * (128 * num)/denom;
         P2 = (128 * num) % denom;
         P3 = denom;
     }
 
-    // Get the register addresses for given channel
     uint8_t baseaddr = 0;
     uint8_t phaseOffsetRegister = 0;
     uint8_t clkControlRegister = 0;
@@ -242,68 +161,42 @@ int si5351_SetupOutput(uint8_t output, si5351PLL_t pllSource, si5351DriveStrengt
         break;
     }
 
-    uint8_t clkControl = 0x0C | driveStrength; // clock not inverted, powered up
-    if(pllSource == SI5351_PLL_B) {
-        clkControl |= (1 << 5); // Uses PLLB
+    uint8_t clkControl = 0x0C | driveStrength;
+    if (pllSource == SI5351_PLL_B) {
+        clkControl |= (1 << 5);
     }
 
-    if((conf->allowIntegerMode) && ((num == 0)||(div == 4))) {
-        // use integer mode
+    if ((conf->allowIntegerMode) && ((num == 0)||(div == 4))) {
         clkControl |= (1 << 6);
     }
 
-    si5351_write(clkControlRegister, clkControl);
-    si5351_writeBulk(baseaddr, P1, P2, P3, divBy4, conf->rdiv);
-    si5351_write(phaseOffsetRegister, (phaseOffset & 0x7F));
+    si5351Write(clkControlRegister, clkControl);
+    si5351WriteBulk(baseaddr, P1, P2, P3, divBy4, conf->rdiv);
+    si5351Write(phaseOffsetRegister, (phaseOffset & 0x7F));
 
     return 0;
 }
 
-/**
- * @brief Calculates PLL, MS and RDiv settings for given Fclk in [8_000, 160_000_000] range.
- * The actual frequency will differ less than 6 Hz from given Fclk, assuming `correction` is right.
- * 
- * @param Fclk 
- * @param pll_conf 
- * @param out_conf 
- */
 void si5351_Calc(int32_t Fclk, si5351PLLConfig_t* pll_conf, si5351OutputConfig_t* out_conf) {
-    if(Fclk < 8000) Fclk = 8000;
-    else if(Fclk > 160000000) Fclk = 160000000;
+    if (Fclk < 8000) Fclk = 8000;
+    else if (Fclk > 160000000) Fclk = 160000000;
 
     out_conf->allowIntegerMode = 1;
 
-    if(Fclk < 1000000) {
-        // For frequencies in [8_000, 500_000] range we can use si5351_Calc(Fclk*64, ...) and SI5351_R_DIV_64.
-        // In practice it's worth doing for any frequency below 1 MHz, since it reduces the error.
+    if (Fclk < 1000000) {
         Fclk *= 64;
         out_conf->rdiv = SI5351_R_DIV_64;
     } else {
         out_conf->rdiv = SI5351_R_DIV_1;
     }
 
-    // Apply correction, _after_ determining rdiv.
     Fclk = Fclk - (int32_t)((((double)Fclk)/100000000.0)*((double)si5351Correction));
-
-    // Here we are looking for integer values of a,b,c,x,y,z such as:
-    // N = a + b / c    # pll settings
-    // M = x + y / z    # ms  settings
-    // Fclk = Fxtal * N / M
-    // N in [24, 36]
-    // M in [8, 1800] or M in {4,6}
-    // b < c, y < z
-    // b,c,y,z <= 2**20
-    // c, z != 0
-    // For any Fclk in [500K, 160MHz] this algorithm finds a solution
-    // such as abs(Ffound - Fclk) <= 6 Hz
 
     const int32_t Fxtal = 25000000;
     int32_t a, b, c, x, y, z, t;
 
-    if(Fclk < 81000000) {
-        // Valid for Fclk in 0.5..112.5 MHz range
-        // However an error is > 6 Hz above 81 MHz
-        a = 36; // PLL runs @ 900 MHz
+    if (Fclk < 81000000) {
+        a = 36;
         b = 0;
         c = 1;
         int32_t Fpll = 900000000;
@@ -312,14 +205,9 @@ void si5351_Calc(int32_t Fclk, si5351PLLConfig_t* pll_conf, si5351OutputConfig_t
         y = (Fpll % Fclk) / t;
         z = Fclk / t;
     } else {
-        // Valid for Fclk in 75..160 MHz range
-        if(Fclk >= 150000000) {
-            x = 4;
-        } else if (Fclk >= 100000000) {
-            x = 6;
-        } else {
-            x = 8;
-        }
+        if(Fclk >= 150000000) x = 4;
+        else if (Fclk >= 100000000) x = 6;
+        else x = 8;
         y = 0;
         z = 1;
         
@@ -338,38 +226,19 @@ void si5351_Calc(int32_t Fclk, si5351PLLConfig_t* pll_conf, si5351OutputConfig_t
     out_conf->denom = z;
 }
 
-/**
- * @brief Finds PLL and MS parameters that give phase shift 90° between two channels,
- * if 0 and (uint8_t)out_conf.div are passed as phaseOffset for these channels. Channels should
- * use the same PLL to make it work. Fclk can be from 1.4 MHz to 100 MHz. The actual frequency will
- * differ less than 4 Hz from given Fclk, assuming `correction` is right.
- * 
- * @param Fclk 
- * @param pll_conf 
- * @param out_conf 
- */
 void si5351_CalcIQ(int32_t Fclk, si5351PLLConfig_t* pll_conf, si5351OutputConfig_t* out_conf) {
     const int32_t Fxtal = 25000000;
     int32_t Fpll;
 
-    if(Fclk < 1400000) Fclk = 1400000;
-    else if(Fclk > 100000000) Fclk = 100000000;
+    if (Fclk < 1400000) Fclk = 1400000;
+    else if (Fclk > 100000000) Fclk = 100000000;
 
-    // apply correction
     Fclk = Fclk - ((Fclk/1000000)*si5351Correction)/100;
 
-    // disable integer mode
     out_conf->allowIntegerMode = 0;
-
-    // Using RDivider's changes the phase shift and AN619 doesn't give any
-    // guarantees regarding this change.
     out_conf->rdiv = si5351RDiv_t::SI5351_R_DIV_1;
 
-    if(Fclk < 4900000) {
-        // Little hack, run PLL below 600 MHz to cover 1.4 MHz .. 4.725 MHz range.
-        // AN619 doesn't literally say that PLL can't run below 600 MHz.
-        // Experiments showed that PLL gets unstable when you run it below 177 MHz,
-        // which limits Fclk to 177 / 127 = 1.4 MHz.
+    if (Fclk < 4900000) {
         out_conf->div = 127;
     } else if(Fclk < 8000000) {
         out_conf->div = 625000000 / Fclk;
@@ -382,15 +251,9 @@ void si5351_CalcIQ(int32_t Fclk, si5351PLLConfig_t* pll_conf, si5351OutputConfig
     Fpll = Fclk * out_conf->div;
     pll_conf->mult = Fpll / Fxtal;
     pll_conf->num = (Fpll % Fxtal) / 24;
-    pll_conf->denom = Fxtal / 24; // denom can't exceed 0xFFFFF
+    pll_conf->denom = Fxtal / 24;
 }
 
-/**
- * @brief Setup CLK0 for given frequency and drive strength. Use PLLA.
- * 
- * @param Fclk 
- * @param driveStrength 
- */
 void si5351_SetupCLK0(int32_t Fclk, si5351DriveStrength_t driveStrength) {
 	si5351PLLConfig_t pll_conf;
 	si5351OutputConfig_t out_conf;
@@ -400,12 +263,6 @@ void si5351_SetupCLK0(int32_t Fclk, si5351DriveStrength_t driveStrength) {
 	si5351_SetupOutput(0, SI5351_PLL_A, driveStrength, &out_conf, 0);
 }
 
-/**
- * @brief Setup CLK2 for given frequency and drive strength. Use PLLB.
- * 
- * @param Fclk 
- * @param driveStrength 
- */
 void si5351_SetupCLK2(int32_t Fclk, si5351DriveStrength_t driveStrength) {
 	si5351PLLConfig_t pll_conf;
 	si5351OutputConfig_t out_conf;
@@ -415,58 +272,23 @@ void si5351_SetupCLK2(int32_t Fclk, si5351DriveStrength_t driveStrength) {
 	si5351_SetupOutput(2, SI5351_PLL_B, driveStrength, &out_conf, 0);
 }
 
-/**
- * @brief Enables or disables outputs depending on provided bitmask.
- * Examples:
- * `si5351_EnableOutputs(1 << 0)' enables CLK0 and disables CLK1 and CLK2
- * `si5351_EnableOutputs((1 << 2) | (1 << 0))` enables CLK0 and CLK2 and disables CLK1
- * 
- * @param enabled 
- */
 void si5351_EnableOutputs(uint8_t enabled) {
-    si5351_write(SI5351_REGISTER_3_OUTPUT_ENABLE_CONTROL, ~enabled);
+    si5351Write(SI5351_REGISTER_3_OUTPUT_ENABLE_CONTROL, ~enabled);
 }
 
-/**
- * @brief Writes data to the specified register
- * 
- * @param reg register address
- * @param data 
- * @return uint8_t 
- */
 static uint8_t si5351Write(uint8_t reg, uint8_t data)
 {
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-  ic2_master_start(cmd);
-  i2c_master_write_byte(cmd, SI5351_ADDRESS << 1 | 1, ACK_CHECK_EN);
-  i2c_master_write_byte(cmd, reg, ACK_CHECK_EN);
-  i2c_master_write_byte(cmd, data, ACK_CHECK_EN);
-  i2c_master_stop(cmd);
-  esp_err_t st = i2c_master_cmd_begin(I2C_PORT, cmd, 1000 / portTICK_RATE_MS);
-  i2c_cmd_link_delete(cmd);
-  return st == ESP_OK;
+  uint8_t write_buf[2] = {reg, data};
+  return i2c_master_transmit(si5351Handle, write_buf, sizeof(write_buf), -1) == ESP_OK;
 }
 
-
-/**
- * @brief Common code for _SetupPLL and _SetupOutput
- * 
- * @param baseaddr 
- * @param P1 
- * @param P2 
- * @param P3 
- * @param divBy4 
- * @param rdiv 
- */
-static void si5351WriteBulk(uint8_t baseaddr,
-			    int32_t P1, int32_t P2, int32_t P3,
-			    uint8_t divBy4, si5351RDiv_t rdiv) {
-    si5351_write(baseaddr,   (P3 >> 8) & 0xFF);
-    si5351_write(baseaddr+1, P3 & 0xFF);
-    si5351_write(baseaddr+2, ((P1 >> 16) & 0x3) | ((divBy4 & 0x3) << 2) | ((rdiv & 0x7) << 4));
-    si5351_write(baseaddr+3, (P1 >> 8) & 0xFF);
-    si5351_write(baseaddr+4, P1 & 0xFF);
-    si5351_write(baseaddr+5, ((P3 >> 12) & 0xF0) | ((P2 >> 16) & 0xF));
-    si5351_write(baseaddr+6, (P2 >> 8) & 0xFF);
-    si5351_write(baseaddr+7, P2 & 0xFF);
+static void si5351WriteBulk(uint8_t baseaddr, int32_t P1, int32_t P2, int32_t P3, uint8_t divBy4, si5351RDiv_t rdiv) {
+    si5351Write(baseaddr,   (P3 >> 8) & 0xFF);
+    si5351Write(baseaddr+1, P3 & 0xFF);
+    si5351Write(baseaddr+2, ((P1 >> 16) & 0x3) | ((divBy4 & 0x3) << 2) | (((uint8_t)rdiv & 0x7) << 4));
+    si5351Write(baseaddr+3, (P1 >> 8) & 0xFF);
+    si5351Write(baseaddr+4, P1 & 0xFF);
+    si5351Write(baseaddr+5, ((P3 >> 12) & 0xF0) | ((P2 >> 16) & 0xF));
+    si5351Write(baseaddr+6, (P2 >> 8) & 0xFF);
+    si5351Write(baseaddr+7, P2 & 0xFF);
 }
