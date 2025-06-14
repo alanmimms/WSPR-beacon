@@ -1,12 +1,15 @@
 # CMakeLists.txt for the jtencode ESP-IDF component
 
 # Define the source files for this component.
-# This assumes RSEncoder.cpp is located directly in the component directory.
-set(COMPONENT_SRCS "RSEncoder.cpp")
+# This assumes RSEncode.cpp and jtencode_util.cpp are located directly in the component directory.
+set(COMPONENT_SRCS
+    "RSEncode.cpp"      # Renamed source file
+    "jtencode_util.cpp" # New utility source file
+)
 
 # Define the include directories for this component.
 # The current directory (where CMakeLists.txt resides) should be included
-# so other components that depend on 'jtencode' can find RSEncoder.h.
+# so other components that depend on 'jtencode' can find RSEncode.h and jtencode_util.h.
 set(COMPONENT_PRIV_INCLUDE_DIRS ".")
 
 # Register the component with the ESP-IDF build system.
@@ -20,7 +23,7 @@ set(COMPONENT_PRIV_INCLUDE_DIRS ".")
 # PRIV_INCLUDE_DIRS: Specifies private include directories. These are only
 #                    used by this component itself.
 # REQUIRES / PRIV_REQUIRES: Specifies dependencies on other ESP-IDF components.
-#                           For RSEncoder, it primarily uses standard C++ features
+#                           For RSEncode, it primarily uses standard C++ features
 #                           and cstring, so no specific IDF component dependencies
 #                           are explicitly required for its core functionality here.
 idf_component_register(

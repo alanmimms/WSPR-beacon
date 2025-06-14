@@ -1,22 +1,21 @@
-#include "RSEncoder.h"
-#include <string.h> // For memset, memmove
-#include <stdexcept> // For std::runtime_error
-#include <numeric>   // Not used in this version
-#include <algorithm> // For std::fill (could be used instead of memset for parity)
+#include "RSEncode.h" // Updated include
+#include <string.h>   // For memset, memmove
+#include <stdexcept>  // For std::runtime_error
+#include <numeric>    // Not used in this version
+#include <algorithm>  // For std::fill (could be used instead of memset for parity)
 
-// Internal definition of the data_t type, now consistent with RSEncoder.
+// Internal definition of the data_t type, now consistent with RSEncode.
 typedef uint8_t data_t;
 
 // Internal macro for A_0 (zero in index form) to maintain consistency with original logic.
 // It explicitly takes the 'nn' value from the current rs_control_block instance.
-// Now, it's just 'nn'.
 #define RS_A_0_VAL(nn_val) (nn_val)
 
 
-// --- RSEncoder Class Implementation ---
+// --- RSEncode Class Implementation ---
 
 // Private modnn helper
-int RSEncoder::modnn_private(int x) const {
+int RSEncode::modnn_private(int x) const {
   // This method directly uses member variables
   while (x >= nn) {
     x -= nn;
@@ -26,24 +25,24 @@ int RSEncoder::modnn_private(int x) const {
 }
 
 // Constructor
-RSEncoder::RSEncoder(int symsize, int gfpoly, int fcr_param, int prim_param, int nroots_param, int pad_param)
-  : mm(symsize), nn((1 << symsize) - 1), nroots(nroots_param), fcr(fcr_param), prim(prim_param), pad(pad_param) {
+RSEncode::RSEncode(int symsize, int gfpoly, int fcr_param, int prim_param, int nroots_param, int pad_param)
+  : mm(symsize), nn((1 << symsize) - 1), nroots(nroots_param), fcr(fcr_param), prim(prim_param), iprim(0), pad(pad_param) { // iprim initialized to 0
 
   // Validate parameters first, throwing exceptions for invalid inputs
   if (mm < 0 || mm > 8 * sizeof(data_t)) {
-    throw std::runtime_error("RSEncoder: Invalid symsize (bits per symbol).");
+    throw std::runtime_error("RSEncode: Invalid symsize (bits per symbol).");
   }
   if (fcr < 0 || fcr >= (1 << mm)) {
-    throw std::runtime_error("RSEncoder: Invalid fcr (first consecutive root).");
+    throw std::runtime_error("RSEncode: Invalid fcr (first consecutive root).");
   }
   if (prim <= 0 || prim >= (1 << mm)) {
-    throw std::runtime_error("RSEncoder: Invalid prim (primitive element).");
+    throw std::runtime_error("RSEncode: Invalid prim (primitive element).");
   }
   if (nroots < 0 || nroots >= (1 << mm)) {
-    throw std::runtime_error("RSEncoder: Invalid nroots (number of roots/parity symbols).");
+    throw std::runtime_error("RSEncode: Invalid nroots (number of roots/parity symbols).");
   }
   if (pad < 0 || pad >= ((1 << mm) - 1 - nroots)) {
-    throw std::runtime_error("RSEncoder: Invalid pad (padding bytes).");
+    throw std::runtime_error("RSEncode: Invalid pad (padding bytes).");
   }
 
   // Resize vectors instead of malloc
@@ -68,7 +67,7 @@ RSEncoder::RSEncoder(int symsize, int gfpoly, int fcr_param, int prim_param, int
   // Check if the field generator polynomial is primitive
   if (sr != 1) {
     // Vectors will be automatically destructed, no manual free needed.
-    throw std::runtime_error("RSEncoder: Field generator polynomial is not primitive!");
+    throw std::runtime_error("RSEncode: Field generator polynomial is not primitive!");
   }
 
   // Initialize the generator polynomial
@@ -79,10 +78,10 @@ RSEncoder::RSEncoder(int symsize, int gfpoly, int fcr_param, int prim_param, int
     // Multiply genpoly[] by (x + alpha^root) in GF(2^m)
     for (int j = i; j > 0; --j) {
       if (genpoly[j] != 0) {
-	genpoly[j] = genpoly[j - 1] ^
-	  alpha_to[modnn_private(index_of[genpoly[j]] + root)];
+        genpoly[j] = genpoly[j - 1] ^
+                     alpha_to[modnn_private(index_of[genpoly[j]] + root)];
       } else {
-	genpoly[j] = genpoly[j - 1];
+        genpoly[j] = genpoly[j - 1];
       }
     }
     // genpoly[0] can never be zero after the first root
@@ -93,15 +92,20 @@ RSEncoder::RSEncoder(int symsize, int gfpoly, int fcr_param, int prim_param, int
   for (int i = 0; i <= nroots; ++i) {
     genpoly[i] = index_of[genpoly[i]];
   }
+
+  // Find prim-th root of 1, used in decoding (moved here from original init_rs)
+  int iprim_val = 1;
+  for (; (iprim_val % prim) != 0; iprim_val += nn);
+  iprim = iprim_val / prim;
 }
 
 // Destructor (trivial due to std::vector handling memory)
-RSEncoder::~RSEncoder() {
+RSEncode::~RSEncode() {
   // No explicit cleanup needed for std::vector members; they clean themselves up.
 }
 
 // Move constructor implementation
-RSEncoder::RSEncoder(RSEncoder&& other) noexcept
+RSEncode::RSEncode(RSEncode&& other) noexcept
   : mm(std::move(other.mm)),
     nn(std::move(other.nn)),
     nroots(std::move(other.nroots)),
@@ -116,7 +120,7 @@ RSEncoder::RSEncoder(RSEncoder&& other) noexcept
 }
 
 // Move assignment operator implementation
-RSEncoder& RSEncoder::operator=(RSEncoder&& other) noexcept {
+RSEncode& RSEncode::operator=(RSEncode&& other) noexcept {
   if (this != &other) { // Handle self-assignment
     // Move members from 'other' to 'this'
     mm = std::move(other.mm);
@@ -134,10 +138,10 @@ RSEncoder& RSEncoder::operator=(RSEncoder&& other) noexcept {
 }
 
 // Encode method implementation
-void RSEncoder::encode(const std::vector<uint8_t>& data, std::vector<uint8_t>& parity) const {
+void RSEncode::encode(const std::vector<uint8_t>& data, std::vector<uint8_t>& parity) const {
   // Check if the encoder is properly initialized (though constructor should ensure this)
   if (alpha_to.empty() || index_of.empty() || genpoly.empty()) {
-    throw std::runtime_error("RSEncoder: Encoder internal tables not initialized. Cannot encode.");
+    throw std::runtime_error("RSEncode: Encoder internal tables not initialized. Cannot encode.");
   }
 
   // Ensure parity vector is correctly sized
@@ -147,8 +151,10 @@ void RSEncoder::encode(const std::vector<uint8_t>& data, std::vector<uint8_t>& p
 
   // Get raw pointers to vector data for compatibility with memset/memmove
   // and direct array-like access for performance.
-  data_t* parity_ptr = parity.data();
+  // Note: data.data() can return nullptr if data is empty.
   const data_t* data_ptr = data.data();
+  data_t* parity_ptr = parity.data();
+
 
   // Initialize parity symbols to zero
   memset(parity_ptr, 0, nroots * sizeof(data_t));
@@ -156,10 +162,16 @@ void RSEncoder::encode(const std::vector<uint8_t>& data, std::vector<uint8_t>& p
   // Encoding loop based on the original encode_rs.h logic
   // Number of data symbols to process
   const int num_data_symbols = nn - nroots - pad;
+  const size_t data_size = data.size(); // Get data size once
 
   for (int i = 0; i < num_data_symbols; ++i) {
-    // Calculate feedback term: data_symbol XOR first_parity_symbol, then convert to index form
-    data_t feedback = index_of[data_ptr[i] ^ parity_ptr[0]];
+    // Safely get the current data symbol:
+    // If 'i' is within the bounds of 'data', use data_ptr[i].
+    // Otherwise, treat the data symbol as 0 (implicit padding).
+    data_t current_data_symbol = (static_cast<size_t>(i) < data_size) ? data_ptr[i] : 0x00;
+
+    // Calculate feedback term: current_data_symbol XOR first_parity_symbol, then convert to index form
+    data_t feedback = index_of[current_data_symbol ^ parity_ptr[0]];
 
     if (feedback != RS_A_0_VAL(nn)) { // If feedback term is non-zero
 #ifdef UNNORMALIZED
@@ -169,7 +181,7 @@ void RSEncoder::encode(const std::vector<uint8_t>& data, std::vector<uint8_t>& p
 #endif
       // Apply feedback to the rest of the parity symbols
       for (int j = 1; j < nroots; ++j) {
-	parity_ptr[j] ^= alpha_to[modnn_private(feedback + genpoly[nroots - j])];
+        parity_ptr[j] ^= alpha_to[modnn_private(feedback + genpoly[nroots - j])];
       }
     }
 

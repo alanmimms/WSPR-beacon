@@ -1,15 +1,15 @@
-#ifndef RSENCODER_H
-#define RSENCODER_H
+#ifndef RSENCODE_H
+#define RSENCODE_H
 
-#include <cstdint> // For uint8_t
-#include <vector>  // Using std::vector for dynamic arrays
-#include <string>  // For potential error messages or char conversion utilities
+#include <cstdint>   // For uint8_t
+#include <vector>    // Using std::vector for dynamic arrays
+#include <string>    // For potential error messages or char conversion utilities
 #include <stdexcept> // For exceptions
-#include <cctype>  // For isdigit, isupper
-#include <utility> // For std::move
+#include <cctype>    // For isdigit, isupper
+#include <utility>   // For std::move
 
 /**
- * @class RSEncoder
+ * @class RSEncode
  * @brief A C++ class for Reed-Solomon encoding.
  *
  * This class encapsulates the Reed-Solomon encoding functionality,
@@ -17,8 +17,8 @@
  * It replaces the raw C functions and global data structures with
  * proper C++ class members and methods.
  */
-class RSEncoder {
- public:
+class RSEncode {
+public:
   /**
    * @brief Constructor: Initializes the Reed-Solomon encoder.
    * @param symsize Bits per symbol (e.g., 8 for 256-symbol Galois field).
@@ -30,7 +30,7 @@ class RSEncoder {
    * @throws std::runtime_error if initialization parameters are invalid or
    * memory allocation fails, or if the GF polynomial is not primitive.
    */
-  RSEncoder(int symsize, int gfpoly, int fcr, int prim, int nroots, int pad);
+  RSEncode(int symsize, int gfpoly, int fcr, int prim, int nroots, int pad);
 
   /**
    * @brief Destructor: Frees all dynamically allocated memory.
@@ -39,15 +39,15 @@ class RSEncoder {
    * With std::vector members, this destructor becomes trivial as vector
    * handles its own memory.
    */
-  ~RSEncoder();
+  ~RSEncode();
 
   // Prevent copying to avoid shallow copy issues with raw pointers.
-  RSEncoder(const RSEncoder&) = delete;
-  RSEncoder& operator=(const RSEncoder&) = delete;
+  RSEncode(const RSEncode&) = delete;
+  RSEncode& operator=(const RSEncode&) = delete;
 
   // Enable move semantics for efficient resource transfer (C++11 and later).
-  RSEncoder(RSEncoder&& other) noexcept;
-  RSEncoder& operator=(RSEncoder&& other) noexcept;
+  RSEncode(RSEncode&& other) noexcept;
+  RSEncode& operator=(RSEncode&& other) noexcept;
 
   /**
    * @brief Encodes input data and generates parity symbols.
@@ -58,7 +58,26 @@ class RSEncoder {
    */
   void encode(const std::vector<uint8_t>& data, std::vector<uint8_t>& parity) const;
 
- private:
+  // --- Public Getter Methods for Test/Read-Only Access ---
+  /**
+   * @brief Get the total number of symbols per block.
+   * @return The value of nn.
+   */
+  int getNN() const { return nn; }
+
+  /**
+   * @brief Get the number of generator roots (parity symbols).
+   * @return The value of nroots.
+   */
+  int getNRoots() const { return nroots; }
+
+  /**
+   * @brief Get the number of padding bytes in a shortened block.
+   * @return The value of pad.
+   */
+  int getPad() const { return pad; }
+
+private:
   // Core Reed-Solomon parameters
   int mm;              /**< Bits per symbol */
   int nn;              /**< Symbols per block (= (1<<mm)-1) */
@@ -82,4 +101,4 @@ class RSEncoder {
   int modnn_private(int x) const;
 };
 
-#endif // RSENCODER_H
+#endif // RSENCODE_H
