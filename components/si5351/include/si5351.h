@@ -2,6 +2,7 @@
 #define SI5351_H
 
 #include <cstdint>
+#include "sdkconfig.h"
 
 class Si5351 {
 public:
@@ -44,7 +45,9 @@ public:
     };
 
     // --- Constructor & Destructor ---
-    explicit Si5351(int32_t correction = 0, uint8_t sdaPin = 21, uint8_t sclPin = 22);
+    explicit Si5351(int32_t correction = 0,
+		    uint8_t sdaPin = CONFIG_I2C_MASTER_SDA,
+		    uint8_t sclPin = CONFIG_I2C_MASTER_SCL);
     ~Si5351();
 
     // Prevent copying

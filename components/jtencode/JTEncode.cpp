@@ -10,23 +10,6 @@ static const uint8_t ft8LdpcGenerator[87][12] = {
     // ... all 87 rows ...
 };
 
-// CRC-14 calculation for FT8
-static uint16_t crc14(const uint8_t* data, int len) {
-  const uint16_t poly = 0x2757;
-  uint16_t crc = 0;
-  for (int i = 0; i < len; ++i) {
-    crc ^= (uint16_t)data[i] << 6;
-    for (int j = 0; j < 8; ++j) {
-      if ((crc & 0x2000) != 0) {
-        crc = (crc << 1) ^ poly;
-      } else {
-        crc = crc << 1;
-      }
-    }
-  }
-  return crc & 0x3FFF;
-}
-
 // WSPR character encoding helper
 static uint8_t wsprCode(char c) {
   if (c >= '0' && c <= '9') return c - '0';

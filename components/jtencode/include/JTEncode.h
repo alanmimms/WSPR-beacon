@@ -22,6 +22,9 @@ public:
   // Generic encode method for most message-based modes
   virtual void encode(const char* message) {}
 
+  // Overload for WSPR
+  virtual void encode(const char* callsign, const char *locator, int8_t powerDbm) {}
+
 protected:
   // Encoding pipeline steps. Derived classes override what they need.
   

@@ -45,7 +45,7 @@ struct BeaconConfig {
 
 // Statistics structure
 struct BeaconStats {
-    uint32_t totalTxMinutes[5] = {0}; // Corresponds to each band in the plan
+  uint32_t totalTxMinutes[5] = {0}; // Corresponds to each band in the plan
 };
 
 

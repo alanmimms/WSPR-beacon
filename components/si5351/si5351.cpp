@@ -68,10 +68,13 @@ void Si5351::i2cInit(uint8_t sdaPin, uint8_t sclPin) {
 
   i2c_device_config_t devConfig = {
     .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-    .device_address = SI5351_ADDRESS,
+    .device_address = CONFIG_SI5351_ADDRESS,
     .scl_speed_hz = 100000,
+    .scl_wait_us = 0,
+    .flags = 0,
   };
-  ESP_ERROR_CHECK(i2c_master_bus_add_device((i2c_master_bus_handle_t)busHandle, &devConfig, (i2c_master_dev_handle_t*)&devHandle));
+  ESP_ERROR_CHECK(i2c_master_bus_add_device((i2c_master_bus_handle_t)busHandle, &devConfig,
+					    (i2c_master_dev_handle_t*)&devHandle));
 }
 
 uint8_t Si5351::write(uint8_t reg, uint8_t data) {
@@ -123,7 +126,7 @@ int Si5351::setupOutput(uint8_t output, PLL pllSource, DriveStrength driveStreng
         p3 = denom;
     }
 
-    uint8_t baseaddr = 0, phaseReg = 0, ctrlReg = 0;
+    uint8_t baseaddr = 0, ctrlReg = 0;
     switch (output) {
         case 0: baseaddr = SI5351_REG_MS0_PARAMS_1; ctrlReg = SI5351_REG_CLK0_CONTROL; break;
         case 1: baseaddr = SI5351_REG_MS1_PARAMS_1; ctrlReg = SI5351_REG_CLK1_CONTROL; break;

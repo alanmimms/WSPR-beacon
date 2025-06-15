@@ -5,7 +5,6 @@ set(COMPONENT_SRCS
     "JTEncode.cpp"
     "RSEncode.cpp"
     "jtencode-util.cpp"
-    "crc14.c"
     "nhash.c"
 )
 
