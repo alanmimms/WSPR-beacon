@@ -2,6 +2,7 @@
 
 #include "Settings.h"
 #include "esp_http_server.h"
+#include "dns-server.h" // Using your custom DNS server header
 
 class WebServer {
 public:
@@ -9,20 +10,31 @@ public:
 
   /**
    * @brief Starts the web server.
-   * * @param settings A reference to the application's settings object.
-   * The reference guarantees that a valid, non-null object is provided.
+   * @param settings A reference to the application's settings object.
+   * @param provisioningMode If true, start in captive portal mode.
+   * If false, start in normal serving mode.
    */
-  void start(Settings& settings);
+  void start(Settings& settings, bool provisioningMode);
 
   /**
-   * @brief Stops the web server if it is running.
+   * @brief Stops the web server and associated services (like DNS).
    */
   void stop();
 
 private:
-  httpd_handle_t server;
-  Settings* settings; // Internally, we can store a pointer for convenience.
+  // Helper methods
+  void mountFileSystem();
+  void startDnsServer();
+  void stopDnsServer();
 
-  // --- Request Handlers ---
-  static esp_err_t rootGetHandler(httpd_req_t *req);
+  // HTTPD request handlers
+  static esp_err_t fileGetHandler(httpd_req_t *req);
+  static esp_err_t settingsPostHandler(httpd_req_t *req);
+
+  // Server instance handles
+  httpd_handle_t server;
+  dns_server_handle_t dnsServer; // Use handle from your dns-server.h
+
+  // Member variables to store context
+  Settings* settings;
 };

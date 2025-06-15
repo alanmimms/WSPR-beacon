@@ -2,67 +2,34 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
+#include "sdkconfig.h"
 #include <string.h>
 
-// Required for CONFIG_ macros
-#include "sdkconfig.h"
-
-// Required ESP-IDF driver and utility headers
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
-#include "esp_mac.h" // Required for esp_efuse_mac_get_default
 
 static const char* TAG = "BeaconFSM";
 
-// --- Constants ---
 static const int MAX_WIFI_CONNECT_ATTEMPTS = 10;
 static const int PROVISIONING_TIMEOUT_MINUTES = 5;
 
-// --- Forward declarations of our concrete state classes ---
+// State forward declarations
 class InitialState;
 class ConnectingState;
 class ProvisioningState;
 class ConnectedState;
 class TransmittingState;
 
-// --- State Class Implementations ---
+// State class definitions
+class InitialState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
+class ConnectingState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
+class ProvisioningState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; void exit() override; };
+class ConnectedState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
+class TransmittingState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
 
-class InitialState : public BeaconState {
-public:
-  using BeaconState::BeaconState; // Inherit constructor
-  void enter() override;
-};
-
-class ConnectingState : public BeaconState {
-public:
-  using BeaconState::BeaconState;
-  void enter() override;
-};
-
-class ProvisioningState : public BeaconState {
-public:
-  using BeaconState::BeaconState;
-  void enter() override;
-  void exit() override;
-};
-
-class ConnectedState : public BeaconState {
-public:
-  using BeaconState::BeaconState;
-  void enter() override;
-};
-
-class TransmittingState : public BeaconState {
-public:
-  using BeaconState::BeaconState;
-  void enter() override;
-};
-
-
-// --- BeaconFsm Method Implementations ---
-
+// BeaconFsm implementation
 BeaconFsm::BeaconFsm() :
-  // The order here MUST match the declaration order in BeaconFSM.h
   si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL),
   currentState(nullptr),
   settings(),
@@ -72,9 +39,6 @@ BeaconFsm::BeaconFsm() :
   provisionTimer(nullptr),
   wifiConnectAttempts(0)
 {
-  // --- Perform all one-time system initializations first ---
-  
-  // 1. Initialize NVS
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
@@ -82,7 +46,6 @@ BeaconFsm::BeaconFsm() :
   }
   ESP_ERROR_CHECK(ret);
 
-  // 2. Initialize Networking Stack (Netif, Event Loop, WiFi)
   ESP_ERROR_CHECK(esp_netif_init());
   ESP_ERROR_CHECK(esp_event_loop_create_default());
   esp_netif_create_default_wifi_sta();
@@ -91,39 +54,23 @@ BeaconFsm::BeaconFsm() :
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-  // --- Now it is safe to register event handlers ---
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &BeaconFsm::onWifiStaDisconnected, this));
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &BeaconFsm::onWifiStaGotIp, this));
 
-  // --- Load settings and create other components ---
   settings.load();
   
-  const esp_timer_create_args_t provisionTimerArgs = {
-      .callback = &BeaconFsm::onProvisionTimeout,
-      .arg = this,
-      .dispatch_method = ESP_TIMER_TASK,
-      .name = "provision-timeout",
-      .skip_unhandled_events = false
-  };
+  const esp_timer_create_args_t provisionTimerArgs = {.callback = &BeaconFsm::onProvisionTimeout, .arg = this, .name = "provision-timeout"};
   ESP_ERROR_CHECK(esp_timer_create(&provisionTimerArgs, &provisionTimer));
 
-  const esp_timer_create_args_t wifiRetryTimerArgs = {
-      .callback = &BeaconFsm::onWifiRetryTimeout,
-      .arg = this,
-      .dispatch_method = ESP_TIMER_TASK,
-      .name = "wifi-retry",
-      .skip_unhandled_events = false
-  };
+  const esp_timer_create_args_t wifiRetryTimerArgs = {.callback = &BeaconFsm::onWifiRetryTimeout, .arg = this, .name = "wifi-retry"};
   ESP_ERROR_CHECK(esp_timer_create(&wifiRetryTimerArgs, &wifiRetryTimer));
 }
 
 BeaconFsm::~BeaconFsm() {
-  // Clean up the current state if it exists
   delete currentState;
 }
 
 void BeaconFsm::start() {
-  // Create and transition to the initial state to kick things off.
   transitionTo(new InitialState(this));
 }
 
@@ -134,18 +81,14 @@ void BeaconFsm::transitionTo(BeaconState* newState) {
   }
   currentState = newState;
   if (currentState != nullptr) {
-      currentState->enter();
+    currentState->enter();
   }
 }
-
-// --- Static Callback Wrappers ---
 
 void BeaconFsm::onProvisionTimeout(void* arg) { static_cast<BeaconFsm*>(arg)->provisionTimeout(); }
 void BeaconFsm::onWifiRetryTimeout(void* arg) { static_cast<BeaconFsm*>(arg)->wifiRetryTimeout(); }
 void BeaconFsm::onWifiStaGotIp(void* arg, esp_event_base_t eventBase, int32_t eventId, void* eventData) { static_cast<BeaconFsm*>(arg)->wifiStaGotIp(eventData); }
 void BeaconFsm::onWifiStaDisconnected(void* arg, esp_event_base_t eventBase, int32_t eventId, void* eventData) { static_cast<BeaconFsm*>(arg)->wifiStaDisconnected(eventData); }
-
-// --- FSM Handler Methods ---
 
 void BeaconFsm::provisionTimeout() {
   ESP_LOGI(TAG, "Provisioning timed out. Retrying Wi-Fi connection.");
@@ -168,14 +111,12 @@ void BeaconFsm::wifiStaDisconnected(void* eventData) {
   wifiConnectAttempts++;
   if (wifiConnectAttempts >= MAX_WIFI_CONNECT_ATTEMPTS) {
     ESP_LOGE(TAG, "Failed to connect after %d attempts. Entering provisioning mode.", MAX_WIFI_CONNECT_ATTEMPTS);
-    wifiConnectAttempts = 0; // Reset for the next cycle
+    wifiConnectAttempts = 0;
     transitionTo(new ProvisioningState(this));
   } else {
-    esp_timer_start_once(wifiRetryTimer, 5 * 1000 * 1000); 
+    esp_timer_start_once(wifiRetryTimer, 5 * 1000 * 1000);
   }
 }
-
-// --- Concrete State Method Implementations ---
 
 void InitialState::enter() {
   ESP_LOGI(TAG, "Entering Initial state");
@@ -213,11 +154,11 @@ void ConnectedState::enter() {
 
 void TransmittingState::enter() {
   ESP_LOGI(TAG, "Entering Transmitting state. System is operational.");
-  // Now that the system is connected, we can start the scheduler.
+  // Start the web server in normal (non-provisioning) mode
+  context->webServer.start(context->settings, false);
+  // Start the transmission scheduler
   context->scheduler.start();
 }
-
-// --- General Instance Method Implementations ---
 
 void BeaconFsm::connectToWifi() {
   wifi_config_t wifiConfig = {};
@@ -250,7 +191,8 @@ void BeaconFsm::startProvisioningMode() {
   ESP_LOGI(TAG, "Provisioning AP '%s' started.", wifi_config.ap.ssid);
   ESP_LOGI(TAG, "Connect and go to http://" IPSTR, IP2STR(&ip_info.ip));
 
-  webServer.start(settings);
+  // Start the web server in provisioning (captive portal) mode.
+  webServer.start(settings, true);
 }
 
 void BeaconFsm::stopWebServer() {
@@ -261,5 +203,4 @@ void BeaconFsm::stopWebServer() {
 
 void BeaconFsm::startNtpSync() {
   ESP_LOGI(TAG, "Starting NTP synchronization...");
-  // NTP client initialization and sync logic goes here
 }

@@ -10,21 +10,24 @@ idf_component_register(
 	"Settings.cpp"
     REQUIRES 
         # ESP-IDF Framework Components
-        esp_wifi 
-        esp_event
-        nvs_flash 
-        lwip 
 	esp_driver_gpio
 	esp_driver_i2c
-        esp_http_server
+	esp_netif
 	esp_timer
-        mdns
+	spiffs
+        esp_event
+        esp_http_server
+        esp_wifi 
         json
+        lwip 
+        mdns
+        nvs_flash 
 
         # Local Project Components
+	dns-server
         jtencode
-	tinyfsm
         si5351
+	tinyfsm
     INCLUDE_DIRS 
         "."
 )
