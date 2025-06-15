@@ -5,29 +5,24 @@
 #include "si5351.h"
 #include "Settings.h"
 #include "WebServer.h"
+#include "Scheduler.h" // Include your existing Scheduler header
 
 // Forward declaration of the main context class
 class BeaconFsm;
 
 // --- Abstract Base Class for all States ---
-// Each state will inherit from this and implement its own logic.
 class BeaconState {
 public:
-  // States are constructed with a pointer to the main FSM context.
   BeaconState(BeaconFsm* context) : context(context) {}
   virtual ~BeaconState() {}
-
-  // Called when entering the state. Pure virtual, must be implemented.
   virtual void enter() = 0;
-  // Called when exiting the state.
-  virtual void exit() {} // Default empty implementation is often sufficient.
+  virtual void exit() {}
 
 protected:
   BeaconFsm* context;
 };
 
 // --- Main Application Context Class ---
-// This class owns all the components and data, and manages state transitions.
 class BeaconFsm {
 public:
   BeaconFsm();
@@ -35,8 +30,10 @@ public:
 
   void start();
   void transitionTo(BeaconState* newState);
+  
+  // The Si5351 instance is public to be accessible for the Scheduler
+  Si5351 si5351;
 
-// Allow state classes to access private members of the FSM
 friend class InitialState;
 friend class ConnectingState;
 friend class ProvisioningState;
@@ -46,9 +43,9 @@ friend class TransmittingState;
 private:
   // --- Instance Variables ---
   BeaconState* currentState;
-  Si5351 si5351;
   Settings settings;
   WebServer webServer;
+  Scheduler scheduler; // Your Scheduler is now a member
   esp_timer_handle_t wifiRetryTimer;
   esp_timer_handle_t provisionTimer;
   int wifiConnectAttempts;
