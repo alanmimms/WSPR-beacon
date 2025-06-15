@@ -1,104 +1,73 @@
-Project Context: ESP32 WSPR Beacon
-This document summarizes the state, requirements, and development history for an advanced ESP32-based WSPR beacon project.
+Project Context: ESP32 WSPR Beacon (Updated)
+This document summarizes the current state, requirements, and development history for an advanced ESP32-based WSPR beacon project.
 
 1. High-Level Goal
 The primary objective is to create a feature-rich, standalone WSPR beacon using an ESP32 microcontroller and an Si5351 DDS synthesizer. The device will be configurable and controllable via a web interface.
 
 2. Core Software Architecture
-Language & Style: C++ with a preference for camelCase naming, 2-space indentation, no m_ prefixes, and C-style strings/arrays where practical. Filenames should use dashes instead of underscores.
+Language & Style
+Language: C++
 
-Framework: ESP-IDF.
+Style: camelCase naming, 2-space indentation, no m_ prefixes, and C-style strings/arrays where practical. Filenames use dashes.
 
-Key Libraries:
+Framework & Components
+Framework: ESP-IDF
 
-jtencode: A custom C++ component for encoding WSPR and other digital modes.
+Main Class: BeaconFsm acts as the central context object, owning all major components.
 
-si5351: A custom C++ class-based driver for the Si5351 chip.
+State Machine: A custom, pointer-based state machine has been implemented to replace tinyfsm.
 
-tinyfsm: A finite state machine to manage the application's operational states (e.g., Provisioning, Connecting, Transmitting).
+BeaconState is an abstract base class for all states.
+
+BeaconFsm holds a pointer to the currentState and manages transitions via a transitionTo() method.
+
+This design was chosen for its simplicity and readability over the previous template-based approach.
+
+Component Drivers:
+
+si5351: A C++ class-based driver for the Si5351 chip. A single instance is owned by BeaconFsm.
+
+Scheduler: Manages transmission timing and band plans. It receives a reference to the si5351 and Settings objects from BeaconFsm.
+
+WebServer: Provides the web UI for configuration. It receives a reference to the Settings object.
+
+Settings: Manages loading and saving configuration to NVS.
+
+jtencode: A C++ component for encoding WSPR signals.
+
+Design Pattern: Dependency Injection
+The project uses dependency injection to manage shared resources. The BeaconFsm class creates and owns the single instances of Si5351 and Settings. It then passes references (Si5351&, Settings&) to other classes (Scheduler, WebServer) that need them. This ensures a single source of truth and avoids object duplication.
 
 3. Detailed Feature Requirements
 Wi-Fi and Networking
-Dual-Mode Connectivity: The device operates in two modes:
+Dual-Mode Connectivity: Operates in Station Mode (connecting to a configured Wi-Fi) or falls back to a Provisioning AP Mode.
 
-Station Mode: Connects to a user-configured Wi-Fi network.
+Provisioning AP: Serves a web page to configure Wi-Fi credentials and other beacon settings, which are saved to NVS.
 
-Provisioning AP Mode (Fallback): Creates a temporary Access Point if the Station Mode connection fails.
-
-Provisioning AP Details:
-
-SSID is dynamically generated (e.g., Beacon-XXXX from the MAC address).
-
-Serves a web page to configure Wi-Fi credentials (SSID/password) and a custom mDNS hostname.
-
-Settings are saved to NVS.
-
-Connection Logic:
-
-Attempts to connect in Station mode for 10 tries.
-
-On failure, falls back to Provisioning AP mode for exactly 5 minutes.
-
-After 5 minutes, it reverts to Station mode to retry. This cycle repeats indefinitely.
-
-mDNS Service Discovery:
-
-In AP mode: beacon-XXXX.local.
-
-In Station mode: The user-defined hostname (e.g., my-wspr-beacon.local).
+Connection Logic: The state machine handles repeated attempts to connect in Station mode, falling back to Provisioning mode for a 5-minute timeout before retrying.
 
 Time Management
-Adaptive NTP Synchronization:
+NTP Synchronization: Will be used for precise time synchronization once the beacon is connected to a network.
 
-Uses NTP for precise time.
-
-The NTP client is adaptive: it models the ESP32's internal clock drift and triggers a new sync before the predicted time error exceeds 500ms.
-
-Time Zone Support:
-
-The web UI allows the user to set their local time zone.
-
-Default time zone is GMT.
-
-All scheduling is based on the user's selected local time.
+Time Zone Support: The UI will allow setting a local time zone for scheduling.
 
 Web Interface & Control
-Navigation: All pages share a consistent navigation menu on the left side.
+Configuration Page: Allows setting all operational parameters (Callsign, Locator, Power, Master Schedule, Band Plan).
 
-Configuration Page: Allows setting all operational parameters:
-
-Beacon Identity: Callsign, Maidenhead Locator, and Power (dBm).
-
-Master Schedule: Multiple active time windows, definable by start/stop times and days of the week.
-
-Band Plan: A sequence of bands for rotation.
-
-Transmission Logic: Per-band settings for:
-
-Number of transmissions before rotating to the next band.
-
-Number of 2-minute WSPR intervals to skip between transmissions.
-
-Optional frequency override for each band.
-
-Status & Statistics Page: A read-only page displaying:
-
-Current operational status.
-
-Total transmission minutes accumulated per band.
+Status & Statistics Page: A read-only page to display current status and transmission history.
 
 4. Hardware & System
-MCU: ESP32.
+MCU: ESP32-C3
 
-Synthesizer: Si5351.
+Synthesizer: Si5351
 
-Partition Table: A custom partition scheme is used to provide a single, large 3MB application partition, foregoing OTA capability.
+Partition Table: A custom partition scheme provides a single, large 3MB application partition, foregoing OTA capability.
 
-5. Development History & Known Issues
-The project has undergone significant refactoring from C-style code to a C++ class-based architecture.
+5. Development History & Key Decisions
+The project was initially implemented using the tinyfsm library with the "Curiously Recurring Template Pattern" (CRTP). This led to complex, non-intuitive compiler errors related to template instantiation (this->template enter<...>()).
 
-Extensive debugging has occurred related to ESP-IDF build system dependencies (json, mdns, driver), C++ exception handling, linker errors, and I2C driver API usage.
+A major architectural decision was made to abandon tinyfsm and refactor the state machine to a simpler, more conventional pointer-based design. This resolved the compilation issues and significantly improved code readability.
 
-The si5351 driver has been successfully refactored into a C++ class.
+Several compiler warnings, treated as errors (-Wreorder, -Wmissing-field-initializers, -Waddress), were resolved by reordering member variables, fully initializing structs, and using C++ references (&) instead of pointers (*) for function arguments where null is not a valid state.
 
-The user has reported a UI bug where the file cabinet icon in the chat interface can cause a context reset.
+The Scheduler and WebServer classes were refactored to accept references to the shared si5351 and settings objects, following a dependency injection pattern.
