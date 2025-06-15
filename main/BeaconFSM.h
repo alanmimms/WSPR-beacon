@@ -2,6 +2,7 @@
 
 #include "esp_event.h"
 #include "esp_timer.h"
+#include "esp_netif.h" // Added for network initialization
 #include "si5351.h"
 #include "Settings.h"
 #include "WebServer.h"

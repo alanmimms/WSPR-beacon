@@ -4,9 +4,13 @@
 #include "esp_wifi.h"
 #include <string.h>
 
-// Required ESP-IDF driver headers
+// Required for CONFIG_ macros
+#include "sdkconfig.h"
+
+// Required ESP-IDF driver and utility headers
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
+#include "esp_mac.h" // Required for esp_efuse_mac_get_default
 
 static const char* TAG = "BeaconFSM";
 
@@ -58,15 +62,19 @@ public:
 // --- BeaconFsm Method Implementations ---
 
 BeaconFsm::BeaconFsm() :
+  // The order here MUST match the declaration order in BeaconFSM.h
   si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL),
   currentState(nullptr),
   settings(),
   webServer(),
-  scheduler(si5351, settings), 
+  scheduler(si5351, settings),
   wifiRetryTimer(nullptr),
   provisionTimer(nullptr),
   wifiConnectAttempts(0)
 {
+  // --- Perform all one-time system initializations first ---
+  
+  // 1. Initialize NVS
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
@@ -74,9 +82,22 @@ BeaconFsm::BeaconFsm() :
   }
   ESP_ERROR_CHECK(ret);
 
+  // 2. Initialize Networking Stack (Netif, Event Loop, WiFi)
+  ESP_ERROR_CHECK(esp_netif_init());
+  ESP_ERROR_CHECK(esp_event_loop_create_default());
+  esp_netif_create_default_wifi_sta();
+  esp_netif_create_default_wifi_ap();
+
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+  // --- Now it is safe to register event handlers ---
+  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &BeaconFsm::onWifiStaDisconnected, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &BeaconFsm::onWifiStaGotIp, this));
+
+  // --- Load settings and create other components ---
   settings.load();
   
-  // Fully initialize timer arguments to resolve compiler warnings
   const esp_timer_create_args_t provisionTimerArgs = {
       .callback = &BeaconFsm::onProvisionTimeout,
       .arg = this,
@@ -94,11 +115,6 @@ BeaconFsm::BeaconFsm() :
       .skip_unhandled_events = false
   };
   ESP_ERROR_CHECK(esp_timer_create(&wifiRetryTimerArgs, &wifiRetryTimer));
-
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED,
-					     &BeaconFsm::onWifiStaDisconnected, this));
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-					     &BeaconFsm::onWifiStaGotIp, this));
 }
 
 BeaconFsm::~BeaconFsm() {
@@ -216,8 +232,25 @@ void BeaconFsm::connectToWifi() {
 }
 
 void BeaconFsm::startProvisioningMode() {
-  ESP_LOGI(TAG, "Starting provisioning AP and web server.");
-  webServer.start(settings); // Pass by reference, not by pointer
+  uint8_t mac[6];
+  ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+  
+  wifi_config_t wifi_config = {};
+  snprintf((char *)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid), "Beacon-%02X%02X", mac[4], mac[5]);
+  wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+  wifi_config.ap.max_connection = 4;
+
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+  ESP_ERROR_CHECK(esp_wifi_start());
+
+  esp_netif_ip_info_t ip_info;
+  ESP_ERROR_CHECK(esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info));
+  
+  ESP_LOGI(TAG, "Provisioning AP '%s' started.", wifi_config.ap.ssid);
+  ESP_LOGI(TAG, "Connect and go to http://" IPSTR, IP2STR(&ip_info.ip));
+
+  webServer.start(settings);
 }
 
 void BeaconFsm::stopWebServer() {
@@ -228,5 +261,5 @@ void BeaconFsm::stopWebServer() {
 
 void BeaconFsm::startNtpSync() {
   ESP_LOGI(TAG, "Starting NTP synchronization...");
-  // NTP client initialization and sync logic would go here
+  // NTP client initialization and sync logic goes here
 }
