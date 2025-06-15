@@ -66,7 +66,7 @@ public:
 
 private:
   // --- Private Methods ---
-  void i2cInit(uint8_t sdaPin, uint8_t sclPin);
+  void i2cInit(uint8_t i2cAddr, uint8_t sdaPin, uint8_t sclPin);
   uint8_t write(uint8_t reg, uint8_t data);
   void writeBulk(uint8_t baseaddr, int32_t p1, int32_t p2, int32_t p3, uint8_t divBy4, RDiv rdiv);
 

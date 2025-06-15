@@ -58,10 +58,11 @@ public:
 // --- BeaconFsm Method Implementations ---
 
 BeaconFsm::BeaconFsm() :
-  currentState(nullptr),
   si5351(0, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL),
+  currentState(nullptr),
   settings(),
   webServer(),
+  scheduler(si5351, settings), 
   wifiRetryTimer(nullptr),
   provisionTimer(nullptr),
   wifiConnectAttempts(0)
@@ -75,10 +76,23 @@ BeaconFsm::BeaconFsm() :
 
   settings.load();
   
-  const esp_timer_create_args_t provisionTimerArgs = { .callback = &BeaconFsm::onProvisionTimeout, .arg = this, .name = "provision-timeout" };
+  // Fully initialize timer arguments to resolve compiler warnings
+  const esp_timer_create_args_t provisionTimerArgs = {
+      .callback = &BeaconFsm::onProvisionTimeout,
+      .arg = this,
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "provision-timeout",
+      .skip_unhandled_events = false
+  };
   ESP_ERROR_CHECK(esp_timer_create(&provisionTimerArgs, &provisionTimer));
 
-  const esp_timer_create_args_t wifiRetryTimerArgs = { .callback = &BeaconFsm::onWifiRetryTimeout, .arg = this, .name = "wifi-retry" };
+  const esp_timer_create_args_t wifiRetryTimerArgs = {
+      .callback = &BeaconFsm::onWifiRetryTimeout,
+      .arg = this,
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "wifi-retry",
+      .skip_unhandled_events = false
+  };
   ESP_ERROR_CHECK(esp_timer_create(&wifiRetryTimerArgs, &wifiRetryTimer));
 
   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &BeaconFsm::onWifiStaDisconnected, this));
@@ -101,7 +115,9 @@ void BeaconFsm::transitionTo(BeaconState* newState) {
     delete currentState;
   }
   currentState = newState;
-  currentState->enter();
+  if (currentState != nullptr) {
+      currentState->enter();
+  }
 }
 
 // --- Static Callback Wrappers ---
@@ -179,6 +195,8 @@ void ConnectedState::enter() {
 
 void TransmittingState::enter() {
   ESP_LOGI(TAG, "Entering Transmitting state. System is operational.");
+  // Now that the system is connected, we can start the scheduler.
+  context->scheduler.start();
 }
 
 // --- General Instance Method Implementations ---
@@ -197,7 +215,7 @@ void BeaconFsm::connectToWifi() {
 
 void BeaconFsm::startProvisioningMode() {
   ESP_LOGI(TAG, "Starting provisioning AP and web server.");
-  webServer.start(settings);
+  webServer.start(settings); // Pass by reference, not by pointer
 }
 
 void BeaconFsm::stopWebServer() {
@@ -208,5 +226,5 @@ void BeaconFsm::stopWebServer() {
 
 void BeaconFsm::startNtpSync() {
   ESP_LOGI(TAG, "Starting NTP synchronization...");
-  // NTP client initialization and sync logic goes here
+  // NTP client initialization and sync logic would go here
 }

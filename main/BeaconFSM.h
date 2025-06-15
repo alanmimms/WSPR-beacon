@@ -5,7 +5,7 @@
 #include "si5351.h"
 #include "Settings.h"
 #include "WebServer.h"
-#include "Scheduler.h" // Include your existing Scheduler header
+#include "Scheduler.h"
 
 // Forward declaration of the main context class
 class BeaconFsm;
@@ -41,11 +41,12 @@ friend class ConnectedState;
 friend class TransmittingState;
 
 private:
-  // --- Instance Variables ---
+  // --- Instance Variables (Reordered to match constructor) ---
   BeaconState* currentState;
+  // si5351 is public, initialized via public member initializer
   Settings settings;
   WebServer webServer;
-  Scheduler scheduler; // Your Scheduler is now a member
+  Scheduler scheduler;
   esp_timer_handle_t wifiRetryTimer;
   esp_timer_handle_t provisionTimer;
   int wifiConnectAttempts;

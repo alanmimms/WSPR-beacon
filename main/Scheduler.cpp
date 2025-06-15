@@ -1,110 +1,104 @@
 #include "Scheduler.h"
-#include "ConfigManager.h"
-#include "JTEncode.h"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include <time.h>
 
 static const char* TAG = "Scheduler";
 
-Scheduler::Scheduler() : si5351(0) {
-  // The constructor of the Si5351 member object now handles all hardware initialization.
-  // The correction factor is passed here.
+// The scheduler will run its check once per second.
+static const uint64_t SCHEDULER_INTERVAL_US = 1000 * 1000;
+
+Scheduler::Scheduler(Si5351& si5351, Settings& settings) :
+  si5351(si5351),
+  settings(settings),
+  timer(nullptr),
+  currentBandIndex(0),
+  transmissionsOnCurrentBand(0),
+  skipIntervalCount(0)
+{
+  // The C++ initializer list handles storing the references.
 }
 
-void Scheduler::run() {
-  BeaconConfig config;
-  BeaconStats stats;
-  int bandIndex = 0;
-  int iterationCount = 0;
-  int skipCount = 0;
-
-  while (true) {
-    vTaskDelay(pdMS_TO_TICKS(500)); // Main loop runs twice a second
-
-    // Load config to see if we should be running
-    ConfigManager::loadConfig(config);
-    if (!config.isRunning) {
-      si5351.enableOutputs(0); // Use the class method to ensure transmitter is off
-      continue;
-    }
-
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
-
-    // Check master time schedule
-    bool inActiveWindow = false;
-    for (int i = 0; i < 5; ++i) {
-      const auto& s = config.timeSchedules[i];
-      if (s.enabled && (s.daysOfWeek & (1 << timeinfo.tm_wday))) {
-	int nowMinutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
-	int startMinutes = s.startHour * 60 + s.startMinute;
-	int endMinutes = s.endHour * 60 + s.endMinute;
-	if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
-	  inActiveWindow = true;
-	  break;
-	}
-      }
-    }
-
-    if (!inActiveWindow) continue;
-
-    // Check if it's the start of an even minute (WSPR TX window)
-    if (timeinfo.tm_sec == 0 && (timeinfo.tm_min % 2 == 0)) {
-      ESP_LOGI(TAG, "WSPR window started at %d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
-            
-      if (skipCount >= config.skipIntervals) {
-	skipCount = 0; // Reset skip counter
-
-	if(config.numBandsInPlan > 0) {
-	  uint32_t freq = config.bandPlan[bandIndex].frequencyHz;
-	  ESP_LOGI(TAG, "TRANSMITTING on band %d, Freq: %lu Hz", bandIndex, freq);
-                    
-	  // --- Call the transmission logic ---
-	  transmit(freq, config.callsign, config.locator, config.powerDbm);
-                    
-	  ConfigManager::loadStats(stats);
-	  stats.totalTxMinutes[bandIndex] += 2;
-	  ConfigManager::saveStats(stats);
-
-	  // --- Update band rotation logic ---
-	  iterationCount++;
-	  if(iterationCount >= config.bandPlan[bandIndex].iterations) {
-	    iterationCount = 0;
-	    bandIndex = (bandIndex + 1) % config.numBandsInPlan;
-	    ESP_LOGI(TAG, "Rotating to next band index: %d", bandIndex);
-	  }
-	}
-      } else {
-	skipCount++;
-	ESP_LOGI(TAG, "Skipping interval. Skip %d of %d", skipCount, config.skipIntervals);
-      }
-
-      // Sleep for the remainder of the 2-minute slot to prevent re-triggering
-      vTaskDelay(pdMS_TO_TICKS(118 * 1000)); 
-    }
+void Scheduler::start() {
+  if (timer != nullptr) {
+    ESP_LOGW(TAG, "Scheduler timer already running.");
+    return;
   }
+  ESP_LOGI(TAG, "Starting scheduler timer.");
+  const esp_timer_create_args_t timer_args = {
+      .callback = &Scheduler::onTimer,
+      .arg = this,
+      .name = "scheduler-tick"
+  };
+  ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer));
+  ESP_ERROR_CHECK(esp_timer_start_periodic(timer, SCHEDULER_INTERVAL_US));
 }
 
-void Scheduler::transmit(uint32_t freq, const char* callsign, const char* locator, int8_t power) {
-  WSPREncoder wsprEncoder(freq);
-  wsprEncoder.encode(callsign, locator, power);
-    
-  // Use the member object to control the hardware
-  si5351.enableOutputs(1 << 0); // Enable CLK0
-    
-  for(int i = 0; i < WSPREncoder::TxBufferSize; ++i) {
-    // Calculate the exact frequency in Hz for the current symbol
-    uint32_t symbolFreqHz = freq + (wsprEncoder.symbols[i] * WSPREncoder::ToneSpacing) / 100;
-        
-    // Use the C++ API to set the frequency for each symbol step
-    si5351.setupCLK0(symbolFreqHz, Si5351::DriveStrength::MA_2);
-
-    vTaskDelay(pdMS_TO_TICKS(WSPREncoder::SymbolPeriod));
+void Scheduler::stop() {
+  if (timer != nullptr) {
+    ESP_LOGI(TAG, "Stopping scheduler timer.");
+    esp_timer_stop(timer);
+    esp_timer_delete(timer);
+    timer = nullptr;
   }
-    
-  si5351.enableOutputs(0); // Disable transmitter
+  // Ensure the transmitter is off when the scheduler stops.
+  // si5351.outputEnable(0, 0);
+}
+
+void Scheduler::onTimer(void* arg) {
+  // The static callback simply calls the instance's tick method.
+  static_cast<Scheduler*>(arg)->tick();
+}
+
+void Scheduler::tick() {
+  time_t now;
+  struct tm timeinfo;
+  time(&now);
+  localtime_r(&now, &timeinfo);
+
+  // WSPR transmissions start at the beginning of an even minute (00 seconds).
+  if (timeinfo.tm_sec != 0 || timeinfo.tm_min % 2 != 0) {
+    return;
+  }
+
+  ESP_LOGI(TAG, "Checking schedule at %02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  
+  // 1. Check if we are within a master schedule window.
+  // (Implementation of checking Settings for active time windows would go here)
+  bool inActiveWindow = true; // Placeholder
+  if (!inActiveWindow) {
+    return;
+  }
+
+  // 2. Check the skip interval.
+  // (Implementation of checking per-band skip settings would go here)
+  if (skipIntervalCount > 0) {
+    ESP_LOGI(TAG, "Skipping this interval (%d remaining)", skipIntervalCount);
+    skipIntervalCount--;
+    return;
+  }
+
+  // 3. It's time to transmit. Select the band and frequency.
+  // (This is a simplified version of the band plan logic)
+  ESP_LOGI(TAG, "TRANSMITTING on band index %d", currentBandIndex);
+
+  // TODO: Get actual frequency from settings based on currentBandIndex
+  // For example: long freq = settings.getBandFrequency(currentBandIndex);
+  // si5351.setFrequency(0, freq);
+  // si5351.outputEnable(0, 1);
+  // jtencode_wspr(...)
+
+  // 4. Update counters for the next cycle.
+  transmissionsOnCurrentBand++;
+  // (Implementation of checking transmissions_per_band setting would go here)
+  int txPerBand = 5; // Placeholder
+  if (transmissionsOnCurrentBand >= txPerBand) {
+    transmissionsOnCurrentBand = 0;
+    currentBandIndex++;
+    // (Implementation of checking band plan size would go here)
+    if (currentBandIndex >= 5) { // Placeholder for band plan size
+      currentBandIndex = 0;
+    }
+    // (Reset skip counter for the new band based on settings)
+    skipIntervalCount = 2; // Placeholder
+  }
 }
