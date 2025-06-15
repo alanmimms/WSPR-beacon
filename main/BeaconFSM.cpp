@@ -58,7 +58,7 @@ public:
 // --- BeaconFsm Method Implementations ---
 
 BeaconFsm::BeaconFsm() :
-  si5351(0, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL),
+  si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL),
   currentState(nullptr),
   settings(),
   webServer(),
@@ -95,8 +95,10 @@ BeaconFsm::BeaconFsm() :
   };
   ESP_ERROR_CHECK(esp_timer_create(&wifiRetryTimerArgs, &wifiRetryTimer));
 
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &BeaconFsm::onWifiStaDisconnected, this));
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &BeaconFsm::onWifiStaGotIp, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED,
+					     &BeaconFsm::onWifiStaDisconnected, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+					     &BeaconFsm::onWifiStaGotIp, this));
 }
 
 BeaconFsm::~BeaconFsm() {
