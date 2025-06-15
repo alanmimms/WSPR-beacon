@@ -4,6 +4,7 @@
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "driver/i2c_master.h"
+#include "esp_log.h"
 
 // --- Private Register Definitions ---
 enum {
@@ -23,6 +24,8 @@ enum si5351CrystalLoad {
     CRYSTAL_LOAD_8PF  = (2<<6),
     CRYSTAL_LOAD_10PF = (3<<6)
 };
+
+static const char *TAG = "Si5351";
 
 // --- Constructor / Destructor ---
 
@@ -64,6 +67,7 @@ void Si5351::i2cInit(uint8_t sdaPin, uint8_t sclPin) {
         .enable_internal_pullup = true
     }
   };
+  ESP_LOGI(TAG, "i2c_new_master_bus");
   ESP_ERROR_CHECK(i2c_new_master_bus(&busConfig, (i2c_master_bus_handle_t*)&busHandle));
 
   i2c_device_config_t devConfig = {
@@ -73,8 +77,10 @@ void Si5351::i2cInit(uint8_t sdaPin, uint8_t sclPin) {
     .scl_wait_us = 0,
     .flags = 0,
   };
+  ESP_LOGI(TAG, "i2c_master_bus_add_device");
   ESP_ERROR_CHECK(i2c_master_bus_add_device((i2c_master_bus_handle_t)busHandle, &devConfig,
 					    (i2c_master_dev_handle_t*)&devHandle));
+  ESP_LOGI(TAG, "done");
 }
 
 uint8_t Si5351::write(uint8_t reg, uint8_t data) {

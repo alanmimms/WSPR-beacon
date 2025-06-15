@@ -1,15 +1,28 @@
-#ifndef WEBSERVER_H
-#define WEBSERVER_H
+#pragma once
 
+#include "Settings.h"
 #include "esp_http_server.h"
 
 class WebServer {
 public:
-  void start(bool isProvisioning);
+  WebServer();
+
+  /**
+   * @brief Starts the web server.
+   * * @param settings A reference to the application's settings object.
+   * The reference guarantees that a valid, non-null object is provided.
+   */
+  void start(Settings& settings);
+
+  /**
+   * @brief Stops the web server if it is running.
+   */
   void stop();
 
-protected:
+private:
   httpd_handle_t server;
-};
+  Settings* settings; // Internally, we can store a pointer for convenience.
 
-#endif // WEBSERVER_H
+  // --- Request Handlers ---
+  static esp_err_t rootGetHandler(httpd_req_t *req);
+};
