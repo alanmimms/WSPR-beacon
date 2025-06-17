@@ -3,6 +3,8 @@
 This document summarizes the current state, requirements, and
 development history for an advanced ESP32-based WSPR beacon project.
 
+Git repo is https://github.com/alanmimms/jtencode.git.
+
 1. High-Level Goal The primary objective is to create a feature-rich,
 standalone WSPR beacon using an ESP32 microcontroller and an Si5351
 DDS synthesizer. The device will be configurable and controllable via
