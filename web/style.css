@@ -1,93 +1,111 @@
+:root {
+    --primary-color: #1a73e8;
+    --background-color: #f0f2f5;
+    --container-bg-color: #ffffff;
+    --text-color: #333;
+    --muted-text-color: #5f6368;
+    --border-color: #ddd;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f0f2f5;
-    color: #333;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
+    background-color: var(--background-color);
+    color: var(--text-color);
     margin: 0;
     padding: 1rem;
-    box-sizing: border-box;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    background-color: var(--container-bg-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem 2rem;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.75rem;
+}
+
+header h2 {
+    margin: 0.25rem 0 0;
+    font-weight: 300;
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.content-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+nav {
+    flex: 1;
+    min-width: 180px;
+    background-color: #f8f9fa;
+    border-right: 1px solid var(--border-color);
+    padding: 1rem;
+}
+
+nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+nav a {
+    display: block;
+    padding: 0.75rem 1rem;
+    text-decoration: none;
+    color: var(--muted-text-color);
+    border-radius: 4px;
+    font-weight: 500;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+nav a:hover {
+    background-color: #e9ecef;
+}
+
+nav a.active {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
 }
 
 main {
-    background-color: #fff;
+    flex: 3;
     padding: 2rem;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 400px;
+    min-width: 300px;
 }
 
-h1 {
-    color: #1a73e8;
-    text-align: center;
-    margin-top: 0;
-}
-
-p {
-    text-align: center;
-    margin-bottom: 2rem;
-    color: #5f6368;
-}
-
-form {
+footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid var(--border-color);
+    padding: 1rem 2rem;
+    font-size: 0.8rem;
+    color: var(--muted-text-color);
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
+    flex-wrap: wrap;
 }
 
-fieldset {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-legend {
-    font-weight: bold;
-    color: #1a73e8;
-    padding: 0 0.5rem;
-}
-
-label {
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    margin-bottom: 1rem;
-    box-sizing: border-box;
-}
-
-input:focus {
-    border-color: #1a73e8;
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
-}
-
-button {
-    background-color: #1a73e8;
-    color: #fff;
-    border: none;
-    padding: 1rem;
-    border-radius: 4px;
-    font-size: 1rem;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-button:hover {
-    background-color: #185abc;
-}
-
-#status-message {
-    margin-top: 1rem;
-    text-align: center;
-    font-weight: bold;
-}
+/* Form Styles */
+form { display: flex; flex-direction: column; }
+fieldset { border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; margin-bottom: 1.5rem; }
+legend { font-weight: bold; color: var(--primary-color); padding: 0 0.5rem; }
+label { margin-bottom: 0.5rem; font-weight: 500; }
+input { width: 100%; padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 1rem; box-sizing: border-box; }
+input:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2); }
+button { background-color: var(--primary-color); color: #fff; border: none; padding: 1rem; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+button:hover { background-color: #185abc; }
+#status-message { margin-top: 1rem; text-align: center; font-weight: bold; }

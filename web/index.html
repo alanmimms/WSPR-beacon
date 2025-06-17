@@ -3,18 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WSPR Beacon Setup</title>
+    <title>WSPR Beacon Control</title>
     <link rel="stylesheet" href="style.css">
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
-  <h1>WSPR Beacon Setup</title>
-  <main>
-    <form>
-      <button type="submit" id="submit-btn">Save and Reboot</button>
-    </form>
-    <div id="status-message"></div>
-  </main>
-  <script src="script.js"></script>
+    <div class="container">
+        <header>
+            <h1>WSPR Beacon</h1>
+            <h2>Control Panel</h2>
+        </header>
+        <div class="content-wrapper">
+            <nav>
+                <ul>
+                    <li><a href="/index.html" class="active">Status</a></li>
+                    <li><a href="/provisioning.html">Provisioning</a></li>
+                    <!-- More links will be added here -->
+                </ul>
+            </nav>
+            <main>
+                <h3>Beacon Status</h3>
+                <p>This page will show the current operational status of the beacon.</p>
+                <!-- Content for status, schedules, etc. will go here -->
+            </main>
+        </div>
+        <footer>
+            <span id="footer-identity"></span>
+            <span id="footer-network"></span>
+        </footer>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>

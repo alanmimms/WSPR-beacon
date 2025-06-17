@@ -7,11 +7,12 @@ static const char* TAG = "Settings";
 static const char* NVS_NAMESPACE = "beacon_cfg";
 
 Settings::Settings() {
-  // Initialize with empty C strings to ensure they are null-terminated
   memset(callsign, 0, sizeof(callsign));
   memset(locator, 0, sizeof(locator));
+  powerDbm = 0;
   memset(ssid, 0, sizeof(ssid));
   memset(password, 0, sizeof(password));
+  memset(hostname, 0, sizeof(hostname));
 }
 
 void Settings::load() {
@@ -24,22 +25,25 @@ void Settings::load() {
 
   size_t requiredSize;
 
-  // Load Callsign
+  // Load string values
   if (nvs_get_str(nvsHandle, "callsign", NULL, &requiredSize) == ESP_OK) {
     nvs_get_str(nvsHandle, "callsign", callsign, &requiredSize);
   }
-  // Load Locator
   if (nvs_get_str(nvsHandle, "locator", NULL, &requiredSize) == ESP_OK) {
     nvs_get_str(nvsHandle, "locator", locator, &requiredSize);
   }
-  // Load SSID
   if (nvs_get_str(nvsHandle, "ssid", NULL, &requiredSize) == ESP_OK) {
     nvs_get_str(nvsHandle, "ssid", ssid, &requiredSize);
   }
-  // Load Password
   if (nvs_get_str(nvsHandle, "password", NULL, &requiredSize) == ESP_OK) {
     nvs_get_str(nvsHandle, "password", password, &requiredSize);
   }
+  if (nvs_get_str(nvsHandle, "hostname", NULL, &requiredSize) == ESP_OK) {
+    nvs_get_str(nvsHandle, "hostname", hostname, &requiredSize);
+  }
+
+  // Load integer value
+  nvs_get_i32(nvsHandle, "power_dbm", &powerDbm);
   
   nvs_close(nvsHandle);
   ESP_LOGI(TAG, "Settings loaded from NVS.");
@@ -55,8 +59,10 @@ void Settings::save() {
 
   nvs_set_str(nvsHandle, "callsign", callsign);
   nvs_set_str(nvsHandle, "locator", locator);
+  nvs_set_i32(nvsHandle, "power_dbm", powerDbm);
   nvs_set_str(nvsHandle, "ssid", ssid);
   nvs_set_str(nvsHandle, "password", password);
+  nvs_set_str(nvsHandle, "hostname", hostname);
 
   err = nvs_commit(nvsHandle);
   if (err != ESP_OK) {
@@ -70,19 +76,28 @@ void Settings::save() {
 // --- Getters ---
 const char* Settings::getCallsign() const { return callsign; }
 const char* Settings::getLocator() const { return locator; }
+int Settings::getPowerDbm() const { return powerDbm; }
 const char* Settings::getSsid() const { return ssid; }
 const char* Settings::getPassword() const { return password; }
+const char* Settings::getHostname() const { return hostname; }
+
 
 // --- Setters ---
 void Settings::setCallsign(const char* newCallsign) { 
-  strncpy(callsign, newCallsign, MAX_CALLSIGN_LEN - 1); 
+  strncpy(callsign, newCallsign, sizeof(callsign) - 1); 
 }
 void Settings::setLocator(const char* newLocator) { 
-  strncpy(locator, newLocator, MAX_LOCATOR_LEN - 1); 
+  strncpy(locator, newLocator, sizeof(locator) - 1); 
+}
+void Settings::setPowerDbm(int power) {
+  powerDbm = power;
 }
 void Settings::setSsid(const char* newSsid) { 
-  strncpy(ssid, newSsid, MAX_SSID_LEN - 1); 
+  strncpy(ssid, newSsid, sizeof(ssid) - 1); 
 }
 void Settings::setPassword(const char* newPassword) { 
-  strncpy(password, newPassword, MAX_PASSWORD_LEN - 1); 
+  strncpy(password, newPassword, sizeof(password) - 1); 
+}
+void Settings::setHostname(const char* newHostname) {
+  strncpy(hostname, newHostname, sizeof(hostname) - 1);
 }
