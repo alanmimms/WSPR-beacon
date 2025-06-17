@@ -10,8 +10,6 @@
 #include "driver/i2c_master.h"
 
 // --- Debugging Flag ---
-// Set to 1 to use static Wi-Fi credentials from secrets.h for debugging.
-// Set to 0 for normal operation (AP provisioning).
 #define USE_STATIC_WIFI_CREDS 1
 
 #if USE_STATIC_WIFI_CREDS
@@ -68,10 +66,18 @@ BeaconFsm::BeaconFsm() :
 
   settings.load();
   
-  const esp_timer_create_args_t provisionTimerArgs = {.callback = &BeaconFsm::onProvisionTimeout, .arg = this, .name = "provision-timeout"};
+  const esp_timer_create_args_t provisionTimerArgs = {
+    .callback = &BeaconFsm::onProvisionTimeout,
+    .arg = this,
+    .name = "provision-timeout"
+  };
   ESP_ERROR_CHECK(esp_timer_create(&provisionTimerArgs, &provisionTimer));
 
-  const esp_timer_create_args_t wifiRetryTimerArgs = {.callback = &BeaconFsm::onWifiRetryTimeout, .arg = this, .name = "wifi-retry"};
+  const esp_timer_create_args_t wifiRetryTimerArgs = {
+    .callback = &BeaconFsm::onWifiRetryTimeout,
+    .arg = this,
+    .name = "wifi-retry"
+  };
   ESP_ERROR_CHECK(esp_timer_create(&wifiRetryTimerArgs, &wifiRetryTimer));
 }
 
@@ -138,7 +144,6 @@ void BeaconFsm::wifiStaDisconnected(void* eventData) {
 void InitialState::enter() {
   #if USE_STATIC_WIFI_CREDS
     ESP_LOGI(TAG, "Debug mode enabled. Using static credentials from secrets.h");
-    // Temporarily overwrite settings with static credentials for connection attempt.
     context->settings.setSsid(WIFI_SSID);
     context->settings.setPassword(WIFI_PASSWORD);
     context->transitionTo(new ConnectingState(context));
@@ -179,9 +184,7 @@ void ConnectedState::enter() {
 
 void TransmittingState::enter() {
   ESP_LOGI(TAG, "Entering Transmitting state. System is operational.");
-  // Start the web server in normal (non-provisioning) mode
   context->webServer.start(context->settings, false);
-  // Start the transmission scheduler
   context->scheduler.start();
 }
 
@@ -216,7 +219,6 @@ void BeaconFsm::startProvisioningMode() {
   ESP_LOGI(TAG, "Provisioning AP '%s' started.", wifi_config.ap.ssid);
   ESP_LOGI(TAG, "Connect and go to http://" IPSTR, IP2STR(&ip_info.ip));
 
-  // Start the web server in provisioning (captive portal) mode.
   webServer.start(settings, true);
 }
 

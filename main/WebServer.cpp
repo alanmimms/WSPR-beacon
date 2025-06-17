@@ -13,13 +13,15 @@ static const char* TAG = "WebServer";
 static const char* SPIFFS_PARTITION_LABEL = "storage";
 static const char* SPIFFS_BASE_PATH = "/spiffs";
 
-// Declare the SPIFFS configuration as a static const to avoid runtime overhead.
+// Declare configurations as static const to avoid runtime overhead.
 static const esp_vfs_spiffs_conf_t spiffs_conf = {
   .base_path = SPIFFS_BASE_PATH,
   .partition_label = SPIFFS_PARTITION_LABEL,
   .max_files = 5,
   .format_if_mount_failed = true
 };
+
+static const dns_server_config_t dns_config = DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF");
 
 WebServer::WebServer() : server(nullptr), dnsServer(nullptr), settings(nullptr), provisioningMode(false) {}
 
@@ -37,8 +39,7 @@ void WebServer::mountFileSystem() {
 
 void WebServer::startDnsServer() {
   ESP_LOGI(TAG, "Starting custom DNS server for captive portal");
-  dns_server_config_t config = DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF");
-  dnsServer = start_dns_server(&config);
+  dnsServer = start_dns_server(&dns_config);
   if (dnsServer == NULL) {
       ESP_LOGE(TAG, "Failed to start custom DNS server");
   }
@@ -146,17 +147,25 @@ void WebServer::start(Settings& settingsRef, bool provMode) {
     startDnsServer();
   }
 
-  // Use the default configuration which includes httpd_uri_match_wildcard
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.uri_match_fn = httpd_uri_match_wildcard;
   config.stack_size = 8192;
+  config.uri_match_fn = httpd_uri_match_wildcard;
 
   if (httpd_start(&server, &config) == ESP_OK) {
-    // A single wildcard handler for all GET requests is the robust solution.
-    httpd_uri_t fileGetUri = {.uri = "/*", .method = HTTP_GET, .handler = fileGetHandler, .user_ctx = this};
+    const httpd_uri_t fileGetUri = {
+      .uri       = "/*",
+      .method    = HTTP_GET,
+      .handler   = fileGetHandler,
+      .user_ctx  = this
+    };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fileGetUri));
 
-    httpd_uri_t settingsPostUri = {.uri = "/settings", .method = HTTP_POST, .handler = settingsPostHandler, .user_ctx = this};
+    const httpd_uri_t settingsPostUri = {
+      .uri       = "/settings",
+      .method    = HTTP_POST,
+      .handler   = settingsPostHandler,
+      .user_ctx  = this
+    };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &settingsPostUri));
   } else {
     ESP_LOGE(TAG, "Error starting web server!");
