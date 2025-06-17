@@ -9,6 +9,15 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 
+// --- Debugging Flag ---
+// Set to 1 to use static Wi-Fi credentials from secrets.h for debugging.
+// Set to 0 for normal operation (AP provisioning).
+#define USE_STATIC_WIFI_CREDS 1
+
+#if USE_STATIC_WIFI_CREDS
+#include "secrets.h"
+#endif
+
 static const char* TAG = "BeaconFSM";
 
 static const int MAX_WIFI_CONNECT_ATTEMPTS = 10;
@@ -102,34 +111,50 @@ void BeaconFsm::wifiRetryTimeout() {
 
 void BeaconFsm::wifiStaGotIp(void* eventData) {
   ip_event_got_ip_t* event = (ip_event_got_ip_t*) eventData;
-  ESP_LOGI(TAG, "Got IP address: " IPSTR, IP2STR(&event->ip_info.ip));
+  ESP_LOGI(TAG, "***************************************************");
+  ESP_LOGI(TAG, "Beacon connected! IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
+  ESP_LOGI(TAG, "***************************************************");
   transitionTo(new ConnectedState(this));
 }
 
 void BeaconFsm::wifiStaDisconnected(void* eventData) {
   ESP_LOGW(TAG, "Wi-Fi disconnected.");
-  wifiConnectAttempts++;
-  if (wifiConnectAttempts >= MAX_WIFI_CONNECT_ATTEMPTS) {
-    ESP_LOGE(TAG, "Failed to connect after %d attempts. Entering provisioning mode.", MAX_WIFI_CONNECT_ATTEMPTS);
-    wifiConnectAttempts = 0;
-    transitionTo(new ProvisioningState(this));
-  } else {
-    esp_timer_start_once(wifiRetryTimer, 5 * 1000 * 1000);
-  }
+  
+  #if USE_STATIC_WIFI_CREDS
+    ESP_LOGI(TAG, "Debug mode: Retrying connection to static AP...");
+    transitionTo(new ConnectingState(this));
+  #else
+    wifiConnectAttempts++;
+    if (wifiConnectAttempts >= MAX_WIFI_CONNECT_ATTEMPTS) {
+      ESP_LOGE(TAG, "Failed to connect after %d attempts. Entering provisioning mode.", MAX_WIFI_CONNECT_ATTEMPTS);
+      wifiConnectAttempts = 0;
+      transitionTo(new ProvisioningState(this));
+    } else {
+      esp_timer_start_once(wifiRetryTimer, 5 * 1000 * 1000);
+    }
+  #endif
 }
 
 void InitialState::enter() {
-  ESP_LOGI(TAG, "Entering Initial state");
-  if (strlen(context->settings.getSsid()) > 0) {
+  #if USE_STATIC_WIFI_CREDS
+    ESP_LOGI(TAG, "Debug mode enabled. Using static credentials from secrets.h");
+    // Temporarily overwrite settings with static credentials for connection attempt.
+    context->settings.setSsid(WIFI_SSID);
+    context->settings.setPassword(WIFI_PASSWORD);
     context->transitionTo(new ConnectingState(context));
-  } else {
-    ESP_LOGI(TAG, "No SSID configured, entering provisioning mode.");
-    context->transitionTo(new ProvisioningState(context));
-  }
+  #else
+    ESP_LOGI(TAG, "Entering Initial state");
+    if (strlen(context->settings.getSsid()) > 0) {
+      context->transitionTo(new ConnectingState(context));
+    } else {
+      ESP_LOGI(TAG, "No SSID configured, entering provisioning mode.");
+      context->transitionTo(new ProvisioningState(context));
+    }
+  #endif
 }
 
 void ConnectingState::enter() {
-  ESP_LOGI(TAG, "Entering Connecting state, attempt %d/%d", context->wifiConnectAttempts + 1, MAX_WIFI_CONNECT_ATTEMPTS);
+  ESP_LOGI(TAG, "Connecting to Wi-Fi...");
   context->connectToWifi();
 }
 
@@ -168,8 +193,8 @@ void BeaconFsm::connectToWifi() {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifiConfig));
   ESP_ERROR_CHECK(esp_wifi_start());
-  ESP_ERROR_CHECK(esp_wifi_connect());
   ESP_LOGI(TAG, "Connection request sent for SSID: %s", settings.getSsid());
+  ESP_ERROR_CHECK(esp_wifi_connect());
 }
 
 void BeaconFsm::startProvisioningMode() {
@@ -198,7 +223,6 @@ void BeaconFsm::startProvisioningMode() {
 void BeaconFsm::stopWebServer() {
   ESP_LOGI(TAG, "Stopping web server and Wi-Fi.");
   webServer.stop();
-  esp_wifi_stop();
 }
 
 void BeaconFsm::startNtpSync() {

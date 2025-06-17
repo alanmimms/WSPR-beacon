@@ -37,4 +37,5 @@ private:
 
   // Member variables to store context
   Settings* settings;
+  bool provisioningMode;
 };

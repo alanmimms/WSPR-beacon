@@ -18,7 +18,7 @@ extern "C" {
 
 #define DNS_SERVER_CONFIG_SINGLE(queried_name, netif_key)  {        \
         .num_of_entries = 1,                                        \
-        .item = { { .name = queried_name, .if_key = netif_key } }   \
+        .item = { { .name = queried_name, .if_key = netif_key, .ip = {0} } }   \
         }
 
 /**
@@ -43,9 +43,9 @@ typedef struct dns_entry_pair {
  * #include "dns_server.h"
  *
  * dns_server_config_t config = {
- *   .num_of_entries = 2,
- *   .item = { {.name = "my-esp32.com", .ip = { .addr = ESP_IP4TOADDR( 192, 168, 4, 1) } } ,
- *             {.name = "my-utils.com", .ip = { .addr = ESP_IP4TOADDR( 192, 168, 4, 100) } } } };
+ * .num_of_entries = 2,
+ * .item = { {.name = "my-esp32.com", .ip = { .addr = ESP_IP4TOADDR( 192, 168, 4, 1) } } ,
+ * {.name = "my-utils.com", .ip = { .addr = ESP_IP4TOADDR( 192, 168, 4, 100) } } } };
  * start_dns_server(&config);
  * \endcode
  */
