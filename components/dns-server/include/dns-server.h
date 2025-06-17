@@ -66,7 +66,7 @@ typedef struct dns_server_handle *dns_server_handle_t;
  * @param config Configuration structure listing the pairs of (name, IP/netif-id)
  * @return dns_server's handle on success, NULL on failure
  */
-dns_server_handle_t start_dns_server(dns_server_config_t *config);
+dns_server_handle_t start_dns_server(const dns_server_config_t *config);
 
 /**
  * @brief Stops and destroys DNS server's task and structs

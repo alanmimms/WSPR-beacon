@@ -267,7 +267,7 @@ void dns_server_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-dns_server_handle_t start_dns_server(dns_server_config_t *config)
+dns_server_handle_t start_dns_server(const dns_server_config_t *config)
 {
     dns_server_handle_t handle = calloc(1, sizeof(struct dns_server_handle) + config->num_of_entries * sizeof(dns_entry_pair_t));
     ESP_RETURN_ON_FALSE(handle, NULL, TAG, "Failed to allocate dns server handle");
