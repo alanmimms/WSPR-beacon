@@ -15,59 +15,56 @@ Framework: ESP-IDF
 
 Main Class: BeaconFsm acts as the central context object, owning all major components.
 
-State Machine: A custom, pointer-based state machine has been implemented to replace tinyfsm.
+State Machine: A custom, pointer-based state machine manages the application's operational states.
 
-BeaconState is an abstract base class for all states.
+Web Interface: A web server built on esp_http_server provides a UI for configuration and status monitoring.
 
-BeaconFsm holds a pointer to the currentState and manages transitions via a transitionTo() method.
+Web assets (HTML, CSS, JS, favicon) are stored on a dedicated SPIFFS partition.
 
-This design was chosen for its simplicity and readability over the previous template-based approach.
+A captive portal with a custom DNS server redirects users to the provisioning page in AP mode.
+
+HTTP Basic Authentication protects non-provisioning pages.
+
+A JSON API endpoint (/api/status.json) provides dynamic data to the frontend.
 
 Component Drivers:
 
-si5351: A C++ class-based driver for the Si5351 chip. A single instance is owned by BeaconFsm.
+si5351: C++ class for the Si5351 chip.
 
-Scheduler: Manages transmission timing and band plans. It receives a reference to the si5351 and Settings objects from BeaconFsm.
+Scheduler: Manages transmission timing and band plans.
 
-WebServer: Provides the web UI for configuration. It receives a reference to the Settings object.
+Settings: A data-driven class that manages all configuration using string keys and dynamically allocated values, persisted to NVS.
 
-Settings: Manages loading and saving configuration to NVS.
-
-jtencode: A C++ component for encoding WSPR signals.
+dns-server: A custom component for the captive portal DNS.
 
 Design Pattern: Dependency Injection
-The project uses dependency injection to manage shared resources. The BeaconFsm class creates and owns the single instances of Si5351 and Settings. It then passes references (Si5351&, Settings&) to other classes (Scheduler, WebServer) that need them. This ensures a single source of truth and avoids object duplication.
+The BeaconFsm class creates and owns the single instances of Si5351 and Settings. It then passes references to these objects to other classes (Scheduler, WebServer) that need to access them.
 
 3. Detailed Feature Requirements
 Wi-Fi and Networking
 Dual-Mode Connectivity: Operates in Station Mode (connecting to a configured Wi-Fi) or falls back to a Provisioning AP Mode.
 
-Provisioning AP: Serves a web page to configure Wi-Fi credentials and other beacon settings, which are saved to NVS.
-
-Connection Logic: The state machine handles repeated attempts to connect in Station mode, falling back to Provisioning mode for a 5-minute timeout before retrying.
-
-Time Management
-NTP Synchronization: Will be used for precise time synchronization once the beacon is connected to a network.
-
-Time Zone Support: The UI will allow setting a local time zone for scheduling.
+Debug Mode: A compile-time flag (USE_STATIC_WIFI_CREDS) allows bypassing AP mode to connect directly to a hardcoded Wi-Fi network for easier development.
 
 Web Interface & Control
-Configuration Page: Allows setting all operational parameters (Callsign, Locator, Power, Master Schedule, Band Plan).
+Layout: All pages share a consistent layout with a header, footer, and side navigation menu.
 
-Status & Statistics Page: A read-only page to display current status and transmission history.
+Provisioning Page: (provisioning.html) Allows setting up Wi-Fi, hostname, and initial admin credentials.
+
+Control Pages: (index.html, security.html) Are protected by authentication and allow for monitoring and further configuration.
 
 4. Hardware & System
 MCU: ESP32-C3
 
 Synthesizer: Si5351
 
-Partition Table: A custom partition scheme provides a single, large 3MB application partition, foregoing OTA capability.
+Partition Table: A custom partitions.csv defines partitions for the application, NVS, and a storage partition for the SPIFFS filesystem.
 
 5. Development History & Key Decisions
-The project was initially implemented using the tinyfsm library with the "Curiously Recurring Template Pattern" (CRTP). This led to complex, non-intuitive compiler errors related to template instantiation (this->template enter<...>()).
+The project was refactored from a complex template-based state machine (tinyfsm) to a simpler, more maintainable pointer-based state machine.
 
-A major architectural decision was made to abandon tinyfsm and refactor the state machine to a simpler, more conventional pointer-based design. This resolved the compilation issues and significantly improved code readability.
+Web content was moved from being embedded in C++ code to a separate SPIFFS partition, managed by the spiffs_create_partition_image build command.
 
-Several compiler warnings, treated as errors (-Wreorder, -Wmissing-field-initializers, -Waddress), were resolved by reordering member variables, fully initializing structs, and using C++ references (&) instead of pointers (*) for function arguments where null is not a valid state.
+An "HTTP 431: Request Header Fields Too Large" error during authentication was resolved by increasing the Max HTTP Request Header Length in the HTTP Server component configuration via menuconfig. Previous attempts to fix this in code were incorrect as the issue was with the server's compile-time buffer allocation.
 
-The Scheduler and WebServer classes were refactored to accept references to the shared si5351 and settings objects, following a dependency injection pattern.
+The Settings class was refactored to be fully data-driven, using an array of structs and generic getValue/setValue methods instead of hardcoded getters and setters.

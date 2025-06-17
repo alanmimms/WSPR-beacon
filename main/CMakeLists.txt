@@ -20,6 +20,7 @@ idf_component_register(
         esp_wifi 
         json
         lwip 
+ 	mbedtls
         mdns
         nvs_flash 
         spiffs
