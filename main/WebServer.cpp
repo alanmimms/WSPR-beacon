@@ -178,6 +178,10 @@ esp_err_t WebServer::fileGetHandler(httpd_req_t* req) {
   filepath[sizeof(filepath) - 1] = '\0';
   strncat(filepath, targetFile, sizeof(filepath) - basePathLen - 1);
 
+  isControlPage = (strcmp(uri, "/index.html") == 0) || 
+    (strcmp(uri, "/security.html") == 0) ||
+    (strcmp(uri, "/settings.html") == 0);
+
   int fd = open(filepath, O_RDONLY, 0);
   if (fd == -1) {
     httpd_resp_send_404(req);
@@ -219,72 +223,107 @@ esp_err_t WebServer::settingsPostHandler(httpd_req_t *req) {
   char* pair = strtok_r(buf, "&", &saveptr);
   while (pair != NULL) {
     char* value_saveptr;
-    char* key = strtok_r(pair, "=", &value_saveptr);
-    char* value = strtok_r(NULL, "", &value_saveptr);
+    WebServer* self = static_cast<WebServer*>(req->user_ctx);
+    char buf[1024];
+    int ret, remaining = req->content_len;
+
+    if (remaining >= sizeof(buf)) { /* ... */ return ESP_FAIL; }
+    ret = httpd_req_recv(req, buf, remaining);
+    if (ret <= 0) { return ESP_FAIL; }
+    buf[ret] = '\0';
+
+    bool rebootRequired = false;
+    char* saveptr;
+    char* pair = strtok_r(buf, "&", &saveptr);
+    while (pair != NULL) {
+      char* value_saveptr;
+      char* key = strtok_r(pair, "=", &value_saveptr);
+      char* value = strtok_r(NULL, "", &value_saveptr);
         
-    if (key && value) {
-      self->settings->setValue(key, value);
+      if (key && value) {
+	self->settings->setValue(key, value);
+
+	if (key && value) {
+	  if (strcmp(key, "reboot") == 0 && strcmp(value, "true") == 0) {
+	    rebootRequired = true;
+	  } else {
+	    self->settings->setValue(key, value);
+	  }
+	}
+	pair = strtok_r(NULL, "&", &saveptr);
+      }
+      pair = strtok_r(NULL, "&", &saveptr);
     }
-    pair = strtok_r(NULL, "&", &saveptr);
-  }
     
-  self->settings->save();
-  ESP_LOGI(TAG, "Settings saved. Rebooting.");
-  httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    self->settings->save();
+    ESP_LOGI(TAG, "Settings saved. Rebooting.");
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    self->settings->save();
     
-  vTaskDelay(pdMS_TO_TICKS(1000));
-  esp_restart();
-  return ESP_OK;
-}
-
-void WebServer::start(Settings& settingsRef, bool provMode) {
-  if (server != nullptr) return;
-  
-  this->settings = &settingsRef;
-  this->provisioningMode = provMode;
-  mountFileSystem();
-  
-  if (this->provisioningMode) {
-    startDnsServer();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+    return ESP_OK;
   }
 
-  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.stack_size = 8192;
-  config.uri_match_fn = httpd_uri_match_wildcard;
+  void WebServer::start(Settings& settingsRef, bool provMode) {
+    if (server != nullptr) return;
   
-  if (httpd_start(&server, &config) == ESP_OK) {
-    const httpd_uri_t apiStatusUri = {
-      .uri       = "/api/status.json",
-      .method    = HTTP_GET,
-      .handler   = apiStatusGetHandler,
-      .user_ctx  = this
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &apiStatusUri));
+    this->settings = &settingsRef;
+    this->provisioningMode = provMode;
+    mountFileSystem();
+  
+    if (this->provisioningMode) {
+      startDnsServer();
+    }
 
-    const httpd_uri_t fileGetUri = {
-      .uri       = "/*",
-      .method    = HTTP_GET,
-      .handler   = fileGetHandler,
-      .user_ctx  = this
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fileGetUri));
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.stack_size = 8192;
+    config.uri_match_fn = httpd_uri_match_wildcard;
+  
+    if (httpd_start(&server, &config) == ESP_OK) {
+      const httpd_uri_t apiStatusUri = {
+	.uri       = "/api/status.json",
+	.method    = HTTP_GET,
+	.handler   = apiStatusGetHandler,
+	.user_ctx  = this
+      };
+      ESP_ERROR_CHECK(httpd_register_uri_handler(server, &apiStatusUri));
+    if (rebootRequired) {
+        ESP_LOGI(TAG, "Settings saved. Rebooting.");
+        httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        esp_restart();
+    } else {
+        ESP_LOGI(TAG, "Settings saved.");
+        httpd_resp_send(req, "Settings Saved", HTTPD_RESP_USE_STRLEN);
+    }
 
-    const httpd_uri_t settingsPostUri = {
-      .uri       = "/settings",
-      .method    = HTTP_POST,
-      .handler   = settingsPostHandler,
-      .user_ctx  = this
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &settingsPostUri));
-  } else {
-    ESP_LOGE(TAG, "Error starting web server!");
+      const httpd_uri_t fileGetUri = {
+	.uri       = "/*",
+	.method    = HTTP_GET,
+	.handler   = fileGetHandler,
+	.user_ctx  = this
+      };
+      ESP_ERROR_CHECK(httpd_register_uri_handler(server, &fileGetUri));
+
+      const httpd_uri_t settingsPostUri = {
+	.uri       = "/settings",
+	.method    = HTTP_POST,
+	.handler   = settingsPostHandler,
+	.user_ctx  = this
+      };
+      ESP_ERROR_CHECK(httpd_register_uri_handler(server, &settingsPostUri));
+    } else {
+      ESP_LOGE(TAG, "Error starting web server!");
+    }
+
+    return ESP_OK;
   }
-}
 
-void WebServer::stop() {
-  stopDnsServer();
-  if (server != nullptr) {
-    httpd_stop(server);
-    server = nullptr;
+  void WebServer::stop() {
+    stopDnsServer();
+    if (server != nullptr) {
+      httpd_stop(server);
+      server = nullptr;
+    }
   }
-}

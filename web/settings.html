@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSPR Beacon Settings</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WSPR Beacon</h1>
+            <h2>Beacon & Schedule Settings</h2>
+        </header>
+        <div class="content-wrapper">
+            <nav>
+                <ul>
+                    <li><a href="/index.html">Status</a></li>
+                    <li><a href="/provisioning.html">Provisioning</a></li>
+                    <li><a href="/security.html">Security</a></li>
+                    <li><a href="/settings.html" class="active">Settings</a></li>
+                </ul>
+            </nav>
+            <main>
+                <form id="settings-form">
+                    <fieldset>
+                        <legend>Beacon Identity</legend>
+                        <label for="callsign">Callsign</label>
+                        <input type="text" id="callsign" name="callsign" required>
+                        <label for="locator">Maidenhead Locator (6 chars)</label>
+                        <input type="text" id="locator" name="locator" maxlength="6" required>
+                        <label for="powerDbm">Power (dBm)</label>
+                        <input type="number" id="powerDbm" name="powerDbm" min="0" max="30" required>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Scheduling</legend>
+                        <p>Configure when the beacon is active. All times are in UTC.</p>
+                        <label for="tx_percentage">Transmit Percentage</label>
+                        <input type="number" id="tx_percentage" name="tx_percentage" min="0" max="100" value="20" required>
+                        <small>Percentage of 2-minute WSPR intervals to transmit on.</small>
+
+                        <label for="tx_skip">Skip Intervals</label>
+                        <input type="number" id="tx_skip" name="tx_skip" min="0" max="10" value="0" required>
+                        <small>Number of 2-minute intervals to skip after transmitting.</small>
+                    </fieldset>
+                    
+                    <button type="submit" id="submit-btn">Save Settings</button>
+                </form>
+                <div id="status-message"></div>
+            </main>
+        </div>
+        <footer>
+             <span id="footer-identity"></span>
+             <span id="footer-network"></span>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

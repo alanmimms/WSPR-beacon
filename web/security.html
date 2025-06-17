@@ -19,6 +19,7 @@
                     <li><a href="/index.html">Status</a></li>
                     <li><a href="/provisioning.html">Provisioning</a></li>
                     <li><a href="/security.html" class="active">Security</a></li>
+                    <li><a href="/settings.html">Settings</a></li>
                 </ul>
             </nav>
             <main>
@@ -27,9 +28,9 @@
                     <fieldset>
                         <legend>Admin Credentials</legend>
                         <label for="adminUser">Admin Username</label>
-                        <input type="text" id="adminUser" name="adminUser" required>
+                        <input type="text" id="adminUser" name="adminUser" maxlength="32" required>
                         <label for="adminPass">New Password</label>
-                        <input type="password" id="adminPass" name="adminPass">
+                        <input type="password" id="adminPass" name="adminPass" maxlength="64">
                     </fieldset>
                     <button type="submit" id="submit-btn">Save and Reboot</button>
                 </form>
