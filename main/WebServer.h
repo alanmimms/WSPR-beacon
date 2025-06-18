@@ -1,23 +1,28 @@
-#pragma once
+#ifndef WEBSERVER_H
+#define WEBSERVER_H
 
 #include "esp_http_server.h"
+#include "Settings.h"
 
 class WebServer {
 public:
-    WebServer();
-    void start();
-    void stop();
+  WebServer(Settings &settings);
+  ~WebServer();
 
-    // Add these declarations:
-    static esp_err_t rootGetHandler(httpd_req_t *req);
-    static esp_err_t fileGetHandler(httpd_req_t *req);
-    static esp_err_t apiSettingsGetHandler(httpd_req_t *req);
-    static esp_err_t apiSettingsPostHandler(httpd_req_t *req);
-    static esp_err_t apiStatusGetHandler(httpd_req_t *req);  // <-- Add this line
+  void start();
+  void stop();
 
 private:
-    httpd_handle_t server;
+  static esp_err_t rootGetHandler(httpd_req_t *req);
+  static esp_err_t fileGetHandler(httpd_req_t *req);
+  static esp_err_t apiSettingsGetHandler(httpd_req_t *req);
+  static esp_err_t apiSettingsPostHandler(httpd_req_t *req);
+  static esp_err_t apiStatusGetHandler(httpd_req_t *req);
+
+  static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename);
+
+  httpd_handle_t server;
+  Settings &settings;
 };
 
-// Also declare getStatusJson if not already declared elsewhere:
-extern "C" esp_err_t getStatusJson(char* buf, size_t buflen);
+#endif // WEBSERVER_H

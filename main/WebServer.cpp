@@ -1,5 +1,4 @@
 #include "WebServer.h"
-#include "Settings.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
@@ -15,23 +14,21 @@
 static const char *TAG = "WebServer";
 static const char *SPIFFS_BASE_PATH = "/spiffs";
 
-WebServer::WebServer() : server(nullptr) {}
+WebServer::WebServer(Settings &settings)
+  : server(nullptr), settings(settings) {}
 
-// Sets the Content-Type header based on the file extension
-static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename) {
-  if (strstr(filename, ".html")) {
-    return httpd_resp_set_type(req, "text/html");
-  } else if (strstr(filename, ".css")) {
-    return httpd_resp_set_type(req, "text/css");
-  } else if (strstr(filename, ".js")) {
-    return httpd_resp_set_type(req, "application/javascript");
-  } else if (strstr(filename, ".ico")) {
-    return httpd_resp_set_type(req, "image/x-icon");
-  }
+WebServer::~WebServer() {
+  stop();
+}
+
+esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {
+  if (strstr(filename, ".html")) return httpd_resp_set_type(req, "text/html");
+  if (strstr(filename, ".css")) return httpd_resp_set_type(req, "text/css");
+  if (strstr(filename, ".js")) return httpd_resp_set_type(req, "application/javascript");
+  if (strstr(filename, ".ico")) return httpd_resp_set_type(req, "image/x-icon");
   return httpd_resp_set_type(req, "text/plain");
 }
 
-// Handler to serve the root URL, which redirects to index.html
 esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
   httpd_resp_set_status(req, "307 Temporary Redirect");
   httpd_resp_set_hdr(req, "Location", "/index.html");
@@ -39,12 +36,10 @@ esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Generic handler to serve any static file from the SPIFFS '/spiffs' directory
 esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   char filepath[FILE_PATH_MAX];
-  // Safely construct the full path to the file in the SPIFFS filesystem
   strncpy(filepath, SPIFFS_BASE_PATH, sizeof(filepath) - 1);
-  filepath[sizeof(filepath) - 1] = '\0'; // Ensure null termination
+  filepath[sizeof(filepath) - 1] = '\0';
   strncat(filepath, req->uri, sizeof(filepath) - strlen(filepath) - 1);
   ESP_LOGI(TAG, "Serving file: %s", filepath);
 
@@ -93,49 +88,27 @@ esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
 
 // Handler for GET /api/settings - returns all current settings as JSON
 esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
-  char* jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
+  char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
   if (!jsonBuffer) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  
-  if (getSettingsJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
+  if (self && self->settings.getJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
   } else {
     ESP_LOGE(TAG, "Failed to retrieve settings as JSON");
     httpd_resp_send_500(req);
   }
-
-  free(jsonBuffer);
-  return ESP_OK;
-}
-
-// Handler for GET /api/status.json - returns system status as JSON
-esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
-  char* jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
-  if (!jsonBuffer) {
-    ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
-    httpd_resp_send_500(req);
-    return ESP_FAIL;
-  }
-
-  // Placeholder: replace with your actual status-gathering logic
-  if (getStatusJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
-  } else {
-    ESP_LOGE(TAG, "Failed to retrieve status as JSON");
-    httpd_resp_send_500(req);
-  }
-
   free(jsonBuffer);
   return ESP_OK;
 }
 
 // Handler for POST /api/settings - receives JSON and updates settings
 esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
   char content[JSON_BUF_SIZE];
   int ret = httpd_req_recv(req, content, sizeof(content) - 1);
   if (ret <= 0) {
@@ -144,7 +117,12 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   }
   content[ret] = '\0';
 
-  esp_err_t err = saveSettingsJson(content);
+  if (!self) {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Settings instance not initialized");
+    return ESP_FAIL;
+  }
+
+  esp_err_t err = self->settings.saveJson(content);
   if (err == ESP_OK) {
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
@@ -155,10 +133,40 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+// Handler for GET /api/status.json - returns system status as JSON
+esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
+  char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
+  if (!jsonBuffer) {
+    ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  // Fill in with your actual status-gathering logic
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "status", "ok");
+  cJSON_AddNumberToObject(root, "uptime", 1234); // Replace with actual uptime
+  cJSON_AddBoolToObject(root, "wifi_connected", true); // Replace as needed
+
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered && strlen(rendered) < JSON_BUF_SIZE) {
+    strcpy(jsonBuffer, rendered);
+    cJSON_free(rendered);
+    cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
+    free(jsonBuffer);
+    return ESP_OK;
+  }
+  if (rendered) cJSON_free(rendered);
+  cJSON_Delete(root);
+  free(jsonBuffer);
+  httpd_resp_send_500(req);
+  return ESP_FAIL;
+}
+
 void WebServer::start() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.lru_purge_enable = true;
-  // We MUST set uri_match_fn to allow wildcards.
   config.uri_match_fn = httpd_uri_match_wildcard;
 
   ESP_LOGI(TAG, "Starting web server");
@@ -167,15 +175,12 @@ void WebServer::start() {
     return;
   }
 
-  // --- Register URI Handlers ---
-  // Register most specific handlers first.
-
-  // 1. (Highest Priority) Specific API endpoints.
+  // Register API handlers with user_ctx pointing to this instance
   const httpd_uri_t apiStatus = {
     .uri = "/api/status.json",
     .method = HTTP_GET,
     .handler = apiStatusGetHandler,
-    .user_ctx = NULL
+    .user_ctx = this
   };
   httpd_register_uri_handler(server, &apiStatus);
 
@@ -183,7 +188,7 @@ void WebServer::start() {
     .uri = "/api/settings",
     .method = HTTP_POST,
     .handler = apiSettingsPostHandler,
-    .user_ctx = NULL
+    .user_ctx = this
   };
   httpd_register_uri_handler(server, &apiPost);
 
@@ -191,25 +196,23 @@ void WebServer::start() {
     .uri = "/api/settings",
     .method = HTTP_GET,
     .handler = apiSettingsGetHandler,
-    .user_ctx = NULL
+    .user_ctx = this
   };
   httpd_register_uri_handler(server, &apiGet);
 
-  // 2. Handler for the root URI.
   const httpd_uri_t root = {
     .uri = "/",
     .method = HTTP_GET,
     .handler = rootGetHandler,
-    .user_ctx = NULL
+    .user_ctx = nullptr
   };
   httpd_register_uri_handler(server, &root);
 
-  // 3. (Lowest Priority) Wildcard file server for any other request.
   const httpd_uri_t fileServer = {
     .uri = "/*",
     .method = HTTP_GET,
     .handler = fileGetHandler,
-    .user_ctx = NULL
+    .user_ctx = nullptr
   };
   httpd_register_uri_handler(server, &fileServer);
 }
@@ -219,24 +222,4 @@ void WebServer::stop() {
     httpd_stop(server);
     server = nullptr;
   }
-}
-
-// --- Add this helper function if it doesn't exist elsewhere ---
-esp_err_t getStatusJson(char* buf, size_t buflen) {
-  // Placeholder: fill in with your actual runtime status.
-  cJSON *root = cJSON_CreateObject();
-  cJSON_AddStringToObject(root, "status", "ok");
-  cJSON_AddNumberToObject(root, "uptime", 1234); // Replace with actual uptime
-  cJSON_AddBoolToObject(root, "wifi_connected", true); // Replace as needed
-
-  char *rendered = cJSON_PrintUnformatted(root);
-  if (rendered && strlen(rendered) < buflen) {
-    strcpy(buf, rendered);
-    cJSON_free(rendered);
-    cJSON_Delete(root);
-    return ESP_OK;
-  }
-  if (rendered) cJSON_free(rendered);
-  cJSON_Delete(root);
-  return ESP_FAIL;
 }

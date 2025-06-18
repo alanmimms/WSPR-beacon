@@ -6,37 +6,16 @@
 #include "esp_log.h"
 #include "cJSON.h"
 #include <cstring>
-#include <math.h>
-
-// Define NVS key constants if not already defined elsewhere
-#define NVS_NAMESPACE "settings"
-#define NVS_JSON_KEY  "settings_json"
 
 static const char *TAG = "Settings";
 static cJSON *gSettingsJson = NULL;
 static SemaphoreHandle_t gSettingsMutex;
 
-BeaconSettings settings;
-
-static float wattsToDbm(float watts) {
-  if (watts <= 0) return 0.0f;
-  return 10.0f * log10f(watts * 1000.0f);
+Settings::Settings() {
+  // Constructor does not initialize mutex or JSON object; call initialize() explicitly
 }
 
-static float dbmToWatts(float dbm) {
-  return powf(10.0f, dbm / 10.0f) / 1000.0f;
-}
-
-static void ensureDefaultSettings() {
-  if (!cJSON_HasObjectItem(gSettingsJson, "callsign"))
-    cJSON_AddStringToObject(gSettingsJson, "callsign", "N0CALL");
-  if (!cJSON_HasObjectItem(gSettingsJson, "locator"))
-    cJSON_AddStringToObject(gSettingsJson, "locator", "AA00aa");
-  if (!cJSON_HasObjectItem(gSettingsJson, "dbm"))
-    cJSON_AddNumberToObject(gSettingsJson, "dbm", 30.0f);
-}
-
-void initializeSettings() {
+void Settings::initialize() {
   gSettingsMutex = xSemaphoreCreateMutex();
   gSettingsJson = cJSON_CreateObject();
   if (!gSettingsJson) {
@@ -44,7 +23,7 @@ void initializeSettings() {
   }
 }
 
-esp_err_t loadSettings() {
+esp_err_t Settings::load() {
   if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return ESP_ERR_TIMEOUT;
 
   nvs_handle_t nvsHandle;
@@ -60,7 +39,7 @@ esp_err_t loadSettings() {
 
   bool loadSuccess = false;
   if (err == ESP_OK && requiredSize > 1) {
-    char *jsonString = (char *)malloc(requiredSize);
+    char *jsonString = (char *) malloc(requiredSize);
     if (jsonString) {
       err = nvs_get_str(nvsHandle, NVS_JSON_KEY, jsonString, &requiredSize);
       if (err == ESP_OK) {
@@ -83,16 +62,12 @@ esp_err_t loadSettings() {
     ensureDefaultSettings();
   }
 
-  strncpy(settings.callsign, cJSON_GetObjectItem(gSettingsJson, "callsign")->valuestring, sizeof(settings.callsign) - 1);
-  strncpy(settings.locator, cJSON_GetObjectItem(gSettingsJson, "locator")->valuestring, sizeof(settings.locator) - 1);
-  settings.dbm = (float)cJSON_GetObjectItem(gSettingsJson, "dbm")->valuedouble;
-
   nvs_close(nvsHandle);
   xSemaphoreGive(gSettingsMutex);
   return ESP_OK;
 }
 
-esp_err_t saveSettingsJson(const char *jsonString) {
+esp_err_t Settings::saveJson(const char *jsonString) {
   if (!jsonString) return ESP_ERR_INVALID_ARG;
   if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return ESP_ERR_TIMEOUT;
 
@@ -103,19 +78,8 @@ esp_err_t saveSettingsJson(const char *jsonString) {
     return ESP_FAIL;
   }
 
-  cJSON *callsign = cJSON_GetObjectItem(newJson, "callsign");
-  cJSON *locator = cJSON_GetObjectItem(newJson, "locator");
-  cJSON *dbm = cJSON_GetObjectItem(newJson, "dbm");
-
   cJSON_Delete(gSettingsJson);
-  gSettingsJson = cJSON_CreateObject();
-  if (callsign) cJSON_AddStringToObject(gSettingsJson, "callsign", callsign->valuestring);
-  if (locator) cJSON_AddStringToObject(gSettingsJson, "locator", locator->valuestring);
-  if (dbm) cJSON_AddNumberToObject(gSettingsJson, "dbm", dbm->valuedouble);
-
-  strncpy(settings.callsign, callsign ? callsign->valuestring : "N0CALL", sizeof(settings.callsign) - 1);
-  strncpy(settings.locator, locator ? locator->valuestring : "AA00aa", sizeof(settings.locator) - 1);
-  settings.dbm = dbm ? (float)dbm->valuedouble : 30.0f;
+  gSettingsJson = newJson;
 
   char *compactString = cJSON_PrintUnformatted(gSettingsJson);
   if (!compactString) {
@@ -129,34 +93,85 @@ esp_err_t saveSettingsJson(const char *jsonString) {
   if (err == ESP_OK) {
     err = nvs_set_str(nvsHandle, NVS_JSON_KEY, compactString);
     if (err == ESP_OK) {
-      nvs_commit(nvsHandle);
+      err = nvs_commit(nvsHandle);
     }
     nvs_close(nvsHandle);
   }
-  free(compactString);
-
+  cJSON_free(compactString);
   xSemaphoreGive(gSettingsMutex);
   return err;
 }
 
-esp_err_t getSettingsJson(char *buf, size_t buflen) {
+esp_err_t Settings::getJson(char *buffer, size_t len) {
+  if (!buffer || len == 0) return ESP_ERR_INVALID_ARG;
   if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return ESP_ERR_TIMEOUT;
 
-  cJSON *out = cJSON_CreateObject();
-  cJSON_AddStringToObject(out, "callsign", settings.callsign);
-  cJSON_AddStringToObject(out, "locator", settings.locator);
-  cJSON_AddNumberToObject(out, "dbm", settings.dbm);
-
-  char *jsonStr = cJSON_PrintUnformatted(out);
-  if (jsonStr && strlen(jsonStr) < buflen) {
-    strcpy(buf, jsonStr);
-    cJSON_free(jsonStr);
-    cJSON_Delete(out);
+  char *jsonString = cJSON_PrintUnformatted(gSettingsJson);
+  if (!jsonString) {
     xSemaphoreGive(gSettingsMutex);
-    return ESP_OK;
+    return ESP_FAIL;
   }
-  if (jsonStr) cJSON_free(jsonStr);
-  cJSON_Delete(out);
+  size_t strLen = strlen(jsonString);
+  if (strLen + 1 > len) {
+    cJSON_free(jsonString);
+    xSemaphoreGive(gSettingsMutex);
+    return ESP_ERR_NVS_INVALID_LENGTH;
+  }
+  strncpy(buffer, jsonString, len - 1);
+  buffer[len - 1] = 0;
+  cJSON_free(jsonString);
   xSemaphoreGive(gSettingsMutex);
-  return ESP_FAIL;
+  return ESP_OK;
+}
+
+size_t Settings::getString(const char *key, char *value, size_t maxLen, const char *defaultValue) {
+  if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) {
+    if (defaultValue && value && maxLen > 0) {
+      strncpy(value, defaultValue, maxLen - 1);
+      value[maxLen - 1] = 0;
+      return strlen(value);
+    }
+    return 0;
+  }
+  if (!key || !value || maxLen == 0) {
+    xSemaphoreGive(gSettingsMutex);
+    return 0;
+  }
+  const cJSON *item = cJSON_GetObjectItem(gSettingsJson, key);
+  if (item && cJSON_IsString(item) && item->valuestring) {
+    strncpy(value, item->valuestring, maxLen - 1);
+    value[maxLen - 1] = 0;
+  } else if (defaultValue) {
+    strncpy(value, defaultValue, maxLen - 1);
+    value[maxLen - 1] = 0;
+  } else if (maxLen > 0) {
+    value[0] = 0;
+  }
+  xSemaphoreGive(gSettingsMutex);
+  return strlen(value);
+}
+
+int Settings::getInt(const char *key, int defaultValue) {
+  int result = defaultValue;
+  if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) {
+    return result;
+  }
+  if (!key) {
+    xSemaphoreGive(gSettingsMutex);
+    return result;
+  }
+  const cJSON *item = cJSON_GetObjectItem(gSettingsJson, key);
+  if (item && cJSON_IsNumber(item)) {
+    result = item->valueint;
+  }
+  xSemaphoreGive(gSettingsMutex);
+  return result;
+}
+
+void Settings::ensureDefaultSettings() {
+  // Fill in defaults as needed for your application
+  cJSON_ReplaceItemInObject(gSettingsJson, "callsign", cJSON_CreateString("N0CALL"));
+  cJSON_ReplaceItemInObject(gSettingsJson, "grid", cJSON_CreateString("AA00aa"));
+  cJSON_ReplaceItemInObject(gSettingsJson, "powerDBm", cJSON_CreateNumber(10));
+  cJSON_ReplaceItemInObject(gSettingsJson, "txIntervalMinutes", cJSON_CreateNumber(10));
 }
