@@ -112,6 +112,28 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+// Handler for GET /api/status.json - returns system status as JSON
+esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
+  char* jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
+  if (!jsonBuffer) {
+    ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  // Placeholder: replace with your actual status-gathering logic
+  if (getStatusJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
+  } else {
+    ESP_LOGE(TAG, "Failed to retrieve status as JSON");
+    httpd_resp_send_500(req);
+  }
+
+  free(jsonBuffer);
+  return ESP_OK;
+}
+
 // Handler for POST /api/settings - receives JSON and updates settings
 esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   char content[JSON_BUF_SIZE];
@@ -146,31 +168,22 @@ void WebServer::start() {
   }
 
   // --- Register URI Handlers ---
-  // The last handler registered is the first one checked.
-  // We register the most generic handler (wildcard) first, and the
-  // most specific handlers last.
+  // Register most specific handlers first.
 
-  // 1. (Lowest Priority) The wildcard file server for any other request.
-  const httpd_uri_t fileServer = {
-    .uri = "/*",
+  // 1. (Highest Priority) Specific API endpoints.
+  const httpd_uri_t apiStatus = {
+    .uri = "/api/status.json",
     .method = HTTP_GET,
-    .handler = fileGetHandler,
+    .handler = apiStatusGetHandler,
+    .user_ctx = NULL
   };
-  httpd_register_uri_handler(server, &fileServer);
+  httpd_register_uri_handler(server, &apiStatus);
 
-  // 2. The handler for the root URI, which redirects to the main page.
-  const httpd_uri_t root = {
-    .uri = "/",
-    .method = HTTP_GET,
-    .handler = rootGetHandler,
-  };
-  httpd_register_uri_handler(server, &root);
-
-  // 3. (Highest Priority) Specific API endpoints are registered last.
   const httpd_uri_t apiPost = {
     .uri = "/api/settings",
     .method = HTTP_POST,
     .handler = apiSettingsPostHandler,
+    .user_ctx = NULL
   };
   httpd_register_uri_handler(server, &apiPost);
 
@@ -178,8 +191,27 @@ void WebServer::start() {
     .uri = "/api/settings",
     .method = HTTP_GET,
     .handler = apiSettingsGetHandler,
+    .user_ctx = NULL
   };
   httpd_register_uri_handler(server, &apiGet);
+
+  // 2. Handler for the root URI.
+  const httpd_uri_t root = {
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = rootGetHandler,
+    .user_ctx = NULL
+  };
+  httpd_register_uri_handler(server, &root);
+
+  // 3. (Lowest Priority) Wildcard file server for any other request.
+  const httpd_uri_t fileServer = {
+    .uri = "/*",
+    .method = HTTP_GET,
+    .handler = fileGetHandler,
+    .user_ctx = NULL
+  };
+  httpd_register_uri_handler(server, &fileServer);
 }
 
 void WebServer::stop() {
@@ -187,4 +219,24 @@ void WebServer::stop() {
     httpd_stop(server);
     server = nullptr;
   }
+}
+
+// --- Add this helper function if it doesn't exist elsewhere ---
+esp_err_t getStatusJson(char* buf, size_t buflen) {
+  // Placeholder: fill in with your actual runtime status.
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "status", "ok");
+  cJSON_AddNumberToObject(root, "uptime", 1234); // Replace with actual uptime
+  cJSON_AddBoolToObject(root, "wifi_connected", true); // Replace as needed
+
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered && strlen(rendered) < buflen) {
+    strcpy(buf, rendered);
+    cJSON_free(rendered);
+    cJSON_Delete(root);
+    return ESP_OK;
+  }
+  if (rendered) cJSON_free(rendered);
+  cJSON_Delete(root);
+  return ESP_FAIL;
 }
