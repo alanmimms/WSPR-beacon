@@ -31,7 +31,7 @@ static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename) 
   return httpd_resp_set_type(req, "text/plain");
 }
 
-// Handler to serve the root URL, which redirects to index.html for a clean SPA experience
+// Handler to serve the root URL, which redirects to index.html
 esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
   httpd_resp_set_status(req, "307 Temporary Redirect");
   httpd_resp_set_hdr(req, "Location", "/index.html");
@@ -42,8 +42,9 @@ esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
 // Generic handler to serve any static file from the SPIFFS '/spiffs' directory
 esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   char filepath[FILE_PATH_MAX];
+  // Safely construct the full path to the file in the SPIFFS filesystem
   strncpy(filepath, SPIFFS_BASE_PATH, sizeof(filepath) - 1);
-  filepath[sizeof(filepath) - 1] = '\0';
+  filepath[sizeof(filepath) - 1] = '\0'; // Ensure null termination
   strncat(filepath, req->uri, sizeof(filepath) - strlen(filepath) - 1);
   ESP_LOGI(TAG, "Serving file: %s", filepath);
 
@@ -90,7 +91,7 @@ esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for GET /api/settings - returns current settings as JSON
+// Handler for GET /api/settings - returns all current settings as JSON
 esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   char* jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
   if (!jsonBuffer) {
@@ -116,16 +117,12 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   char content[JSON_BUF_SIZE];
   int ret = httpd_req_recv(req, content, sizeof(content) - 1);
   if (ret <= 0) {
-    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-      httpd_resp_send_408(req);
-    }
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
     return ESP_FAIL;
   }
   content[ret] = '\0';
 
-  // saveSettingsJson will validate the JSON and handle saving
   esp_err_t err = saveSettingsJson(content);
-
   if (err == ESP_OK) {
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
@@ -139,6 +136,7 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
 void WebServer::start() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.lru_purge_enable = true;
+  // We MUST set uri_match_fn to allow wildcards.
   config.uri_match_fn = httpd_uri_match_wildcard;
 
   ESP_LOGI(TAG, "Starting web server");
@@ -147,37 +145,41 @@ void WebServer::start() {
     return;
   }
 
+  // --- Register URI Handlers ---
+  // The last handler registered is the first one checked.
+  // We register the most generic handler (wildcard) first, and the
+  // most specific handlers last.
+
+  // 1. (Lowest Priority) The wildcard file server for any other request.
+  const httpd_uri_t fileServer = {
+    .uri = "/*",
+    .method = HTTP_GET,
+    .handler = fileGetHandler,
+  };
+  httpd_register_uri_handler(server, &fileServer);
+
+  // 2. The handler for the root URI, which redirects to the main page.
   const httpd_uri_t root = {
     .uri = "/",
     .method = HTTP_GET,
     .handler = rootGetHandler,
-    .user_ctx = NULL
   };
   httpd_register_uri_handler(server, &root);
+
+  // 3. (Highest Priority) Specific API endpoints are registered last.
+  const httpd_uri_t apiPost = {
+    .uri = "/api/settings",
+    .method = HTTP_POST,
+    .handler = apiSettingsPostHandler,
+  };
+  httpd_register_uri_handler(server, &apiPost);
 
   const httpd_uri_t apiGet = {
     .uri = "/api/settings",
     .method = HTTP_GET,
     .handler = apiSettingsGetHandler,
-    .user_ctx = NULL
   };
   httpd_register_uri_handler(server, &apiGet);
-
-  const httpd_uri_t apiPost = {
-    .uri = "/api/settings",
-    .method = HTTP_POST,
-    .handler = apiSettingsPostHandler,
-    .user_ctx = NULL
-  };
-  httpd_register_uri_handler(server, &apiPost);
-
-  const httpd_uri_t fileServer = {
-    .uri = "/*",
-    .method = HTTP_GET,
-    .handler = fileGetHandler,
-    .user_ctx = NULL
-  };
-  httpd_register_uri_handler(server, &fileServer);
 }
 
 void WebServer::stop() {
