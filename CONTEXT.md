@@ -1,148 +1,442 @@
-# Project Context: ESP32 WSPR Beacon (Updated)
+# Context Package for Copilot Chat Reset
 
-This document summarizes the current state, requirements, and
-development history for an advanced ESP32-based WSPR beacon project.
+## Summary
 
-Git repo is https://github.com/alanmimms/jtencode.git.
+- **Project:** WSPR Beacon for ESP32
+- **Main Languages:** C++, C, JavaScript (frontend)
+- **Backend:** Custom ESP32 web server
+- **Frontend:** HTML/JS (not a framework)
+- **Key conventions:**
+  - C/C++: camelCase, no "m_" prefix, 2-space indent, space after keywords, use C strings/arrays, template param names UPPERCASE (not T), e.g., "nCall" not "n_call"
+- **Key settings:** `callsign`, `locator` (Maidenhead), `powerDbm`
+- **Main API endpoints:**
+  - `GET /api/settings` and `POST /api/settings` (returns/updates settings as JSON)
+  - `GET /api/status.json` (returns current status including settings as JSON)
+- **Frontend requirements:**
+  - Footer and status page must show latest settings (callsign, locator, power) immediately after settings are saved.
+  - Footer must update instantly after settings save (without reload).
+  - Status page must always fetch and show latest values on navigation.
 
-1. High-Level Goal The primary objective is to create a feature-rich,
-standalone WSPR beacon using an ESP32 microcontroller and an Si5351
-DDS synthesizer. The device will be configurable and controllable via
-a web interface.
+## Open Issues
 
-2. Core Software Architecture Language & Style Language: C++
+1. After saving settings (POST `/api/settings`), changes must be immediately reflected in `/api/status.json` and `/api/settings`.
+2. Footer and status page must reflect the latest settings without requiring a page reload.
+3. On some pages (like Home/index.html), settings fields display "?" after a settings change.
+4. Backend and frontend must use camelCase for JSON keys and code.
+5. All API endpoints must return current, not cached, values.
 
-Style: camelCase naming, 2-space indentation, no m_ prefixes, and
-C-style strings/arrays where practical. Filenames use dashes and not
-underscores.
+## Current Code Files
 
-Framework & Components Framework: ESP-IDF
+### main/WebServer.cpp
+```cpp
+#include "WebServer.h"
+#include "Settings.h"
+#include "esp_log.h"
+#include "esp_spiffs.h"
+#include "esp_vfs.h"
+#include "cJSON.h"
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
-Main Class: BeaconFsm acts as the central context object, owning all
-major components.
+#define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
+#define SCRATCH_BUFSIZE (8192)
+#define JSON_BUF_SIZE (1024)
+static const char *TAG = "WebServer";
+static const char *SPIFFS_BASE_PATH = "/spiffs"
 
-State Machine: A custom, pointer-based state machine manages the
-application's operational states.
+WebServer::WebServer(Settings &settings)
+  : server(nullptr), settings(settings) {}
 
-Web Interface: A web server built on esp_http_server provides a UI for
-configuration and status monitoring.
+WebServer::~WebServer() {
+  stop();
+}
 
-Web assets (HTML, CSS, JS, favicon) are stored on a dedicated SPIFFS
-partition.
+esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {
+  if (strstr(filename, ".html")) return httpd_resp_set_type(req, "text/html");
+  if (strstr(filename, ".css")) return httpd_resp_set_type(req, "text/css");
+  if (strstr(filename, ".js")) return httpd_resp_set_type(req, "application/javascript");
+  if (strstr(filename, ".ico")) return httpd_resp_set_type(req, "image/x-icon");
+  return httpd_resp_set_type(req, "text/plain");
+}
 
-A captive portal with a custom DNS server redirects users to the
-provisioning page in AP mode.
+esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
+  httpd_resp_set_status(req, "307 Temporary Redirect");
+  httpd_resp_set_hdr(req, "Location", "/index.html");
+  httpd_resp_send(req, NULL, 0);
+  return ESP_OK;
+}
 
-HTTP Basic Authentication protects non-provisioning pages.
+esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
+  char filepath[FILE_PATH_MAX];
+  strncpy(filepath, SPIFFS_BASE_PATH, sizeof(filepath) - 1);
+  filepath[sizeof(filepath) - 1] = '\0';
+  strncat(filepath, req->uri, sizeof(filepath) - strlen(filepath) - 1);
+  ESP_LOGI(TAG, "Serving file: %s", filepath);
 
-A JSON API endpoint (/api/status.json) provides dynamic data to the
-frontend.
+  struct stat fileStat;
+  if (stat(filepath, &fileStat) == -1 || !S_ISREG(fileStat.st_mode)) {
+    ESP_LOGE(TAG, "File not found or not a regular file: %s", filepath);
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
+  }
 
-The C++ compiler cannot distinguish careful coding to test for lengths
-of C strings from careless coding. Do not use something like
-snprintf() to concatenate the components of a larger string even if
-tests show there is enough room in the target buffer. Instead
-concatenate the strings using strncpy and strncat as many times as
-necessary.
+  int fd = open(filepath, O_RDONLY, 0);
+  if (fd == -1) {
+    ESP_LOGE(TAG, "Failed to open file for reading: %s", filepath);
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
 
-Component Drivers:
+  setContentTypeFromFile(req, filepath);
 
-si5351: C++ class for the Si5351 chip.
+  char *chunk = (char*)malloc(SCRATCH_BUFSIZE);
+  if (!chunk) {
+    ESP_LOGE(TAG, "Failed to allocate memory for file chunk");
+    close(fd);
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
 
-i2c: The I2C driver used is part of ESP IDF as a component. Include
-"driver/i2c_master.h" instead of "driver/i2c.h" since this program
-uses I2C as the master on the bus.
+  ssize_t readBytes;
+  do {
+    readBytes = read(fd, chunk, SCRATCH_BUFSIZE);
+    if (readBytes > 0) {
+      if (httpd_resp_send_chunk(req, chunk, readBytes) != ESP_OK) {
+        close(fd);
+        free(chunk);
+        ESP_LOGE(TAG, "File sending failed!");
+        return ESP_FAIL;
+      }
+    }
+  } while (readBytes > 0);
 
-Scheduler: Manages transmission timing and band plans.
+  close(fd);
+  free(chunk);
+  httpd_resp_send_chunk(req, NULL, 0);
+  return ESP_OK;
+}
 
-Settings: A data-driven class that manages all configuration using
-string keys and dynamically allocated values, persisted to NVS.
+// Handler for GET /api/settings - returns all current settings as JSON
+esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
+  char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
+  if (!jsonBuffer) {
+    ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  if (self && self->settings.getJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
+  } else {
+    ESP_LOGE(TAG, "Failed to retrieve settings as JSON");
+    httpd_resp_send_500(req);
+  }
+  free(jsonBuffer);
+  return ESP_OK;
+}
 
-dns-server: A custom component for the captive portal DNS.
+// Handler for POST /api/settings - receives JSON and updates settings
+esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
+  char content[JSON_BUF_SIZE];
+  int ret = httpd_req_recv(req, content, sizeof(content) - 1);
+  if (ret <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
+    return ESP_FAIL;
+  }
+  content[ret] = '\0';
 
-Design Pattern: Dependency Injection The BeaconFsm class creates and
-owns the single instances of Si5351 and Settings. It then passes
-references to these objects to other classes (Scheduler, WebServer)
-that need to access them.
+  if (!self) {
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Settings instance not initialized");
+    return ESP_FAIL;
+  }
 
-3. Detailed Feature Requirements Wi-Fi and Networking Dual-Mode
-Connectivity: Operates in Station Mode (connecting to a configured
-Wi-Fi) or falls back to a Provisioning AP Mode.
+  esp_err_t err = self->settings.saveJson(content); // Save settings from POST
+  if (err == ESP_OK) {
+    self->settings.load(); // Immediately reload settings so all calls use the latest values
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
+  } else {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format or save failed");
+  }
 
-Debug Mode: A compile-time flag (USE_STATIC_WIFI_CREDS) allows
-bypassing AP mode to connect directly to a hardcoded Wi-Fi network for
-easier development.
+  return ESP_OK;
+}
 
-Web Interface & Control Layout: All pages share a consistent layout
-with a header, footer, and side navigation menu.
+// Handler for GET /api/status.json - returns system status as JSON
+esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
+  char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
+  if (!jsonBuffer) {
+    ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  if (self && self->getStatusJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
+  } else {
+    ESP_LOGE(TAG, "Failed to retrieve status as JSON");
+    httpd_resp_send_500(req);
+  }
+  free(jsonBuffer);
+  return ESP_OK;
+}
 
-Provisioning Page: (provisioning.html) Allows setting up Wi-Fi,
-hostname, and initial admin credentials.
+// This method should be a member so it can pull from this->settings
+esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
+  cJSON *root = cJSON_CreateObject();
+  char callsign[32] = "";
+  char locator[16] = "";
+  int powerDbm = 0;
 
-Control Pages: (index.html, security.html) Are protected by
-authentication and allow for monitoring and further configuration.
+  settings.getString("callsign", callsign, sizeof(callsign), "");
+  settings.getString("locator", locator, sizeof(locator), "");
+  settings.getInt("powerDbm", &powerDbm, 0);
 
-4. Hardware & System MCU: ESP32-C3
+  cJSON_AddStringToObject(root, "callsign", callsign);
+  cJSON_AddStringToObject(root, "locator", locator);
+  cJSON_AddNumberToObject(root, "power_dbm", powerDbm);
 
-Synthesizer: Si5351
+  // Add other status fields as needed (ip_address, hostname, etc)
 
-Partition Table: A custom partitions.csv defines partitions for the
-application, NVS, and a storage partition for the SPIFFS filesystem.
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered && strlen(rendered) < buflen) {
+    strcpy(buf, rendered);
+    cJSON_free(rendered);
+    cJSON_Delete(root);
+    return ESP_OK;
+  }
+  if (rendered) cJSON_free(rendered);
+  cJSON_Delete(root);
+  return ESP_FAIL;
+}
 
-5. Development History & Key Decisions The project was refactored from
-a complex template-based state machine (tinyfsm) to a simpler, more
-maintainable pointer-based state machine.
+void WebServer::start() {
+  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+  config.lru_purge_enable = true;
+  config.uri_match_fn = httpd_uri_match_wildcard;
 
-Web content was moved from being embedded in C++ code to a separate
-SPIFFS partition, managed by the spiffs_create_partition_image build
-command. Do not embed HTML in the C++ code but rather build the HTML
-and CSS and similar web resources into the SPIFFS file system content
-in the ./web directory which is copied to the target unchanged.
+  ESP_LOGI(TAG, "Starting web server");
+  if (httpd_start(&server, &config) != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to start web server");
+    return;
+  }
 
-An "HTTP 431: Request Header Fields Too Large" error during
-authentication was resolved by increasing the Max HTTP Request Header
-Length in the HTTP Server component configuration via menuconfig.
-Previous attempts to fix this in code were incorrect as the issue was
-with the server's compile-time buffer allocation.
+  // Register API handlers with user_ctx pointing to this instance
+  const httpd_uri_t apiStatus = {
+    .uri = "/api/status.json",
+    .method = HTTP_GET,
+    .handler = apiStatusGetHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiStatus);
 
-The Settings class was refactored to be fully data-driven, using an
-array of structs and generic getValue/setValue methods instead of
-hardcoded getters and setters.
+  const httpd_uri_t apiPost = {
+    .uri = "/api/settings",
+    .method = HTTP_POST,
+    .handler = apiSettingsPostHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiPost);
 
-# Directives for the AI To Follow
+  const httpd_uri_t apiGet = {
+    .uri = "/api/settings",
+    .method = HTTP_GET,
+    .handler = apiSettingsGetHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiGet);
 
-If we're using canvas to build code or other types of files, NEVER
-give me a partial file with comments saying what to change. Always
-give me the entire file in the canvas every time you change anything
-in that file.
+  const httpd_uri_t root = {
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = rootGetHandler,
+    .user_ctx = nullptr
+  };
+  httpd_register_uri_handler(server, &root);
 
-Take my existing files as the definition of the state of the project.
-Any changes I request should be made as incremental changes to those
-files and - as described above - provided as the entire changed file
-in the canvas.
+  const httpd_uri_t fileServer = {
+    .uri = "/*",
+    .method = HTTP_GET,
+    .handler = fileGetHandler,
+    .user_ctx = nullptr
+  };
+  httpd_register_uri_handler(server, &fileServer);
+}
 
-When we're collaborating on code or other file based work in a canvas,
-always provide a link to each file that has changed in the most recent
-prompt in your response so I can open it in canvas.
+void WebServer::stop() {
+  if (server) {
+    httpd_stop(server);
+    server = nullptr;
+  }
+}
+```
 
-In C and C++ use camelCase instead of snake_case everywhere and the
-"m_" prefix for instance members is not to be used. Use 2-space
-indentation rules. Use one space after each C++ keyword like if, for,
-switch, while, etc. before the following expression in parentheses.
-Use curly braces on the line with the directive, and "} else {" and "}
-else if {" and the like to be on one line.
+### main/WebServer.h
+```cpp
+#ifndef WEBSERVER_H
+#define WEBSERVER_H
 
-Use locally declared variables in for loops instead of declaring these
-outside the for loop where possible. Use generic index variables to be
-int. Use C string variables and arrays instead of std::string or
-std::string_view where possible to avoid all the verbosity and
-conversions to and from C string representation. Make all template
-parameters names all uppercase. Instead of names like "n_call" use
-e.g., "nCall".
+#include "esp_http_server.h"
+#include "Settings.h"
 
-Do not prompt me with something like this: "Let me know if any
-questions come up as you work with it or move on to other parts of the
-design." Just end your response and await another interaction.
+class WebServer {
+public:
+  WebServer(Settings &settings);
+  ~WebServer();
 
-Do not give me congratulations and do not tell me I'm smart in your
-responses.
+  void start();
+  void stop();
+
+  esp_err_t getStatusJson(char *buf, size_t buflen);
+
+private:
+  static esp_err_t rootGetHandler(httpd_req_t *req);
+  static esp_err_t fileGetHandler(httpd_req_t *req);
+  static esp_err_t apiSettingsGetHandler(httpd_req_t *req);
+  static esp_err_t apiSettingsPostHandler(httpd_req_t *req);
+  static esp_err_t apiStatusGetHandler(httpd_req_t *req);
+
+  static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename);
+
+  httpd_handle_t server;
+  Settings &settings;
+};
+
+#endif // WEBSERVER_H
+```
+
+### web/script.js
+```javascript
+document.addEventListener('DOMContentLoaded', () => {
+  // --- Highlight Active Nav Link ---
+  const currentPage = window.location.pathname;
+  const navLinks = document.querySelectorAll('nav a');
+  navLinks.forEach(link => {
+    const linkPath = link.getAttribute('href');
+    // Treat "/" as a request for "index.html" for highlighting purposes
+    if (linkPath === currentPage || (currentPage === '/' && linkPath === '/index.html')) {
+      link.classList.add('active');
+    } else {
+      link.classList.remove('active');
+    }
+  });
+
+  // --- Fetch and Populate Footer Values ---
+  async function updateFooter() {
+    try {
+      const response = await fetch('/api/status.json');
+      if (!response.ok) throw new Error('Failed to fetch status');
+      const data = await response.json();
+
+      const callsignDiv = document.getElementById('footer-callsign');
+      if (callsignDiv) {
+        callsignDiv.textContent = data.callsign
+          ? `Callsign: ${data.callsign}` : 'Callsign: ?';
+      }
+
+      const hostnameDiv = document.getElementById('footer-hostname');
+      if (hostnameDiv) {
+        hostnameDiv.textContent = data.hostname
+          ? `Hostname: ${data.hostname}` : 'Hostname: ?';
+      }
+    } catch (error) {
+      const callsignDiv = document.getElementById('footer-callsign');
+      const hostnameDiv = document.getElementById('footer-hostname');
+      if (callsignDiv) callsignDiv.textContent = 'Callsign: ?';
+      if (hostnameDiv) hostnameDiv.textContent = 'Hostname: ?';
+    }
+  }
+  updateFooter();
+
+  // --- Fetch and Populate Home Page (index.html) Status Values ---
+  async function updateHomeStatus() {
+    try {
+      const response = await fetch('/api/status.json');
+      if (!response.ok) throw new Error('Failed to fetch status');
+      const data = await response.json();
+
+      // Example for status fields on index.html:
+      if (document.getElementById('status-callsign')) {
+        document.getElementById('status-callsign').textContent = data.callsign || '?';
+      }
+      if (document.getElementById('status-locator')) {
+        document.getElementById('status-locator').textContent = data.locator || '?';
+      }
+      if (document.getElementById('status-power_dbm')) {
+        document.getElementById('status-power_dbm').textContent = (data.power_dbm !== undefined) ? data.power_dbm : '?';
+      }
+      // Add any other dynamic status fields you display
+    } catch (error) {
+      if (document.getElementById('status-callsign')) {
+        document.getElementById('status-callsign').textContent = '?';
+      }
+      if (document.getElementById('status-locator')) {
+        document.getElementById('status-locator').textContent = '?';
+      }
+      if (document.getElementById('status-power_dbm')) {
+        document.getElementById('status-power_dbm').textContent = '?';
+      }
+    }
+  }
+
+  // --- Provisioning Form Handler ---
+  const form = document.getElementById('settings-form');
+  if (form) {
+    const statusMessage = document.getElementById('status-message');
+    const submitBtn = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+      const data = new URLSearchParams(new FormData(form));
+      try {
+        const response = await fetch('/api/settings', {
+          method: 'POST',
+          body: data,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        });
+        if (response.ok) {
+          if (statusMessage) statusMessage.textContent = 'Settings saved!';
+          await updateFooter(); // Immediately update footer after save
+        } else {
+          if (statusMessage) statusMessage.textContent = 'Failed to save settings.';
+        }
+      } catch (error) {
+        if (statusMessage) statusMessage.textContent = 'Error saving settings.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save';
+      }
+    });
+  }
+
+  // --- Refresh footer when switching pages (nav click) ---
+  const navLinksArr = Array.from(document.querySelectorAll('nav a'));
+  navLinksArr.forEach(link => {
+    link.addEventListener('click', () => {
+      setTimeout(updateFooter, 250); // Give page time to load, then update footer
+    });
+  });
+
+  // --- When on Home page, keep status live ---
+  if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+    updateHomeStatus();
+    // Optionally, refresh status every few seconds:
+    // setInterval(updateHomeStatus, 5000);
+  }
+});
+```
+
+## Next Steps
+
+- Use this context as the first message in a fresh Copilot Chat.
+- Attach the above code files (WebServer.cpp, WebServer.h, script.js) or their latest versions.
+- State your next specific issue or task (e.g., "Fix: sometimes status returns stale data after POST /api/settings").

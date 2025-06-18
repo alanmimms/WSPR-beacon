@@ -1,4 +1,5 @@
 #include "WebServer.h"
+#include "Settings.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
@@ -12,7 +13,7 @@
 #define SCRATCH_BUFSIZE (8192)
 #define JSON_BUF_SIZE (1024)
 static const char *TAG = "WebServer";
-static const char *SPIFFS_BASE_PATH = "/spiffs";
+static const char *SPIFFS_BASE_PATH = "/spiffs"
 
 WebServer::WebServer(Settings &settings)
   : server(nullptr), settings(settings) {}
@@ -122,8 +123,9 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  esp_err_t err = self->settings.saveJson(content);
+  esp_err_t err = self->settings.saveJson(content); // Save settings from POST
   if (err == ESP_OK) {
+    self->settings.load(); // Immediately reload settings so all calls use the latest values
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
   } else {
@@ -135,32 +137,50 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
 
 // Handler for GET /api/status.json - returns system status as JSON
 esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
   char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
   if (!jsonBuffer) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  // Fill in with your actual status-gathering logic
-  cJSON *root = cJSON_CreateObject();
-  cJSON_AddStringToObject(root, "status", "ok");
-  cJSON_AddNumberToObject(root, "uptime", 1234); // Replace with actual uptime
-  cJSON_AddBoolToObject(root, "wifi_connected", true); // Replace as needed
-
-  char *rendered = cJSON_PrintUnformatted(root);
-  if (rendered && strlen(rendered) < JSON_BUF_SIZE) {
-    strcpy(jsonBuffer, rendered);
-    cJSON_free(rendered);
-    cJSON_Delete(root);
+  if (self && self->getStatusJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
-    free(jsonBuffer);
+  } else {
+    ESP_LOGE(TAG, "Failed to retrieve status as JSON");
+    httpd_resp_send_500(req);
+  }
+  free(jsonBuffer);
+  return ESP_OK;
+}
+
+// This method should be a member so it can pull from this->settings
+esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
+  cJSON *root = cJSON_CreateObject();
+  char callsign[32] = "";
+  char locator[16] = "";
+  int powerDbm = 0;
+
+  settings.getString("callsign", callsign, sizeof(callsign), "");
+  settings.getString("locator", locator, sizeof(locator), "");
+  settings.getInt("powerDbm", &powerDbm, 0);
+
+  cJSON_AddStringToObject(root, "callsign", callsign);
+  cJSON_AddStringToObject(root, "locator", locator);
+  cJSON_AddNumberToObject(root, "power_dbm", powerDbm);
+
+  // Add other status fields as needed (ip_address, hostname, etc)
+
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered && strlen(rendered) < buflen) {
+    strcpy(buf, rendered);
+    cJSON_free(rendered);
+    cJSON_Delete(root);
     return ESP_OK;
   }
   if (rendered) cJSON_free(rendered);
   cJSON_Delete(root);
-  free(jsonBuffer);
-  httpd_resp_send_500(req);
   return ESP_FAIL;
 }
 
