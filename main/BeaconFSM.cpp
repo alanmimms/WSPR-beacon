@@ -1,223 +1,193 @@
 #include "BeaconFSM.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-#include "esp_wifi.h"
-#include "esp_mac.h"
+#include "Settings.h"
 #include "sdkconfig.h"
-#include <string.h>
-
+#include "esp_log.h"
+#include "esp_wifi.h"
+#include "esp_spiffs.h"
+#include "nvs_flash.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "driver/gpio.h"
-#include "driver/i2c_master.h"
-
-// --- Debugging Flag ---
-// Set to 1 to use static Wi-Fi credentials from secrets.h for debugging.
-// Set to 0 for normal operation (AP provisioning).
-#define USE_STATIC_WIFI_CREDS 1
-
-#if USE_STATIC_WIFI_CREDS
-#include "secrets.h"
-#endif
+#include "si5351.h"
 
 static const char* TAG = "BeaconFSM";
 
-static const int MAX_WIFI_CONNECT_ATTEMPTS = 10;
-static const int PROVISIONING_TIMEOUT_MINUTES = 5;
+static EventGroupHandle_t wifiEventGroup;
+const int WIFI_CONNECTED_BIT = BIT0;
+const int WIFI_FAIL_BIT = BIT1;
 
-// State forward declarations
-class InitialState;
-class ConnectingState;
-class ProvisioningState;
-class ConnectedState;
-class TransmittingState;
+// Define hardware configuration from Kconfig
+#define STATUS_LED_GPIO CONFIG_STATUS_LED_GPIO
 
-// State class definitions
-class InitialState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
-class ConnectingState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
-class ProvisioningState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; void exit() override; };
-class ConnectedState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
-class TransmittingState : public BeaconState { public: using BeaconState::BeaconState; void enter() override; };
-
-// BeaconFsm implementation
-BeaconFsm::BeaconFsm() :
-  si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL),
-  currentState(nullptr),
-  settings(),
+BeaconFSM::BeaconFSM() :
+  currentState(State::BOOTING),
   webServer(),
-  scheduler(si5351, settings),
-  wifiRetryTimer(nullptr),
-  provisionTimer(nullptr),
-  wifiConnectAttempts(0)
-{
+  si5351(nullptr),
+  scheduler(nullptr) {
+}
+
+BeaconFSM::~BeaconFSM() {
+  delete scheduler;
+  delete si5351;
+}
+
+void BeaconFSM::wifiEventHandler(void* arg, esp_event_base_t eventBase, int32_t eventId, void* eventData) {
+  if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_STA_START) {
+    esp_wifi_connect();
+  } else if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_STA_DISCONNECTED) {
+    ESP_LOGI(TAG, "WiFi disconnected.");
+    if (wifiEventGroup) {
+      xEventGroupSetBits(wifiEventGroup, WIFI_FAIL_BIT);
+    }
+  } else if (eventBase == IP_EVENT && eventId == IP_EVENT_STA_GOT_IP) {
+    ip_event_got_ip_t* event = (ip_event_got_ip_t*) eventData;
+    ESP_LOGI(TAG, "Got IP address: " IPSTR, IP2STR(&event->ip_info.ip));
+    if (wifiEventGroup) {
+      xEventGroupSetBits(wifiEventGroup, WIFI_CONNECTED_BIT);
+    }
+  } else if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_AP_STACONNECTED) {
+    ESP_LOGI(TAG, "Station connected to AP");
+  }
+}
+
+void BeaconFSM::initHardware() {
+  gpio_reset_pin(static_cast<gpio_num_t>(STATUS_LED_GPIO));
+  gpio_set_direction(static_cast<gpio_num_t>(STATUS_LED_GPIO), GPIO_MODE_OUTPUT);
+  ESP_LOGI(TAG, "GPIO driver installed.");
+}
+
+void BeaconFSM::run() {
+  while (true) {
+    switch (currentState) {
+      case State::BOOTING:
+        handleBooting();
+        break;
+      case State::AP_MODE:
+        handleApMode();
+        break;
+      case State::STA_CONNECTING:
+        handleStaConnecting();
+        break;
+      case State::BEACONING:
+        handleBeaconing();
+        break;
+      case State::ERROR:
+        ESP_LOGE(TAG, "Entering error state. Halting.");
+        vTaskDelay(portMAX_DELAY);
+        break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+void BeaconFSM::handleBooting() {
+  ESP_LOGI(TAG, "State: BOOTING");
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
+  
+  initializeSettings();
+  loadSettings();
+  
+  esp_vfs_spiffs_conf_t spiffsConf = { .base_path = "/spiffs", .partition_label = "spiffs_web", .max_files = 5, .format_if_mount_failed = true };
+  ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffsConf));
+  
+  initHardware();
 
-  ESP_ERROR_CHECK(esp_netif_init());
-  ESP_ERROR_CHECK(esp_event_loop_create_default());
-  esp_netif_create_default_wifi_sta();
+  // --- Deferred Initialization ---
+  // Create driver objects now that the OS is running.
+  si5351 = new Si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL, CONFIG_I2C_MASTER_FREQUENCY);
+  scheduler = new Scheduler(*si5351, static_cast<gpio_num_t>(STATUS_LED_GPIO));
+  
+  char ssid[MAX_SSID_LEN];
+  getSettingString("ssid", ssid, sizeof(ssid), "");
+  
+  if (strlen(ssid) > 0) {
+    currentState = State::STA_CONNECTING;
+  } else {
+    currentState = State::AP_MODE;
+  }
+}
+
+void BeaconFSM::handleApMode() {
+  ESP_LOGI(TAG, "State: AP_MODE");
+  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler, this));
+  
   esp_netif_create_default_wifi_ap();
-
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &BeaconFsm::onWifiStaDisconnected, this));
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &BeaconFsm::onWifiStaGotIp, this));
-
-  settings.load();
-  
-  const esp_timer_create_args_t provisionTimerArgs = {.callback = &BeaconFsm::onProvisionTimeout, .arg = this, .name = "provision-timeout"};
-  ESP_ERROR_CHECK(esp_timer_create(&provisionTimerArgs, &provisionTimer));
-
-  const esp_timer_create_args_t wifiRetryTimerArgs = {.callback = &BeaconFsm::onWifiRetryTimeout, .arg = this, .name = "wifi-retry"};
-  ESP_ERROR_CHECK(esp_timer_create(&wifiRetryTimerArgs, &wifiRetryTimer));
-}
-
-BeaconFsm::~BeaconFsm() {
-  delete currentState;
-}
-
-void BeaconFsm::start() {
-  transitionTo(new InitialState(this));
-}
-
-void BeaconFsm::transitionTo(BeaconState* newState) {
-  if (currentState != nullptr) {
-    currentState->exit();
-    delete currentState;
-  }
-  currentState = newState;
-  if (currentState != nullptr) {
-    currentState->enter();
-  }
-}
-
-void BeaconFsm::onProvisionTimeout(void* arg) { static_cast<BeaconFsm*>(arg)->provisionTimeout(); }
-void BeaconFsm::onWifiRetryTimeout(void* arg) { static_cast<BeaconFsm*>(arg)->wifiRetryTimeout(); }
-void BeaconFsm::onWifiStaGotIp(void* arg, esp_event_base_t eventBase, int32_t eventId, void* eventData) { static_cast<BeaconFsm*>(arg)->wifiStaGotIp(eventData); }
-void BeaconFsm::onWifiStaDisconnected(void* arg, esp_event_base_t eventBase, int32_t eventId, void* eventData) { static_cast<BeaconFsm*>(arg)->wifiStaDisconnected(eventData); }
-
-void BeaconFsm::provisionTimeout() {
-  ESP_LOGI(TAG, "Provisioning timed out. Retrying Wi-Fi connection.");
-  transitionTo(new ConnectingState(this));
-}
-
-void BeaconFsm::wifiRetryTimeout() {
-  ESP_LOGI(TAG, "Wi-Fi retry timeout expired. Retrying connection.");
-  transitionTo(new ConnectingState(this));
-}
-
-void BeaconFsm::wifiStaGotIp(void* eventData) {
-  ip_event_got_ip_t* event = (ip_event_got_ip_t*) eventData;
-  ESP_LOGI(TAG, "***************************************************");
-  ESP_LOGI(TAG, "Beacon connected! IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
-  ESP_LOGI(TAG, "***************************************************");
-  transitionTo(new ConnectedState(this));
-}
-
-void BeaconFsm::wifiStaDisconnected(void* eventData) {
-  ESP_LOGW(TAG, "Wi-Fi disconnected.");
-  
-  #if USE_STATIC_WIFI_CREDS
-    ESP_LOGI(TAG, "Debug mode: Retrying connection to static AP...");
-    transitionTo(new ConnectingState(this));
-  #else
-    wifiConnectAttempts++;
-    if (wifiConnectAttempts >= MAX_WIFI_CONNECT_ATTEMPTS) {
-      ESP_LOGE(TAG, "Failed to connect after %d attempts. Entering provisioning mode.", MAX_WIFI_CONNECT_ATTEMPTS);
-      wifiConnectAttempts = 0;
-      transitionTo(new ProvisioningState(this));
-    } else {
-      esp_timer_start_once(wifiRetryTimer, 5 * 1000 * 1000);
-    }
-  #endif
-}
-
-void InitialState::enter() {
-  #if USE_STATIC_WIFI_CREDS
-    ESP_LOGI(TAG, "Debug mode enabled. Using static credentials from secrets.h");
-    // Temporarily overwrite settings with static credentials for connection attempt.
-    context->settings.setValue("ssid", WIFI_SSID);
-    context->settings.setValue("password", WIFI_PASSWORD);
-    context->transitionTo(new ConnectingState(context));
-  #else
-    ESP_LOGI(TAG, "Entering Initial state");
-    const char* ssid = context->settings.getValue("ssid");
-    if (ssid && strlen(ssid) > 0) {
-      context->transitionTo(new ConnectingState(context));
-    } else {
-      ESP_LOGI(TAG, "No SSID configured, entering provisioning mode.");
-      context->transitionTo(new ProvisioningState(context));
-    }
-  #endif
-}
-
-void ConnectingState::enter() {
-  ESP_LOGI(TAG, "Connecting to Wi-Fi...");
-  context->connectToWifi();
-}
-
-void ProvisioningState::enter() {
-  ESP_LOGI(TAG, "Entering Provisioning state for %d minutes.", PROVISIONING_TIMEOUT_MINUTES);
-  context->startProvisioningMode();
-  esp_timer_start_once(context->provisionTimer, (uint64_t)PROVISIONING_TIMEOUT_MINUTES * 60 * 1000000);
-}
-
-void ProvisioningState::exit() {
-  ESP_LOGI(TAG, "Exiting Provisioning state");
-  esp_timer_stop(context->provisionTimer);
-  context->webServer.stop();
-}
-
-void ConnectedState::enter() {
-  ESP_LOGI(TAG, "Entering Connected state.");
-  context->wifiConnectAttempts = 0;
-  context->startNtpSync();
-  context->transitionTo(new TransmittingState(context));
-  context->webServer.start(context->settings);
-}
-
-void TransmittingState::enter() {
-  ESP_LOGI(TAG, "Entering Transmitting state. System is operational.");
-  // Start the transmission scheduler
-  context->scheduler.start();
-}
-
-void BeaconFsm::connectToWifi() {
   wifi_config_t wifiConfig = {};
-  strncpy((char*)wifiConfig.sta.ssid, settings.getValue("ssid"), sizeof(wifiConfig.sta.ssid) - 1);
-  strncpy((char*)wifiConfig.sta.password, settings.getValue("password"), sizeof(wifiConfig.sta.password) - 1);
+  strncpy((char*)wifiConfig.ap.ssid, "JTEncode Beacon", sizeof(wifiConfig.ap.ssid) -1);
+  wifiConfig.ap.authmode = WIFI_AUTH_OPEN;
+  wifiConfig.ap.max_connection = 4;
+
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifiConfig));
+  ESP_ERROR_CHECK(esp_wifi_start());
+  ESP_LOGI(TAG, "SoftAP Started.");
+
+  webServer.start();
+  currentState = State::BEACONING;
+}
+
+void BeaconFSM::handleStaConnecting() {
+  ESP_LOGI(TAG, "State: STA_CONNECTING");
+  wifiEventGroup = xEventGroupCreate();
+  
+  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler, this));
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler, this));
+  esp_netif_create_default_wifi_sta();
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+  
+  char ssid[MAX_SSID_LEN];
+  char password[MAX_PASSWORD_LEN];
+  getSettingString("ssid", ssid, sizeof(ssid), "");
+  getSettingString("password", password, sizeof(password), "");
+
+  wifi_config_t wifiConfig = {};
+  strncpy((char*)wifiConfig.sta.ssid, ssid, sizeof(wifiConfig.sta.ssid)-1);
+  strncpy((char*)wifiConfig.sta.password, password, sizeof(wifiConfig.sta.password)-1);
   
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifiConfig));
   ESP_ERROR_CHECK(esp_wifi_start());
-  ESP_LOGI(TAG, "Connection request sent for SSID: %s", settings.getValue("ssid"));
-  ESP_ERROR_CHECK(esp_wifi_connect());
+  ESP_LOGI(TAG, "Waiting for WiFi connection...");
+
+  EventBits_t bits = xEventGroupWaitBits(wifiEventGroup, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(15000));
+
+  if (bits & WIFI_CONNECTED_BIT) {
+    ESP_LOGI(TAG, "Connected to AP.");
+    webServer.start();
+    currentState = State::BEACONING;
+  } else {
+    ESP_LOGW(TAG, "Failed to connect to AP. Falling back to AP Mode.");
+    webServer.stop();
+    esp_wifi_stop();
+    esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler);
+    esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler);
+    esp_netif_t* wifiNetif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (wifiNetif) {
+      esp_netif_destroy(wifiNetif);
+    }
+    currentState = State::AP_MODE;
+  }
+  vEventGroupDelete(wifiEventGroup);
+  wifiEventGroup = NULL;
 }
 
-void BeaconFsm::startProvisioningMode() {
-  uint8_t mac[6];
-  ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+void BeaconFSM::handleBeaconing() {
+  ESP_LOGI(TAG, "State: BEACONING. Starting scheduler.");
+  if (scheduler) {
+    scheduler->start();
+  }
   
-  wifi_config_t wifi_config = {};
-  snprintf((char *)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid), "Beacon-%02X%02X", mac[4], mac[5]);
-  wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-  wifi_config.ap.max_connection = 4;
-
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
-  ESP_ERROR_CHECK(esp_wifi_start());
-
-  esp_netif_ip_info_t ip_info;
-  ESP_ERROR_CHECK(esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_AP_DEF"), &ip_info));
-  
-  ESP_LOGI(TAG, "Provisioning AP '%s' started.", wifi_config.ap.ssid);
-  ESP_LOGI(TAG, "Connect and go to http://" IPSTR, IP2STR(&ip_info.ip));
-  context->webServer.start(context->settings);
-}
-
-void BeaconFsm::startNtpSync() {
-  ESP_LOGI(TAG, "Starting NTP synchronization...");
+  while (true) {
+    vTaskDelay(portMAX_DELAY);
+  }
 }

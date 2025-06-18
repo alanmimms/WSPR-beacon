@@ -38,9 +38,20 @@ HTTP Basic Authentication protects non-provisioning pages.
 A JSON API endpoint (/api/status.json) provides dynamic data to the
 frontend.
 
+The C++ compiler cannot distinguish careful coding to test for lengths
+of C strings from careless coding. Do not use something like
+snprintf() to concatenate the components of a larger string even if
+tests show there is enough room in the target buffer. Instead
+concatenate the strings using strncpy and strncat as many times as
+necessary.
+
 Component Drivers:
 
 si5351: C++ class for the Si5351 chip.
+
+i2c: The I2C driver used is part of ESP IDF as a component. Include
+"driver/i2c_master.h" instead of "driver/i2c.h" since this program
+uses I2C as the master on the bus.
 
 Scheduler: Manages transmission timing and band plans.
 

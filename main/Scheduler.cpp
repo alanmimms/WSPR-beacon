@@ -1,104 +1,82 @@
 #include "Scheduler.h"
+#include "Settings.h"
 #include "esp_log.h"
-#include <time.h>
+#include "JTEncode.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char* TAG = "Scheduler";
 
-// The scheduler will run its check once per second.
-static const uint64_t SCHEDULER_INTERVAL_US = 1000 * 1000;
-
-Scheduler::Scheduler(Si5351& si5351, Settings& settings) :
+Scheduler::Scheduler(Si5351& si5351, gpio_num_t statusLedPin) :
   si5351(si5351),
-  settings(settings),
   timer(nullptr),
-  currentBandIndex(0),
-  transmissionsOnCurrentBand(0),
-  skipIntervalCount(0)
-{
-  // The C++ initializer list handles storing the references.
+  statusLedPin(statusLedPin) {
 }
 
 void Scheduler::start() {
-  if (timer != nullptr) {
-    ESP_LOGW(TAG, "Scheduler timer already running.");
-    return;
-  }
-  ESP_LOGI(TAG, "Starting scheduler timer.");
+  ESP_LOGI(TAG, "Starting scheduler...");
   const esp_timer_create_args_t timer_args = {
-      .callback = &Scheduler::onTimer,
+      .callback = &Scheduler::timerCallback,
       .arg = this,
-      .name = "scheduler-tick"
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "beacon_timer",
+      .skip_unhandled_events = false
   };
+
   ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer));
-  ESP_ERROR_CHECK(esp_timer_start_periodic(timer, SCHEDULER_INTERVAL_US));
+  
+  // Perform the first transmission immediately without waiting for a timer event.
+  // The timer will be armed inside the transmit() function for all subsequent runs.
+  transmit();
 }
 
 void Scheduler::stop() {
-  if (timer != nullptr) {
-    ESP_LOGI(TAG, "Stopping scheduler timer.");
+  if (timer) {
     esp_timer_stop(timer);
     esp_timer_delete(timer);
     timer = nullptr;
   }
-  // Ensure the transmitter is off when the scheduler stops.
-  // si5351.outputEnable(0, 0);
+  ESP_LOGI(TAG, "Scheduler stopped.");
 }
 
-void Scheduler::onTimer(void* arg) {
-  // The static callback simply calls the instance's tick method.
-  static_cast<Scheduler*>(arg)->tick();
+void Scheduler::timerCallback(void* arg) {
+  // This static function is called by the ESP-IDF timer service.
+  // It calls the instance-specific transmit method.
+  Scheduler* scheduler = static_cast<Scheduler*>(arg);
+  scheduler->transmit();
 }
 
-void Scheduler::tick() {
-  time_t now;
-  struct tm timeinfo;
-  time(&now);
-  localtime_r(&now, &timeinfo);
+void Scheduler::transmit() {
+  // --- Retrieve latest settings ---
+  char callsign[MAX_CALLSIGN_LEN];
+  char grid[MAX_GRID_LEN];
+  getSettingString("callsign", callsign, sizeof(callsign), "N0CALL");
+  getSettingString("grid", grid, sizeof(grid), "AA00aa");
+  int powerDBm = getSettingInt("powerDBm", 10);
 
-  // WSPR transmissions start at the beginning of an even minute (00 seconds).
-  if (timeinfo.tm_sec != 0 || timeinfo.tm_min % 2 != 0) {
-    return;
-  }
-
-  ESP_LOGI(TAG, "Checking schedule at %02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  ESP_LOGI(TAG, "TX cycle: %s, %s, %d dBm.", callsign, grid, powerDBm);
+  gpio_set_level(statusLedPin, 1);
   
-  // 1. Check if we are within a master schedule window.
-  // (Implementation of checking Settings for active time windows would go here)
-  bool inActiveWindow = true; // Placeholder
-  if (!inActiveWindow) {
-    return;
-  }
+  // TODO: Add WSPR/JT9 signal generation logic here using jtencode and si5351
+  // Example:
+  // int symbols[WSPR_SYMBOL_COUNT];
+  // wspr_encode(callsign, grid, powerDBm, symbols);
+  // for (int i = 0; i < WSPR_SYMBOL_COUNT; i++) {
+  //   si5351.set_freq(calculate_freq_for_symbol(symbols[i]));
+  //   vTaskDelay(pdMS_TO_TICKS(WSPR_TONE_PERIOD_MS));
+  // }
+  
+  vTaskDelay(pdMS_TO_TICKS(2000)); // Simulate transmission duration
+  
+  gpio_set_level(statusLedPin, 0);
 
-  // 2. Check the skip interval.
-  // (Implementation of checking per-band skip settings would go here)
-  if (skipIntervalCount > 0) {
-    ESP_LOGI(TAG, "Skipping this interval (%d remaining)", skipIntervalCount);
-    skipIntervalCount--;
-    return;
-  }
-
-  // 3. It's time to transmit. Select the band and frequency.
-  // (This is a simplified version of the band plan logic)
-  ESP_LOGI(TAG, "TRANSMITTING on band index %d", currentBandIndex);
-
-  // TODO: Get actual frequency from settings based on currentBandIndex
-  // For example: long freq = settings.getBandFrequency(currentBandIndex);
-  // si5351.setFrequency(0, freq);
-  // si5351.outputEnable(0, 1);
-  // jtencode_wspr(...)
-
-  // 4. Update counters for the next cycle.
-  transmissionsOnCurrentBand++;
-  // (Implementation of checking transmissions_per_band setting would go here)
-  int txPerBand = 5; // Placeholder
-  if (transmissionsOnCurrentBand >= txPerBand) {
-    transmissionsOnCurrentBand = 0;
-    currentBandIndex++;
-    // (Implementation of checking band plan size would go here)
-    if (currentBandIndex >= 5) { // Placeholder for band plan size
-      currentBandIndex = 0;
-    }
-    // (Reset skip counter for the new band based on settings)
-    skipIntervalCount = 2; // Placeholder
+  // --- Reschedule for the next interval ---
+  int txIntervalMinutes = getSettingInt("txIntervalMinutes", 10);
+  uint64_t intervalMicroseconds = (uint64_t)txIntervalMinutes * 60 * 1000 * 1000;
+  
+  ESP_LOGI(TAG, "Transmission finished. Scheduling next in %d minutes.", txIntervalMinutes);
+  if (timer) {
+    // Arm the one-shot timer for the next transmission.
+    ESP_ERROR_CHECK(esp_timer_start_once(timer, intervalMicroseconds));
   }
 }

@@ -9,6 +9,7 @@ idf_component_register(
         "WebServer.cpp"
         "WifiManager.cpp"
     REQUIRES 
+        cxx
         # ESP-IDF Framework Components
         esp_driver_gpio
         esp_driver_i2c

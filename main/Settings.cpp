@@ -1,113 +1,165 @@
 #include "Settings.h"
-#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_log.h"
-#include <stdlib.h>
+#include "cJSON.h"
+#include <cstring>
 
 static const char* TAG = "Settings";
-static const char* NVS_NAMESPACE = "beacon_cfg";
+static cJSON* gSettingsJson = NULL;
+static SemaphoreHandle_t gSettingsMutex;
 
-// Helper function to find a setting struct by its key
-static Setting* findSetting(Settings* settingsObj, const char* key) {
-    for (int i = 0; i < settingsObj->numSettings; ++i) {
-        if (strcmp(settingsObj->settings[i].key, key) == 0) {
-            return &settingsObj->settings[i];
-        }
-    }
-    return nullptr;
-}
+// Forward declaration for internal use
+static void ensureDefaultSettings();
 
-const Setting* findSetting(const Settings* settingsObj, const char* key) {
-    for (int i = 0; i < settingsObj->numSettings; ++i) {
-        if (strcmp(settingsObj->settings[i].key, key) == 0) {
-            return &settingsObj->settings[i];
-        }
-    }
-    return nullptr;
-}
-
-Settings::Settings() {
-    // Define all settings keys.
-    settings[0] = {"hostname",  nullptr};
-    settings[1] = {"ssid",      nullptr};
-    settings[2] = {"password",  nullptr};
-    settings[3] = {"callsign",  nullptr};
-    settings[4] = {"locator",   nullptr};
-    settings[5] = {"powerDbm",  nullptr};
-    settings[6] = {"adminUser", nullptr};
-    settings[7] = {"adminPass", nullptr};
-    settings[8] = {"tx_percentage", nullptr};
-    settings[9] = {"tx_skip",   nullptr};
-
-    // Initialize with default values.
-    setValue("hostname", "wspr-beacon");
-    setValue("ssid", "");
-    setValue("password", "");
-    setValue("callsign", "N0CALL");
-    setValue("locator", "AA00aa");
-    setValue("powerDbm", "10");
-    setValue("adminUser", "beacon");
-    setValue("adminPass", "WSPR");
-    setValue("tx_percentage", "20");
-    setValue("tx_skip", "0");
-}
-
-Settings::~Settings() {
-    for (int i = 0; i < numSettings; ++i) {
-        if (settings[i].value != nullptr) {
-            free(settings[i].value);
-        }
+void initializeSettings() {
+    gSettingsMutex = xSemaphoreCreateMutex();
+    gSettingsJson = cJSON_CreateObject();
+    if (!gSettingsJson) {
+        ESP_LOGE(TAG, "Failed to create cJSON object during initialization!");
     }
 }
 
-void Settings::load() {
+esp_err_t loadSettings() {
+    if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return ESP_ERR_TIMEOUT;
+
     nvs_handle_t nvsHandle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvsHandle);
-    if (err != ESP_OK) { /* ... */ return; }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error opening NVS handle: %s", esp_err_to_name(err));
+        xSemaphoreGive(gSettingsMutex);
+        return err;
+    }
 
-    for (int i = 0; i < numSettings; ++i) {
-        size_t requiredLen = 0;
-        err = nvs_get_str(nvsHandle, settings[i].key, NULL, &requiredLen);
-        if (err == ESP_OK && requiredLen > 0) {
-            char* tempValue = (char*)malloc(requiredLen);
-            if (tempValue) {
-                nvs_get_str(nvsHandle, settings[i].key, tempValue, &requiredLen);
-                setValue(settings[i].key, tempValue);
-                free(tempValue);
+    size_t requiredSize = 0;
+    err = nvs_get_str(nvsHandle, NVS_JSON_KEY, NULL, &requiredSize);
+
+    bool loadSuccess = false;
+    if (err == ESP_OK && requiredSize > 1) { // >1 to ensure it's not an empty string
+        char* jsonString = (char*)malloc(requiredSize);
+        if (jsonString) {
+            err = nvs_get_str(nvsHandle, NVS_JSON_KEY, jsonString, &requiredSize);
+            if (err == ESP_OK) {
+                cJSON_Delete(gSettingsJson);
+                gSettingsJson = cJSON_Parse(jsonString);
+                if (gSettingsJson != NULL) {
+                    ESP_LOGI(TAG, "Successfully loaded and parsed settings from NVS.");
+                    loadSuccess = true;
+                }
             }
+            free(jsonString);
         }
     }
+
+    if (!loadSuccess) {
+        ESP_LOGW(TAG, "Failed to load settings from NVS or JSON was invalid. Applying defaults.");
+        if (gSettingsJson == NULL) {
+            gSettingsJson = cJSON_CreateObject(); // Ensure we have a valid object
+        }
+        ensureDefaultSettings();
+    }
+
     nvs_close(nvsHandle);
-    ESP_LOGI(TAG, "Settings loaded from NVS.");
+    xSemaphoreGive(gSettingsMutex);
+    return ESP_OK;
 }
 
-void Settings::save() {
+esp_err_t saveSettingsJson(const char* jsonString) {
+    if (!jsonString) return ESP_ERR_INVALID_ARG;
+    if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return ESP_ERR_TIMEOUT;
+
+    cJSON *newJson = cJSON_Parse(jsonString);
+    if (!newJson) {
+        ESP_LOGE(TAG, "Failed to parse incoming JSON string for saving.");
+        xSemaphoreGive(gSettingsMutex);
+        return ESP_FAIL;
+    }
+
+    cJSON_Delete(gSettingsJson);
+    gSettingsJson = newJson;
+
+    char *compactString = cJSON_PrintUnformatted(gSettingsJson);
+    if (!compactString) {
+        ESP_LOGE(TAG, "Failed to print compact JSON for NVS.");
+        xSemaphoreGive(gSettingsMutex);
+        return ESP_FAIL;
+    }
+
     nvs_handle_t nvsHandle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvsHandle);
-    if (err != ESP_OK) { /* ... */ return; }
-
-    for (int i = 0; i < numSettings; ++i) {
-        nvs_set_str(nvsHandle, settings[i].key, settings[i].value);
-    }
-
-    err = nvs_commit(nvsHandle);
-    if (err != ESP_OK) { ESP_LOGE(TAG, "NVS commit failed: %s", esp_err_to_name(err)); }
-    
-    nvs_close(nvsHandle);
-    ESP_LOGI(TAG, "Settings saved to NVS.");
-}
-
-const char* Settings::getValue(const char* key) const {
-    const Setting* setting = findSetting(this, key);
-    return setting ? setting->value : nullptr;
-}
-
-void Settings::setValue(const char* key, const char* value) {
-    Setting* setting = findSetting(this, key);
-    if (setting) {
-        if (setting->value != nullptr) {
-            free(setting->value);
+    if (err == ESP_OK) {
+        err = nvs_set_str(nvsHandle, NVS_JSON_KEY, compactString);
+        if (err == ESP_OK) {
+            err = nvs_commit(nvsHandle);
+            ESP_LOGI(TAG, "Successfully saved settings to NVS.");
         }
-        setting->value = strdup(value);
+        nvs_close(nvsHandle);
     }
+    
+    free(compactString);
+    xSemaphoreGive(gSettingsMutex);
+    return err;
+}
+
+esp_err_t getSettingsJson(char* buffer, size_t len) {
+    if (!buffer || len == 0) return ESP_ERR_INVALID_ARG;
+    if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return ESP_ERR_TIMEOUT;
+    
+    if (!cJSON_PrintPreallocated(gSettingsJson, buffer, len, 0)) { // 0 = not formatted
+        ESP_LOGE(TAG, "Failed to print JSON to buffer, likely insufficient size.");
+        xSemaphoreGive(gSettingsMutex);
+        return ESP_FAIL;
+    }
+
+    xSemaphoreGive(gSettingsMutex);
+    return ESP_OK;
+}
+
+size_t getSettingString(const char* key, char* value, size_t maxLen, const char* defaultValue) {
+    if (!key || !value || maxLen == 0) return 0;
+    if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return 0;
+
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(gSettingsJson, key);
+    size_t copiedLen = 0;
+    if (cJSON_IsString(item) && (item->valuestring != NULL)) {
+        strncpy(value, item->valuestring, maxLen - 1);
+        value[maxLen - 1] = '\0';
+        copiedLen = strlen(value);
+    } else if (defaultValue) {
+        strncpy(value, defaultValue, maxLen - 1);
+        value[maxLen - 1] = '\0';
+        copiedLen = strlen(value);
+    } else {
+        value[0] = '\0';
+    }
+
+    xSemaphoreGive(gSettingsMutex);
+    return copiedLen;
+}
+
+int getSettingInt(const char* key, int defaultValue) {
+    if (!key) return defaultValue;
+    if (xSemaphoreTake(gSettingsMutex, portMAX_DELAY) != pdTRUE) return defaultValue;
+    
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(gSettingsJson, key);
+    int result = defaultValue;
+    if (cJSON_IsNumber(item)) {
+        result = item->valueint;
+    }
+
+    xSemaphoreGive(gSettingsMutex);
+    return result;
+}
+
+// Internal function, must be called within a mutex lock
+static void ensureDefaultSettings() {
+    if (!gSettingsJson) gSettingsJson = cJSON_CreateObject();
+    if (!cJSON_GetObjectItem(gSettingsJson, "callsign")) cJSON_AddStringToObject(gSettingsJson, "callsign", "N0CALL");
+    if (!cJSON_GetObjectItem(gSettingsJson, "grid")) cJSON_AddStringToObject(gSettingsJson, "grid", "AA00aa");
+    if (!cJSON_GetObjectItem(gSettingsJson, "powerDBm")) cJSON_AddNumberToObject(gSettingsJson, "powerDBm", 10);
+    if (!cJSON_GetObjectItem(gSettingsJson, "txIntervalMinutes")) cJSON_AddNumberToObject(gSettingsJson, "txIntervalMinutes", 10);
+    if (!cJSON_GetObjectItem(gSettingsJson, "ssid")) cJSON_AddStringToObject(gSettingsJson, "ssid", "");
+    if (!cJSON_GetObjectItem(gSettingsJson, "password")) cJSON_AddStringToObject(gSettingsJson, "password", "");
 }

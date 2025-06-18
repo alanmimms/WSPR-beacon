@@ -1,33 +1,48 @@
-#pragma once
+#ifndef SCHEDULER_H
+#define SCHEDULER_H
 
 #include "si5351.h"
-#include "Settings.h"
 #include "esp_timer.h"
+#include "driver/gpio.h"
 
+/**
+ * @class Scheduler
+ * @brief Manages the periodic transmission of beacon signals.
+ */
 class Scheduler {
 public:
-  // The constructor takes references to the shared Si5351 and Settings objects.
-  Scheduler(Si5351& si5351, Settings& settings);
+  /**
+   * @brief Construct a new Scheduler object.
+   *
+   * @param si5351 A reference to the initialized Si5351 driver instance.
+   * @param statusLedPin The GPIO pin number for the status LED.
+   */
+  Scheduler(Si5351& si5351, gpio_num_t statusLedPin);
 
+  /**
+   * @brief Starts the scheduling and performs the first transmission.
+   */
   void start();
+
+  /**
+   * @brief Stops and cleans up the timer.
+   */
   void stop();
 
 private:
-  // This method contains the core logic that is run periodically.
-  void tick();
+  /**
+   * @brief The static callback function required by the ESP timer API.
+   */
+  static void timerCallback(void* arg);
 
-  // Static callback function for the ESP-IDF timer.
-  static void onTimer(void* arg);
-
-  // References to the shared objects from BeaconFsm.
+  /**
+   * @brief Performs the actual beacon transmission.
+   */
+  void transmit();
+  
   Si5351& si5351;
-  Settings& settings;
-
-  // Handle for the periodic timer that drives the scheduler.
   esp_timer_handle_t timer;
-
-  // Member variables for tracking the current transmission state.
-  int currentBandIndex;
-  int transmissionsOnCurrentBand;
-  int skipIntervalCount;
+  gpio_num_t statusLedPin;
 };
+
+#endif // SCHEDULER_H

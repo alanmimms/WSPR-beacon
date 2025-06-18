@@ -36,3 +36,11 @@ menu "SI5351 I2C Configuration"
 		device on the I2C bus.
 
 endmenu
+
+config STATUS_LED_GPIO
+    int "GPIO pin where active-low LED is attached"
+    default 8
+    help
+	GPIO number for the status LED to be grounded to produce
+	maximum light output.
+

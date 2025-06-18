@@ -471,6 +471,8 @@ CONFIG_I2C_PORT=-1
 CONFIG_SI5351_ADDRESS=60
 # end of SI5351 I2C Configuration
 
+CONFIG_STATUS_LED_GPIO=8
+
 #
 # Compiler options
 #
