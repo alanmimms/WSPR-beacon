@@ -1,26 +1,66 @@
 <!DOCTYPE html>
 <html>
-<head><title>Settings</title></head>
+<head>
+  <title>Settings</title>
+  <meta charset="utf-8">
+  <style>
+    label { display: block; margin-top: 1em; }
+    input[type="number"] { width: 6em; }
+  </style>
+</head>
 <body>
   <main>
     <h2>Beacon Identity</h2>
     <form id="settings-form">
-      <label for="callsign">Callsign:</label><br>
-      <input type="text" id="callsign" name="callsign"><br>
-      <label for="locator">Maidenhead Locator (4-6 chars):</label><br>
-      <input type="text" id="locator" name="locator"><br>
-      <label for="power">Power (watts):</label><br>
-      <input type="number" id="power" name="power" step="0.01"><br><br>
-      <button type="submit">Save Settings</button>
+      <label for="callsign">Callsign:</label>
+      <input type="text" id="callsign" name="callsign">
+
+      <label for="locator">Maidenhead Locator (4-6 chars):</label>
+      <input type="text" id="locator" name="locator">
+
+      <label for="powerWatts">Power (watts):</label>
+      <input type="number" id="powerWatts" name="powerWatts" step="any" min="0" autocomplete="off">
+
+      <label for="powerDbm">Power (dBm):</label>
+      <input type="number" id="powerDbm" name="powerDbm" step="any" autocomplete="off">
+
+      <br><button type="submit">Save Settings</button>
     </form>
     <p id="settings-message"></p>
     <script>
+      function wattsToDbm(watts) {
+        if (watts <= 0 || isNaN(watts)) return '';
+        return (10 * Math.log10(watts * 1000)).toFixed(2);
+      }
+      function dbmToWatts(dbm) {
+        if (isNaN(dbm)) return '';
+        return (Math.pow(10, dbm / 10) / 1000).toFixed(4);
+      }
+
+      const wattsInput = document.getElementById('powerWatts');
+      const dbmInput = document.getElementById('powerDbm');
+      let updating = false;
+
+      wattsInput.addEventListener('input', () => {
+        if (updating) return;
+        updating = true;
+        dbmInput.value = wattsToDbm(parseFloat(wattsInput.value));
+        updating = false;
+      });
+
+      dbmInput.addEventListener('input', () => {
+        if (updating) return;
+        updating = true;
+        wattsInput.value = dbmToWatts(parseFloat(dbmInput.value));
+        updating = false;
+      });
+
       document.getElementById('settings-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const payload = {
           callsign: document.getElementById('callsign').value,
           locator: document.getElementById('locator').value,
-          power: parseFloat(document.getElementById('power').value)
+          dbm: parseFloat(dbmInput.value)
         };
         const res = await fetch('/api/settings', {
           method: 'POST',
@@ -31,9 +71,10 @@
       });
 
       fetch('/api/status.json').then(res => res.json()).then(data => {
-        document.getElementById('callsign').value = data.callsign || "";
-        document.getElementById('locator').value = data.locator || "";
-        document.getElementById('power').value = data.power || "";
+        document.getElementById('callsign').value = data.callsign || '';
+        document.getElementById('locator').value = data.locator || '';
+        dbmInput.value = (typeof data.dbm !== "undefined") ? data.dbm : '';
+        wattsInput.value = dbmToWatts(parseFloat(dbmInput.value));
       });
     </script>
   </main>

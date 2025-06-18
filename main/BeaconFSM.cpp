@@ -30,6 +30,11 @@ const int WIFI_FAIL_BIT = BIT1;
 // Define hardware configuration from Kconfig
 #define STATUS_LED_GPIO static_cast<gpio_num_t>(CONFIG_STATUS_LED_GPIO)
 
+extern "C" {
+  void initializeSettings();
+  esp_err_t loadSettings();
+}
+
 BeaconFSM::BeaconFSM() :
   currentState(State::BOOTING),
   webServer(nullptr),
@@ -93,7 +98,7 @@ void BeaconFSM::handleBooting() {
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
-  
+
   initializeSettings();
   loadSettings();
   
@@ -204,9 +209,21 @@ void BeaconFSM::handleBeaconing() {
   if (scheduler) {
     scheduler->start();
   }
-  
+
+  // If the scheduler launches a transmission, log the frequency
+  // This requires that Scheduler calls a method or triggers a callback.
+  // For now, add a sample log for frequency (replace or extend as needed).
+
+  // Example: If you know the frequency here
+  // float frequencyHz = scheduler->getCurrentFrequency();
+  // ESP_LOGI(TAG, "Transmit session starting at %.3f Hz", frequencyHz);
+
   while (true) {
     // The FSM task now idles while the scheduler's timer and the web server task run.
     vTaskDelay(portMAX_DELAY);
   }
 }
+
+// Ensure you add the frequency logging in Scheduler or transmit logic as appropriate,
+// e.g., in Scheduler::startTransmit or similar:
+// ESP_LOGI("BeaconFSM", "Transmit session starting at %.3f Hz", frequencyHz);
