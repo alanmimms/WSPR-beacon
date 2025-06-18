@@ -11,6 +11,14 @@
 #include "driver/gpio.h"
 #include "si5351.h"
 
+// For development: bypass web UI provisioning and connect directly to WiFi.
+// Requires a 'secrets.h' file with WIFI_SSID and WIFI_PASSWORD.
+#define BYPASS_PROVISIONING
+
+#ifdef BYPASS_PROVISIONING
+#include "secrets.h"
+#endif
+
 static const char* TAG = "BeaconFSM";
 
 static EventGroupHandle_t wifiEventGroup;
@@ -93,7 +101,12 @@ void BeaconFSM::handleBooting() {
   initializeSettings();
   loadSettings();
   
-  esp_vfs_spiffs_conf_t spiffsConf = { .base_path = "/spiffs", .partition_label = "spiffs_web", .max_files = 5, .format_if_mount_failed = true };
+  static const esp_vfs_spiffs_conf_t spiffsConf = {
+    .base_path = "/spiffs",
+    .partition_label = "storage",
+    .max_files = 50,
+    .format_if_mount_failed = true,
+  };
   ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffsConf));
   
   initHardware();
@@ -103,6 +116,10 @@ void BeaconFSM::handleBooting() {
   si5351 = new Si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL, CONFIG_I2C_MASTER_FREQUENCY);
   scheduler = new Scheduler(*si5351, static_cast<gpio_num_t>(STATUS_LED_GPIO));
   
+#ifdef BYPASS_PROVISIONING
+  ESP_LOGW(TAG, "Bypassing provisioning and using credentials from secrets.h");
+  currentState = State::STA_CONNECTING;
+#else
   char ssid[MAX_SSID_LEN];
   getSettingString("ssid", ssid, sizeof(ssid), "");
   
@@ -111,6 +128,7 @@ void BeaconFSM::handleBooting() {
   } else {
     currentState = State::AP_MODE;
   }
+#endif
 }
 
 void BeaconFSM::handleApMode() {
@@ -145,15 +163,19 @@ void BeaconFSM::handleStaConnecting() {
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
   
+  wifi_config_t wifiConfig = {};
+#ifdef BYPASS_PROVISIONING
+  strncpy((char*)wifiConfig.sta.ssid, WIFI_SSID, sizeof(wifiConfig.sta.ssid) - 1);
+  strncpy((char*)wifiConfig.sta.password, WIFI_PASSWORD, sizeof(wifiConfig.sta.password) - 1);
+#else
   char ssid[MAX_SSID_LEN];
   char password[MAX_PASSWORD_LEN];
   getSettingString("ssid", ssid, sizeof(ssid), "");
   getSettingString("password", password, sizeof(password), "");
-
-  wifi_config_t wifiConfig = {};
   strncpy((char*)wifiConfig.sta.ssid, ssid, sizeof(wifiConfig.sta.ssid)-1);
   strncpy((char*)wifiConfig.sta.password, password, sizeof(wifiConfig.sta.password)-1);
-  
+#endif
+
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifiConfig));
   ESP_ERROR_CHECK(esp_wifi_start());
