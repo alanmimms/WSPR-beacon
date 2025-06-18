@@ -10,6 +10,7 @@
 #include "freertos/event_groups.h"
 #include "driver/gpio.h"
 #include "si5351.h"
+#include "Scheduler.h"
 
 // For development: bypass web UI provisioning and connect directly to WiFi.
 // Requires a 'secrets.h' file with WIFI_SSID and WIFI_PASSWORD.
@@ -21,23 +22,26 @@
 
 static const char* TAG = "BeaconFSM";
 
+// Event group to signal WiFi events
 static EventGroupHandle_t wifiEventGroup;
 const int WIFI_CONNECTED_BIT = BIT0;
 const int WIFI_FAIL_BIT = BIT1;
 
 // Define hardware configuration from Kconfig
-#define STATUS_LED_GPIO CONFIG_STATUS_LED_GPIO
+#define STATUS_LED_GPIO static_cast<gpio_num_t>(CONFIG_STATUS_LED_GPIO)
 
 BeaconFSM::BeaconFSM() :
   currentState(State::BOOTING),
-  webServer(),
+  webServer(nullptr),
   si5351(nullptr),
   scheduler(nullptr) {
 }
 
 BeaconFSM::~BeaconFSM() {
+  // Clean up dynamically allocated objects
   delete scheduler;
   delete si5351;
+  delete webServer;
 }
 
 void BeaconFSM::wifiEventHandler(void* arg, esp_event_base_t eventBase, int32_t eventId, void* eventData) {
@@ -60,26 +64,18 @@ void BeaconFSM::wifiEventHandler(void* arg, esp_event_base_t eventBase, int32_t 
 }
 
 void BeaconFSM::initHardware() {
-  gpio_reset_pin(static_cast<gpio_num_t>(STATUS_LED_GPIO));
-  gpio_set_direction(static_cast<gpio_num_t>(STATUS_LED_GPIO), GPIO_MODE_OUTPUT);
-  ESP_LOGI(TAG, "GPIO driver installed.");
+  gpio_reset_pin(STATUS_LED_GPIO);
+  gpio_set_direction(STATUS_LED_GPIO, GPIO_MODE_OUTPUT);
+  ESP_LOGI(TAG, "GPIO driver initialized for status LED.");
 }
 
 void BeaconFSM::run() {
   while (true) {
     switch (currentState) {
-      case State::BOOTING:
-        handleBooting();
-        break;
-      case State::AP_MODE:
-        handleApMode();
-        break;
-      case State::STA_CONNECTING:
-        handleStaConnecting();
-        break;
-      case State::BEACONING:
-        handleBeaconing();
-        break;
+      case State::BOOTING:        handleBooting();        break;
+      case State::AP_MODE:        handleApMode();         break;
+      case State::STA_CONNECTING: handleStaConnecting();  break;
+      case State::BEACONING:      handleBeaconing();      break;
       case State::ERROR:
         ESP_LOGE(TAG, "Entering error state. Halting.");
         vTaskDelay(portMAX_DELAY);
@@ -104,20 +100,20 @@ void BeaconFSM::handleBooting() {
   static const esp_vfs_spiffs_conf_t spiffsConf = {
     .base_path = "/spiffs",
     .partition_label = "storage",
-    .max_files = 50,
-    .format_if_mount_failed = true,
+    .max_files = 10,
+    .format_if_mount_failed = false,
   };
   ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffsConf));
   
   initHardware();
 
   // --- Deferred Initialization ---
-  // Create driver objects now that the OS is running.
+  webServer = new WebServer();
   si5351 = new Si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL, CONFIG_I2C_MASTER_FREQUENCY);
-  scheduler = new Scheduler(*si5351, static_cast<gpio_num_t>(STATUS_LED_GPIO));
+  scheduler = new Scheduler(*si5351, STATUS_LED_GPIO);
   
 #ifdef BYPASS_PROVISIONING
-  ESP_LOGW(TAG, "Bypassing provisioning and using credentials from secrets.h");
+  ESP_LOGW(TAG, "Bypassing provisioning, connecting with credentials from secrets.h");
   currentState = State::STA_CONNECTING;
 #else
   char ssid[MAX_SSID_LEN];
@@ -149,7 +145,7 @@ void BeaconFSM::handleApMode() {
   ESP_ERROR_CHECK(esp_wifi_start());
   ESP_LOGI(TAG, "SoftAP Started.");
 
-  webServer.start();
+  webServer->start();
   currentState = State::BEACONING;
 }
 
@@ -185,11 +181,11 @@ void BeaconFSM::handleStaConnecting() {
 
   if (bits & WIFI_CONNECTED_BIT) {
     ESP_LOGI(TAG, "Connected to AP.");
-    webServer.start();
+    webServer->start();
     currentState = State::BEACONING;
   } else {
     ESP_LOGW(TAG, "Failed to connect to AP. Falling back to AP Mode.");
-    webServer.stop();
+    if (webServer) webServer->stop();
     esp_wifi_stop();
     esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifiEventHandler);
     esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiEventHandler);
@@ -210,6 +206,7 @@ void BeaconFSM::handleBeaconing() {
   }
   
   while (true) {
+    // The FSM task now idles while the scheduler's timer and the web server task run.
     vTaskDelay(portMAX_DELAY);
   }
 }

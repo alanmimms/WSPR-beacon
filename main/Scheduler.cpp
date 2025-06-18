@@ -4,6 +4,7 @@
 #include "JTEncode.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "si5351.h"
 
 static const char* TAG = "Scheduler";
 
@@ -58,13 +59,6 @@ void Scheduler::transmit() {
   gpio_set_level(statusLedPin, 1);
   
   // TODO: Add WSPR/JT9 signal generation logic here using jtencode and si5351
-  // Example:
-  // int symbols[WSPR_SYMBOL_COUNT];
-  // wspr_encode(callsign, grid, powerDBm, symbols);
-  // for (int i = 0; i < WSPR_SYMBOL_COUNT; i++) {
-  //   si5351.set_freq(calculate_freq_for_symbol(symbols[i]));
-  //   vTaskDelay(pdMS_TO_TICKS(WSPR_TONE_PERIOD_MS));
-  // }
   
   vTaskDelay(pdMS_TO_TICKS(2000)); // Simulate transmission duration
   

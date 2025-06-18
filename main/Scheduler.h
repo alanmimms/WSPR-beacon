@@ -1,9 +1,11 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-#include "si5351.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
+
+// Forward declaration
+class Si5351;
 
 /**
  * @class Scheduler
