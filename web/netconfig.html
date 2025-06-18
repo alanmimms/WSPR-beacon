@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><title>Network Configuration</title></head>
+<body>
+  <main>
+    <h2>Network Configuration</h2>
+    <form id="netconfig-form">
+      <label for="ssid">WiFi SSID:</label><br>
+      <input type="text" id="ssid" name="ssid"><br>
+      <label for="password">WiFi Password:</label><br>
+      <input type="password" id="password" name="password"><br>
+      <label for="hostname">Device Hostname:</label><br>
+      <input type="text" id="hostname" name="hostname"><br><br>
+      <button type="submit">Save Network Settings</button>
+    </form>
+    <p id="netconfig-message"></p>
+    <script>
+      document.getElementById('netconfig-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+          ssid: document.getElementById('ssid').value,
+          password: document.getElementById('password').value,
+          hostname: document.getElementById('hostname').value
+        };
+        const res = await fetch('/api/netconfig', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        document.getElementById('netconfig-message').textContent = res.ok ? 'Saved!' : 'Error saving.';
+      });
+
+      fetch('/api/status.json').then(res => res.json()).then(data => {
+        document.getElementById('ssid').value = data.ssid || "";
+        document.getElementById('hostname').value = data.hostname || "";
+      });
+    </script>
+  </main>
+  <script src="layout.js"></script>
+</body>
+</html>

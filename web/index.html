@@ -1,37 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WSPR Beacon Control</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-</head>
+<html>
+<head><title>Index</title></head>
 <body>
-    <div class="container">
-        <header>
-            <h1>WSPR Beacon</h1>
-            <h2>Control Panel</h2>
-        </header>
-        <div class="content-wrapper">
-            <nav>
-                <ul>
-                    <li><a href="/index.html" class="active">Status</a></li>
-                    <li><a href="/provisioning.html">Provisioning</a></li>
-                    <li><a href="/security.html">Security</a></li>
-                    <li><a href="/settings.html">Settings</a></li>
-                </ul>
-            </nav>
-            <main>
-                <h3>Beacon Status</h3>
-                <p>This page will show the current operational status of the beacon.</p>
-            </main>
-        </div>
-        <footer>
-            <span id="footer-identity"></span>
-            <span id="footer-network"></span>
-        </footer>
-    </div>
-    <script src="script.js"></script>
+  <main>
+    <h2>Status</h2>
+    <p id="status-text">Loading current beacon status...</p>
+    <script>
+      fetch('/api/status.json')
+        .then(res => res.json())
+        .then(data => {
+          const statusText = `
+            Callsign: ${data.callsign || "?"}<br>
+            Locator: ${data.locator || "?"}<br>
+            Power: ${data.power || "?"} W (${data.power_dbm || "?"} dBm)<br>
+            TX %: ${data.tx_percentage || "?"}<br>
+            TX Skip: ${data.tx_skip || "?"}<br>
+          `;
+          document.getElementById('status-text').innerHTML = statusText;
+        });
+    </script>
+  </main>
+  <script src="layout.js"></script>
 </body>
 </html>

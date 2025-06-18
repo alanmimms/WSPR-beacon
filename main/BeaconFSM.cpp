@@ -168,7 +168,7 @@ void ProvisioningState::enter() {
 void ProvisioningState::exit() {
   ESP_LOGI(TAG, "Exiting Provisioning state");
   esp_timer_stop(context->provisionTimer);
-  context->stopWebServer();
+  context->webServer.stop();
 }
 
 void ConnectedState::enter() {
@@ -176,12 +176,11 @@ void ConnectedState::enter() {
   context->wifiConnectAttempts = 0;
   context->startNtpSync();
   context->transitionTo(new TransmittingState(context));
+  context->webServer.start(context->settings);
 }
 
 void TransmittingState::enter() {
   ESP_LOGI(TAG, "Entering Transmitting state. System is operational.");
-  // Start the web server in normal (non-provisioning) mode
-  context->webServer.start(context->settings, false);
   // Start the transmission scheduler
   context->scheduler.start();
 }
@@ -216,14 +215,7 @@ void BeaconFsm::startProvisioningMode() {
   
   ESP_LOGI(TAG, "Provisioning AP '%s' started.", wifi_config.ap.ssid);
   ESP_LOGI(TAG, "Connect and go to http://" IPSTR, IP2STR(&ip_info.ip));
-
-  // Start the web server in provisioning (captive portal) mode.
-  webServer.start(settings, true);
-}
-
-void BeaconFsm::stopWebServer() {
-  ESP_LOGI(TAG, "Stopping web server and Wi-Fi.");
-  webServer.stop();
+  context->webServer.start(context->settings);
 }
 
 void BeaconFsm::startNtpSync() {
