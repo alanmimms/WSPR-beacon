@@ -2,30 +2,27 @@
 #define SETTINGS_H
 
 #include "esp_err.h"
-#include <cstddef>
-
-// --- Constants for setting value lengths ---
-#define MAX_CALLSIGN_LEN    32
-#define MAX_GRID_LEN        12
-#define MAX_SSID_LEN        32
-#define MAX_PASSWORD_LEN    64
-
-// --- NVS Storage Constants ---
-#define NVS_NAMESPACE "jtencode_cfg"
-#define NVS_JSON_KEY "settingsJson"
 
 class Settings {
 public:
   Settings();
-  void initialize();
-  esp_err_t load();
-  esp_err_t saveJson(const char *jsonString);
-  esp_err_t getJson(char *buffer, size_t len);
-  size_t getString(const char *key, char *value, size_t maxLen, const char *defaultValue);
+  ~Settings();
+
+  void load();
+  esp_err_t saveJson(const char *json);
+  esp_err_t getJson(char *buf, size_t buflen);
+
   int getInt(const char *key, int defaultValue);
+  void setInt(const char *key, int value);
+
+  void getString(const char *key, char *dst, size_t dstLen, const char *defaultValue);
+  void setString(const char *key, const char *value);
+
+  static constexpr int maxCallsignLen = 12;
+  static constexpr int maxGridLen = 8;
 
 private:
-  void ensureDefaultSettings();
+  // (Private data/methods if needed)
 };
 
 #endif // SETTINGS_H

@@ -13,7 +13,6 @@
 #define SCRATCH_BUFSIZE (8192)
 #define JSON_BUF_SIZE (1024)
 static const char *TAG = "WebServer";
-static const char *SPIFFS_BASE_PATH = "/spiffs"
 
 WebServer::WebServer(Settings &settings)
   : server(nullptr), settings(settings) {}
@@ -39,7 +38,7 @@ esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
 
 esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   char filepath[FILE_PATH_MAX];
-  strncpy(filepath, SPIFFS_BASE_PATH, sizeof(filepath) - 1);
+  strncpy(filepath, WebServer::spiffsBasePath, sizeof(filepath) - 1);
   filepath[sizeof(filepath) - 1] = '\0';
   strncat(filepath, req->uri, sizeof(filepath) - strlen(filepath) - 1);
   ESP_LOGI(TAG, "Serving file: %s", filepath);
@@ -87,7 +86,6 @@ esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for GET /api/settings - returns all current settings as JSON
 esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
@@ -96,6 +94,8 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
+  // Always reload from NVS before returning settings
+  if (self) self->settings.load();
   if (self && self->settings.getJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
@@ -107,7 +107,6 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for POST /api/settings - receives JSON and updates settings
 esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   char content[JSON_BUF_SIZE];
@@ -123,9 +122,9 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  esp_err_t err = self->settings.saveJson(content); // Save settings from POST
+  esp_err_t err = self->settings.saveJson(content);
   if (err == ESP_OK) {
-    self->settings.load(); // Immediately reload settings so all calls use the latest values
+    self->settings.load(); // Immediately reload to update in-memory values
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
   } else {
@@ -135,7 +134,6 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for GET /api/status.json - returns system status as JSON
 esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
@@ -144,6 +142,8 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
+  // Always reload before returning status
+  if (self) self->settings.load();
   if (self && self->getStatusJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
@@ -155,22 +155,33 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// This method should be a member so it can pull from this->settings
 esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
   cJSON *root = cJSON_CreateObject();
+  char ssid[64] = "";
+  char password[64] = "";
+  char hostname[64] = "";
   char callsign[32] = "";
   char locator[16] = "";
-  int powerDbm = 0;
+  int powerMW = settings.getInt("powerMW", 0);
+  int powerDbm = settings.getInt("powerDbm", 0);
 
+  settings.getString("ssid", ssid, sizeof(ssid), "");
+  settings.getString("password", password, sizeof(password), "");
+  settings.getString("hostname", hostname, sizeof(hostname), "");
   settings.getString("callsign", callsign, sizeof(callsign), "");
   settings.getString("locator", locator, sizeof(locator), "");
-  settings.getInt("powerDbm", &powerDbm, 0);
+
+  cJSON_AddStringToObject(root, "ssid", ssid);
+  cJSON_AddStringToObject(root, "password", password);
+  cJSON_AddStringToObject(root, "hostname", hostname);
 
   cJSON_AddStringToObject(root, "callsign", callsign);
   cJSON_AddStringToObject(root, "locator", locator);
-  cJSON_AddNumberToObject(root, "power_dbm", powerDbm);
 
-  // Add other status fields as needed (ip_address, hostname, etc)
+  cJSON_AddNumberToObject(root, "powerMW", powerMW);
+  cJSON_AddNumberToObject(root, "powerDbm", powerDbm);
+
+  // Add other status fields as needed (ipAddress, hostname, etc) using camelCase
 
   char *rendered = cJSON_PrintUnformatted(root);
   if (rendered && strlen(rendered) < buflen) {

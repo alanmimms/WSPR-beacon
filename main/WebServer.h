@@ -14,6 +14,8 @@ public:
 
   esp_err_t getStatusJson(char *buf, size_t buflen);
 
+  inline static const char spiffsBasePath[] = "/spiffs";
+
 private:
   static esp_err_t rootGetHandler(httpd_req_t *req);
   static esp_err_t fileGetHandler(httpd_req_t *req);

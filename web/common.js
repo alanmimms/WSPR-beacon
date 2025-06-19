@@ -1,6 +1,22 @@
-// layout.js: Injects header, nav, and footer, and fills dynamic values from /api/status.json
+// common.js: Injects header, nav, and footer, and fills dynamic values from /api/status.json
+
+// Converts dBm to Milliwatts
+function dBmToMW(dBm) {
+  return Math.pow(10, dBm / 10);
+}
+
+// Converts Milliwatts to dBm
+function wattsToDbm(mw) {
+  return 10 * Math.log10((mw || 1));
+}
+
+function updateFooter(data) {
+  if (data.callsign) document.getElementById('footer-callsign').textContent = `Callsign: ${data.callsign}`;
+  if (data.hostname) document.getElementById('footer-hostname').textContent = `Hostname: ${data.hostname}`;
+}
 
 function injectLayout() {
+  console.log("Injecting layout");
   const header = document.createElement('header');
   header.innerHTML = `
     <div style="background: #003366; color: white; padding: 1em; font-size: 1.5em;">
@@ -14,8 +30,6 @@ function injectLayout() {
     <div style="width: 200px; background: #f0f0f0; height: 100%; position: fixed; top: 60px; bottom: 30px; padding: 1em;">
       <a href="index.html" id="nav-index" style="display: block; margin-bottom: 0.5em;">Home</a>
       <a href="settings.html" id="nav-settings" style="display: block; margin-bottom: 0.5em;">Settings</a>
-      <a href="schedule.html" id="nav-schedule" style="display: block; margin-bottom: 0.5em;">Schedule</a>
-      <a href="netconfig.html" id="nav-netconfig" style="display: block; margin-bottom: 0.5em;">Network Config</a>
       <a href="security.html" id="nav-security" style="display: block; margin-bottom: 0.5em;">Security</a>
     </div>
   `;
@@ -40,10 +54,7 @@ function injectLayout() {
 
   fetch('/api/status.json')
     .then(res => res.json())
-    .then(data => {
-      if (data.callsign) document.getElementById('footer-callsign').textContent = `Callsign: ${data.callsign}`;
-      if (data.hostname) document.getElementById('footer-hostname').textContent = `Hostname: ${data.hostname}`;
-    });
+    .then(data => updateFooter(data));
 
   // Highlight active nav
   const currentPage = location.pathname.split('/').pop().split('.')[0];

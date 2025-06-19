@@ -41,13 +41,13 @@ void Scheduler::timerCallback(void *arg) {
 }
 
 void Scheduler::transmit() {
-  char callsign[MAX_CALLSIGN_LEN];
-  char grid[MAX_GRID_LEN];
+  char callsign[Settings::maxCallsignLen];
+  char grid[Settings::maxGridLen];
   settings.getString("callsign", callsign, sizeof(callsign), "N0CALL");
   settings.getString("grid", grid, sizeof(grid), "AA00aa");
   int powerDBm = settings.getInt("powerDBm", 10);
 
-  ESP_LOGI(TAG, "TX cycle: %s, %s, %d dBm.", callsign, grid, powerDBm);
+  ESP_LOGI(TAG, "TX cycle: %s, %s, %ddBm.", callsign, grid, powerDBm);
   gpio_set_level(statusLedPin, 1);
 
   // TODO: Add WSPR/JT9 signal generation logic here using jtencode and si5351

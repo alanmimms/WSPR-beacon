@@ -3,7 +3,6 @@ idf_component_register(
         "main.cpp"
         "BeaconFSM.cpp"
         "Settings.cpp"
-        "ConfigManager.cpp"
         "Scheduler.cpp"
         "TimeManager.cpp"
         "WebServer.cpp"

@@ -93,11 +93,10 @@ void BeaconFSM::handleBooting() {
   }
   ESP_ERROR_CHECK(ret);
 
-  settings->initialize();
   settings->load();
 
   static const esp_vfs_spiffs_conf_t spiffsConf = {
-    .base_path = "/spiffs",
+    .base_path = WebServer::spiffsBasePath,
     .partition_label = "storage",
     .max_files = 10,
     .format_if_mount_failed = false,
