@@ -13,11 +13,19 @@
 static const char *TAG = "WebServer";
 static const char *SPIFFS_BASE_PATH = "/spiffs";
 
+WebServer *WebServer::instanceForApi = nullptr;
+
 WebServer::WebServer(Settings *settings)
-  : server(nullptr), settings(settings) {}
+  : server(nullptr), settings(settings) {
+  instanceForApi = this;
+}
 
 WebServer::~WebServer() {
   stop();
+}
+
+void WebServer::setFsmCallback(const std::function<void()> &cb) {
+  fsmSettingsChangedCb = cb;
 }
 
 esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {
@@ -93,7 +101,6 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  // Use the Settings API to generate JSON directly
   char *jsonStr = self->settings->toJsonString();
   if (!jsonStr) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
@@ -102,7 +109,7 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   }
   httpd_resp_set_type(req, "application/json");
   httpd_resp_send(req, jsonStr, strlen(jsonStr));
-  free(jsonStr); // Use free, not cJSON_free, since toJsonString() should use malloc
+  free(jsonStr);
   return ESP_OK;
 }
 
@@ -122,13 +129,14 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  // Use Settings API to parse and update from JSON string
   if (!self->settings->fromJsonString(content)) {
     httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format or save failed");
     return ESP_FAIL;
   }
 
   if (self->settings->storeToNVS() == ESP_OK) {
+    // Notify FSM that settings changed
+    if (self->fsmSettingsChangedCb) self->fsmSettingsChangedCb();
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
   } else {
@@ -159,7 +167,6 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
 }
 
 esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
-  // Deprecated: just use settings->toJsonString() for new code
   char *jsonStr = settings->toJsonString();
   if (jsonStr && strlen(jsonStr) < buflen) {
     strcpy(buf, jsonStr);

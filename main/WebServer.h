@@ -3,6 +3,7 @@
 
 #include "esp_http_server.h"
 #include "Settings.h"
+#include <functional>
 
 class WebServer {
 public:
@@ -16,6 +17,9 @@ public:
 
   inline static const char spiffsBasePath[] = "/spiffs";
 
+  // FSM callback registration for settings changes
+  void setFsmCallback(const std::function<void()> &cb);
+
 private:
   static esp_err_t rootGetHandler(httpd_req_t *req);
   static esp_err_t fileGetHandler(httpd_req_t *req);
@@ -27,6 +31,9 @@ private:
 
   httpd_handle_t server;
   Settings *settings;
+
+  std::function<void()> fsmSettingsChangedCb;
+  static WebServer *instanceForApi; // For static handler access
 };
 
 #endif // WEBSERVER_H
