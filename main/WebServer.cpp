@@ -3,7 +3,6 @@
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
-#include "cJSON.h"
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
@@ -94,8 +93,8 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  const cJSON *jsonObj = self->settings->getUserCJSON();
-  char *jsonStr = cJSON_PrintUnformatted((cJSON *)jsonObj);
+  // Use the Settings API to generate JSON directly
+  char *jsonStr = self->settings->toJsonString();
   if (!jsonStr) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
@@ -103,7 +102,7 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   }
   httpd_resp_set_type(req, "application/json");
   httpd_resp_send(req, jsonStr, strlen(jsonStr));
-  cJSON_free(jsonStr);
+  free(jsonStr); // Use free, not cJSON_free, since toJsonString() should use malloc
   return ESP_OK;
 }
 
@@ -123,33 +122,13 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  // Parse the received JSON and update settings using the API
-  cJSON *root = cJSON_Parse(content);
-  if (!root) {
-    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format");
+  // Use Settings API to parse and update from JSON string
+  if (!self->settings->fromJsonString(content)) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format or save failed");
     return ESP_FAIL;
   }
 
-  cJSON *item;
-
-  item = cJSON_GetObjectItem(root, "callsign");
-  if (item && cJSON_IsString(item)) {
-    self->settings->setString("callsign", item->valuestring);
-  }
-  item = cJSON_GetObjectItem(root, "locator");
-  if (item && cJSON_IsString(item)) {
-    self->settings->setString("locator", item->valuestring);
-  }
-  item = cJSON_GetObjectItem(root, "powerDbm");
-  if (item && cJSON_IsNumber(item)) {
-    self->settings->setInt("powerDbm", item->valueint);
-  }
-
-  cJSON_Delete(root);
-
-  // Persist the settings to NVS
-  esp_err_t err = self->settings->storeToNVS();
-  if (err == ESP_OK) {
+  if (self->settings->storeToNVS() == ESP_OK) {
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
   } else {
@@ -167,8 +146,7 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  const cJSON *jsonObj = self->settings->getUserCJSON();
-  char *jsonStr = cJSON_PrintUnformatted((cJSON *)jsonObj);
+  char *jsonStr = self->settings->toJsonString();
   if (!jsonStr) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
@@ -176,21 +154,19 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   }
   httpd_resp_set_type(req, "application/json");
   httpd_resp_send(req, jsonStr, strlen(jsonStr));
-  cJSON_free(jsonStr);
+  free(jsonStr);
   return ESP_OK;
 }
 
-// This method returns full settings JSON, identical to /api/settings
 esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
-  if (!buf) return ESP_FAIL;
-  const cJSON *jsonObj = settings->getUserCJSON();
-  char *jsonStr = cJSON_PrintUnformatted((cJSON *)jsonObj);
+  // Deprecated: just use settings->toJsonString() for new code
+  char *jsonStr = settings->toJsonString();
   if (jsonStr && strlen(jsonStr) < buflen) {
     strcpy(buf, jsonStr);
-    cJSON_free(jsonStr);
+    free(jsonStr);
     return ESP_OK;
   }
-  if (jsonStr) cJSON_free(jsonStr);
+  if (jsonStr) free(jsonStr);
   return ESP_FAIL;
 }
 
