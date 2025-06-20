@@ -1,11 +1,11 @@
 // common.js: Injects header, nav, and footer, and fills dynamic values from /api/status.json
 
-// Converts dBm to Milliwatts
-function dBmToMW(dBm) {
-  return Math.pow(10, dBm / 10);
+// Converts dbm to Milliwatts
+function dbmToMW(dbm) {
+  return Math.pow(10, dbm / 10);
 }
 
-// Converts Milliwatts to dBm
+// Converts Milliwatts to dbm
 function wattsToDbm(mw) {
   return 10 * Math.log10((mw || 1));
 }

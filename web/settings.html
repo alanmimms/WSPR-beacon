@@ -47,60 +47,62 @@
     </form>
     <p id="settings-message"></p>
     <script>
-      const mwInput = document.getElementById('powerMW');
-      const dbmInput = document.getElementById('powerDbm');
-      let updating = false;
+      document.addEventListener('DOMContentLoaded', () => {
+	const mwInput = document.getElementById('powerMW');
+	const dbmInput = document.getElementById('powerDbm');
+	let updating = false;
 
-      mwInput.addEventListener('input', () => {
-        if (updating) return;
-        updating = true;
+	mwInput.addEventListener('input', () => {
+	  if (updating) return;
+	  updating = true;
 
-	if (!mwInput.value) {
-	  mwInput.value = dbmInput;
-	} else {
-          dbmInput.value = mwToDbm(parseFloat(mwInput.value));
-	}
+	  if (!mwInput.value) {
+	    mwInput.value = dbmToMW(parseFloat(dbmInput));
+	  } else {
+	    dbmInput.value = mwToDbm(parseFloat(mwInput.value));
+	  }
 
-        updating = false;
-      });
+	  updating = false;
+	});
 
-      dbmInput.addEventListener('input', () => {
-        if (updating) return;
-        updating = true;
-        mwInput.value = dbmToMW(parseFloat(dbmInput.value));
-        updating = false;
-      });
+	dbmInput.addEventListener('input', () => {
+	  if (updating) return;
+	  updating = true;
+	  mwInput.value = dbmToMW(parseFloat(dbmInput.value));
+	  updating = false;
+	});
 
-      document.getElementById('settings-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const payload = {
-          ssid: document.getElementById('ssid').value,
-          password: document.getElementById('password').value,
-          hostname: document.getElementById('hostname').value,
-          callsign: document.getElementById('callsign').value,
-          locator: document.getElementById('locator').value,
-          dbm: parseFloat(dbmInput.value),
-	  txPercentage: document.getElementById('txPercentage').value,
-	  txSkip: document.getElementById('txSkip').value,
-        };
-        const res = await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        document.getElementById('settings-message').textContent = res.ok ? 'Saved!' : 'Error saving.';
-	updateFooter(payload);
-      });
+	document.getElementById('settings-form').addEventListener('submit', async (e) => {
+	  e.preventDefault();
+	  const payload = {
+	    ssid: document.getElementById('ssid').value,
+	    password: document.getElementById('password').value,
+	    hostname: document.getElementById('hostname').value,
+	    callsign: document.getElementById('callsign').value,
+	    locator: document.getElementById('locator').value,
+	    dbm: parseFloat(dbmInput.value),
+	    txPercentage: document.getElementById('txPercentage').value,
+	    txSkip: document.getElementById('txSkip').value,
+	  };
+	  const res = await fetch('/api/settings', {
+	    method: 'POST',
+	    headers: { 'Content-Type': 'application/json' },
+	    body: JSON.stringify(payload)
+	  });
+	  document.getElementById('settings-message').textContent = res.ok ? 'Saved!' : 'Error saving.';
+	  updateFooter(payload);
+	});
 
-      fetch('/api/status.json').then(res => res.json()).then(data => {
-        document.getElementById('ssid').value = data.ssid || "";
-        document.getElementById('hostname').value = data.hostname || "";
-        document.getElementById('callsign').value = data.callsign || '';
-        document.getElementById('locator').value = data.locator || '';
-        mwInput.value = (typeof data.powerMW !== "undefined") ? data.powerMW : '';
-        dbmInput.value = (typeof data.powerDbm !== "undefined") ? data.powerDbm : '';
-        document.getElementById('txPercentage').value = data.txPercentage || "";
-        document.getElementById('txSkip').value = data.txSkip || "";
+	fetch('/api/status.json').then(res => res.json()).then(data => {
+	  document.getElementById('ssid').value = data.ssid || "";
+	  document.getElementById('hostname').value = data.hostname || "";
+	  document.getElementById('callsign').value = data.callsign || '';
+	  document.getElementById('locator').value = data.locator || '';
+	  mwInput.value = (typeof data.powerMW !== "undefined") ? data.powerMW : '';
+	  dbmInput.value = (typeof data.powerDbm !== "undefined") ? data.powerDbm : '';
+	  document.getElementById('txPercentage').value = data.txPercentage || "";
+	  document.getElementById('txSkip').value = data.txSkip || "";
+	});
       });
     </script>
   </main>

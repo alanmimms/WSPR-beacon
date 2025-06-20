@@ -42,9 +42,7 @@ BeaconFSM::BeaconFSM()
     webServer(nullptr),
     si5351(nullptr),
     scheduler(nullptr),
-    settings(nullptr) {
-  settings = new Settings(defaultSettingsJson);
-}
+    settings(nullptr) {}
 
 BeaconFSM::~BeaconFSM() {
   delete scheduler;
@@ -73,6 +71,9 @@ void BeaconFSM::wifiEventHandler(void *arg, esp_event_base_t eventBase, int32_t 
 }
 
 void BeaconFSM::initHardware() {
+  ESP_LOGI(TAG, "constructing and loading Settings");
+  settings = new Settings(defaultSettingsJson);
+
   gpio_reset_pin(STATUS_LED_GPIO);
   gpio_set_direction(STATUS_LED_GPIO, GPIO_MODE_OUTPUT);
   ESP_LOGI(TAG, "GPIO driver initialized for status LED.");
