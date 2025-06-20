@@ -27,13 +27,23 @@ const int WIFI_FAIL_BIT = BIT1;
 
 #define STATUS_LED_GPIO static_cast<gpio_num_t>(CONFIG_STATUS_LED_GPIO)
 
+
+static const char *defaultSettingsJson =
+  "{"
+    "\"callsign\":\"N0CALL\","
+    "\"locator\":\"AA00aa\","
+    "\"powerDbm\":10,"
+    "\"txIntervalMinutes\":4"
+  "}";
+
+
 BeaconFSM::BeaconFSM()
   : currentState(State::BOOTING),
     webServer(nullptr),
     si5351(nullptr),
     scheduler(nullptr),
     settings(nullptr) {
-  settings = new Settings();
+  settings = new Settings(defaultSettingsJson);
 }
 
 BeaconFSM::~BeaconFSM() {
@@ -93,8 +103,6 @@ void BeaconFSM::handleBooting() {
   }
   ESP_ERROR_CHECK(ret);
 
-  settings->load();
-
   static const esp_vfs_spiffs_conf_t spiffsConf = {
     .base_path = WebServer::spiffsBasePath,
     .partition_label = "storage",
@@ -105,9 +113,9 @@ void BeaconFSM::handleBooting() {
 
   initHardware();
 
-  webServer = new WebServer(*settings);
+  webServer = new WebServer(settings);
   si5351 = new Si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL, CONFIG_I2C_MASTER_FREQUENCY);
-  scheduler = new Scheduler(*si5351, *settings, STATUS_LED_GPIO);
+  scheduler = new Scheduler(si5351, settings, STATUS_LED_GPIO);
 
 #ifdef BYPASS_PROVISIONING
   ESP_LOGW(TAG, "Bypassing provisioning, connecting with credentials from secrets.h");

@@ -8,7 +8,7 @@
 
 static const char *TAG = "Scheduler";
 
-Scheduler::Scheduler(Si5351 &si5351, Settings &settings, gpio_num_t statusLedPin)
+Scheduler::Scheduler(Si5351 *si5351, Settings *settings, gpio_num_t statusLedPin)
   : si5351(si5351), settings(settings), timer(nullptr), statusLedPin(statusLedPin) {
 }
 
@@ -41,11 +41,9 @@ void Scheduler::timerCallback(void *arg) {
 }
 
 void Scheduler::transmit() {
-  char callsign[Settings::maxCallsignLen];
-  char grid[Settings::maxGridLen];
-  settings.getString("callsign", callsign, sizeof(callsign), "N0CALL");
-  settings.getString("grid", grid, sizeof(grid), "AA00aa");
-  int powerDBm = settings.getInt("powerDBm", 10);
+  const char *callsign = settings->getString("callsign");
+  const char *grid = settings->getString("grid");
+  const int powerDBm = settings->getInt("powerDBm", 10);
 
   ESP_LOGI(TAG, "TX cycle: %s, %s, %ddBm.", callsign, grid, powerDBm);
   gpio_set_level(statusLedPin, 1);
@@ -56,7 +54,7 @@ void Scheduler::transmit() {
 
   gpio_set_level(statusLedPin, 0);
 
-  int txIntervalMinutes = settings.getInt("txIntervalMinutes", 10);
+  int txIntervalMinutes = settings->getInt("txIntervalMinutes", 10);
   uint64_t intervalMicroseconds = (uint64_t) txIntervalMinutes * 60 * 1000 * 1000;
 
   ESP_LOGI(TAG, "Transmission finished. Scheduling next in %d minutes.", txIntervalMinutes);

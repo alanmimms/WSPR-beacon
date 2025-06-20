@@ -11,10 +11,10 @@
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (8192)
-#define JSON_BUF_SIZE (1024)
 static const char *TAG = "WebServer";
+static const char *SPIFFS_BASE_PATH = "/spiffs";
 
-WebServer::WebServer(Settings &settings)
+WebServer::WebServer(Settings *settings)
   : server(nullptr), settings(settings) {}
 
 WebServer::~WebServer() {
@@ -38,7 +38,7 @@ esp_err_t WebServer::rootGetHandler(httpd_req_t *req) {
 
 esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   char filepath[FILE_PATH_MAX];
-  strncpy(filepath, WebServer::spiffsBasePath, sizeof(filepath) - 1);
+  strncpy(filepath, SPIFFS_BASE_PATH, sizeof(filepath) - 1);
   filepath[sizeof(filepath) - 1] = '\0';
   strncat(filepath, req->uri, sizeof(filepath) - strlen(filepath) - 1);
   ESP_LOGI(TAG, "Serving file: %s", filepath);
@@ -86,30 +86,31 @@ esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+// Handler for GET /api/settings - returns all current settings as JSON
 esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
-  char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
-  if (!jsonBuffer) {
+  if (!self) {
+    ESP_LOGE(TAG, "apiSettingsGetHandler: self is null");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  const cJSON *jsonObj = self->settings->getUserCJSON();
+  char *jsonStr = cJSON_PrintUnformatted((cJSON *)jsonObj);
+  if (!jsonStr) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  // Always reload from NVS before returning settings
-  if (self) self->settings.load();
-  if (self && self->settings.getJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
-  } else {
-    ESP_LOGE(TAG, "Failed to retrieve settings as JSON");
-    httpd_resp_send_500(req);
-  }
-  free(jsonBuffer);
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, jsonStr, strlen(jsonStr));
+  cJSON_free(jsonStr);
   return ESP_OK;
 }
 
+// Handler for POST /api/settings - receives JSON and updates settings
 esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
-  char content[JSON_BUF_SIZE];
+  char content[1024];
   int ret = httpd_req_recv(req, content, sizeof(content) - 1);
   if (ret <= 0) {
     if (ret == HTTPD_SOCK_ERR_TIMEOUT) httpd_resp_send_408(req);
@@ -122,76 +123,74 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  esp_err_t err = self->settings.saveJson(content);
+  // Parse the received JSON and update settings using the API
+  cJSON *root = cJSON_Parse(content);
+  if (!root) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format");
+    return ESP_FAIL;
+  }
+
+  cJSON *item;
+
+  item = cJSON_GetObjectItem(root, "callsign");
+  if (item && cJSON_IsString(item)) {
+    self->settings->setString("callsign", item->valuestring);
+  }
+  item = cJSON_GetObjectItem(root, "locator");
+  if (item && cJSON_IsString(item)) {
+    self->settings->setString("locator", item->valuestring);
+  }
+  item = cJSON_GetObjectItem(root, "powerDbm");
+  if (item && cJSON_IsNumber(item)) {
+    self->settings->setInt("powerDbm", item->valueint);
+  }
+
+  cJSON_Delete(root);
+
+  // Persist the settings to NVS
+  esp_err_t err = self->settings->storeToNVS();
   if (err == ESP_OK) {
-    self->settings.load(); // Immediately reload to update in-memory values
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
   } else {
-    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format or save failed");
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to save settings to NVS");
   }
 
   return ESP_OK;
 }
 
+// Handler for GET /api/status.json - returns system status as JSON
 esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
-  char *jsonBuffer = (char*)malloc(JSON_BUF_SIZE);
-  if (!jsonBuffer) {
+  if (!self) {
+    ESP_LOGE(TAG, "apiStatusGetHandler: self is null");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  const cJSON *jsonObj = self->settings->getUserCJSON();
+  char *jsonStr = cJSON_PrintUnformatted((cJSON *)jsonObj);
+  if (!jsonStr) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  // Always reload before returning status
-  if (self) self->settings.load();
-  if (self && self->getStatusJson(jsonBuffer, JSON_BUF_SIZE) == ESP_OK) {
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, jsonBuffer, strlen(jsonBuffer));
-  } else {
-    ESP_LOGE(TAG, "Failed to retrieve status as JSON");
-    httpd_resp_send_500(req);
-  }
-  free(jsonBuffer);
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, jsonStr, strlen(jsonStr));
+  cJSON_free(jsonStr);
   return ESP_OK;
 }
 
+// This method returns full settings JSON, identical to /api/settings
 esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
-  cJSON *root = cJSON_CreateObject();
-  char ssid[64] = "";
-  char password[64] = "";
-  char hostname[64] = "";
-  char callsign[32] = "";
-  char locator[16] = "";
-  int powerMW = settings.getInt("powerMW", 0);
-  int powerDbm = settings.getInt("powerDbm", 0);
-
-  settings.getString("ssid", ssid, sizeof(ssid), "");
-  settings.getString("password", password, sizeof(password), "");
-  settings.getString("hostname", hostname, sizeof(hostname), "");
-  settings.getString("callsign", callsign, sizeof(callsign), "");
-  settings.getString("locator", locator, sizeof(locator), "");
-
-  cJSON_AddStringToObject(root, "ssid", ssid);
-  cJSON_AddStringToObject(root, "password", password);
-  cJSON_AddStringToObject(root, "hostname", hostname);
-
-  cJSON_AddStringToObject(root, "callsign", callsign);
-  cJSON_AddStringToObject(root, "locator", locator);
-
-  cJSON_AddNumberToObject(root, "powerMW", powerMW);
-  cJSON_AddNumberToObject(root, "powerDbm", powerDbm);
-
-  // Add other status fields as needed (ipAddress, hostname, etc) using camelCase
-
-  char *rendered = cJSON_PrintUnformatted(root);
-  if (rendered && strlen(rendered) < buflen) {
-    strcpy(buf, rendered);
-    cJSON_free(rendered);
-    cJSON_Delete(root);
+  if (!buf) return ESP_FAIL;
+  const cJSON *jsonObj = settings->getUserCJSON();
+  char *jsonStr = cJSON_PrintUnformatted((cJSON *)jsonObj);
+  if (jsonStr && strlen(jsonStr) < buflen) {
+    strcpy(buf, jsonStr);
+    cJSON_free(jsonStr);
     return ESP_OK;
   }
-  if (rendered) cJSON_free(rendered);
-  cJSON_Delete(root);
+  if (jsonStr) cJSON_free(jsonStr);
   return ESP_FAIL;
 }
 

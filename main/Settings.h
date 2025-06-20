@@ -1,28 +1,50 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
+#include "cJSON.h"
 #include "esp_err.h"
+#include <stddef.h>
 
 class Settings {
 public:
-  Settings();
+  // Construct with default JSON string (schema + defaults)
+  Settings(const char *defaultJsonString);
   ~Settings();
 
-  void load();
-  esp_err_t saveJson(const char *json);
-  esp_err_t getJson(char *buf, size_t buflen);
+  // Value getters: returns value or default if not present/type mismatch
+  int getInt(const char *key, int defaultValue = 0) const;
+  float getFloat(const char *key, float defaultValue = 0.0f) const;
+  // Returns pointer to string value or default if not present/type mismatch
+  const char *getString(const char *key, const char *defaultValue = "") const;
 
-  int getInt(const char *key, int defaultValue);
+  // Value setters: sets value in cJSON and does not persist to NVS until storeToNVS is called
   void setInt(const char *key, int value);
-
-  void getString(const char *key, char *dst, size_t dstLen, const char *defaultValue);
+  void setFloat(const char *key, float value);
   void setString(const char *key, const char *value);
 
-  static constexpr int maxCallsignLen = 12;
-  static constexpr int maxGridLen = 8;
+  // Store the current JSON object to NVS
+  esp_err_t storeToNVS();
+
+  // Get JSON string representation of the current settings (merged with defaults).
+  // buf must be large enough to hold the JSON string.
+  // Returns ESP_OK on success.
+  esp_err_t getJSON(char *buf, size_t buflen) const;
+
+  // Direct const access for advanced use (read-only)
+  const cJSON *getUserCJSON() const { return user; }
 
 private:
-  // (Private data/methods if needed)
+  cJSON *defaults;
+  cJSON *user;
+  const char *defaultsString;
+
+  void mergeDefaults();
+  void loadFromNVS();
+  esp_err_t internalGetJson(char *buf, size_t buflen) const;
+
+  // No copying
+  Settings(const Settings&) = delete;
+  Settings& operator=(const Settings&) = delete;
 };
 
 #endif // SETTINGS_H

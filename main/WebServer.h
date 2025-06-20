@@ -6,7 +6,7 @@
 
 class WebServer {
 public:
-  WebServer(Settings &settings);
+  WebServer(Settings *settings);
   ~WebServer();
 
   void start();
@@ -26,7 +26,7 @@ private:
   static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename);
 
   httpd_handle_t server;
-  Settings &settings;
+  Settings *settings;
 };
 
 #endif // WEBSERVER_H

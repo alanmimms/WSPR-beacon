@@ -1,174 +1,185 @@
 #include "Settings.h"
+#include "esp_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
-#include "cJSON.h"
 #include <cstring>
-#include <stdio.h>
+#include <cstdlib>
 
 #define SETTINGS_NAMESPACE "settings"
-#define KEY_SSID "ssid"
-#define KEY_PASSWORD "password"
-#define KEY_HOSTNAME "hostname"
+#define SETTINGS_KEY "json"
+#define JSON_MAX_SIZE 1024
 
-#define KEY_CALLSIGN "callsign"
-#define KEY_LOCATOR "locator"
-#define KEY_POWERMW "powerMW"
-#define KEY_POWERDBM "powerDbm"
+static const char *TAG = "Settings";
 
-static const char *DEFAULT_CALLSIGN = "NOCALL";
-static const char *DEFAULT_LOCATOR = "AA00aa";
-static const int DEFAULT_POWERMW = 100;
-static const int DEFAULT_POWERDBM = 23;
-
-Settings::Settings() {}
-
-Settings::~Settings() {}
-
-void Settings::load() {
-  // Try to read each setting from NVS. If any are missing, write defaults for all.
-  nvs_handle_t nvsHandle;
-  esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &nvsHandle);
-  bool needDefaults = err != ESP_OK;
-
-  char callsign[32];
-  size_t len = sizeof(callsign);
-  if (nvs_get_str(nvsHandle, KEY_CALLSIGN, callsign, &len) != ESP_OK) {
-    needDefaults = true;
+Settings::Settings(const char *defaultJsonString)
+  : defaults(nullptr), user(nullptr), defaultsString(defaultJsonString) {
+  defaults = cJSON_Parse(defaultJsonString);
+  if (!defaults) {
+    ESP_LOGE(TAG, "Default JSON is invalid!");
+    defaults = cJSON_CreateObject();
   }
 
-  char locator[16];
-  len = sizeof(locator);
-  if (nvs_get_str(nvsHandle, KEY_LOCATOR, locator, &len) != ESP_OK) {
-    needDefaults = true;
-  }
-
-  int32_t powerMW;
-  if (nvs_get_i32(nvsHandle, KEY_POWERMW, &powerMW) != ESP_OK) {
-    needDefaults = true;
-  }
-
-  int32_t powerDbm;
-  if (nvs_get_i32(nvsHandle, KEY_POWERDBM, &powerDbm) != ESP_OK) {
-    needDefaults = true;
-  }
-
-  if (needDefaults) {
-    // Write defaults
-    nvs_set_str(nvsHandle, KEY_CALLSIGN, DEFAULT_CALLSIGN);
-    nvs_set_str(nvsHandle, KEY_LOCATOR, DEFAULT_LOCATOR);
-    nvs_set_i32(nvsHandle, KEY_POWERMW, DEFAULT_POWERMW);
-    nvs_set_i32(nvsHandle, KEY_POWERDBM, DEFAULT_POWERDBM);
-    nvs_commit(nvsHandle);
-
-    // Immediately save JSON blob for defaults
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, KEY_CALLSIGN, DEFAULT_CALLSIGN);
-    cJSON_AddStringToObject(root, KEY_LOCATOR, DEFAULT_LOCATOR);
-    cJSON_AddNumberToObject(root, KEY_POWERMW, DEFAULT_POWERMW);
-    cJSON_AddNumberToObject(root, KEY_POWERDBM, DEFAULT_POWERDBM);
-    char *jsonStr = cJSON_PrintUnformatted(root);
-    if (jsonStr) {
-      // Save JSON to NVS under "settingsJson" for reference/debug (optional)
-      nvs_set_str(nvsHandle, "settingsJson", jsonStr);
-      nvs_commit(nvsHandle);
-      cJSON_free(jsonStr);
-    }
-    cJSON_Delete(root);
-  }
-
-  nvs_close(nvsHandle);
+  loadFromNVS();
+  mergeDefaults();
 }
 
-esp_err_t Settings::saveJson(const char *json) {
-  cJSON *root = cJSON_Parse(json);
-  if (!root) return ESP_FAIL;
+Settings::~Settings() {
+  if (defaults) cJSON_Delete(defaults);
+  if (user) cJSON_Delete(user);
+}
 
-  nvs_handle_t nvsHandle;
-  esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &nvsHandle);
-  if (err != ESP_OK) goto OPENFAIL;
+void Settings::mergeDefaults() {
+  if (!user || !defaults) return;
+  cJSON *it = nullptr;
+  cJSON_ArrayForEach(it, defaults) {
+    const char *key = it->string;
+    cJSON *userItem = cJSON_GetObjectItem(user, key);
+    if (!userItem || userItem->type != it->type) {
+      if (userItem) cJSON_DeleteItemFromObject(user, key);
+      cJSON_AddItemToObject(user, key, cJSON_Duplicate(it, 1));
+    }
+  }
+}
 
-  nvs_set_str(nvsHandle, "settingsJson", json);
+void Settings::loadFromNVS() {
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READONLY, &handle);
+  if (err != ESP_OK) {
+    user = cJSON_CreateObject();
+    return;
+  }
 
-  err = nvs_commit(nvsHandle);
-  nvs_close(nvsHandle);
- OPENFAIL:
-  cJSON_Delete(root);
+  // Get required length
+  size_t requiredLen = 0;
+  err = nvs_get_str(handle, SETTINGS_KEY, NULL, &requiredLen);
+  if (err != ESP_OK || requiredLen == 0) {
+    nvs_close(handle);
+    user = cJSON_CreateObject();
+    return;
+  }
+
+  char *buf = (char *)malloc(requiredLen);
+  if (!buf) {
+    nvs_close(handle);
+    user = cJSON_CreateObject();
+    return;
+  }
+
+  err = nvs_get_str(handle, SETTINGS_KEY, buf, &requiredLen);
+  nvs_close(handle);
+
+  if (err == ESP_OK && buf[0] != '\0') {
+    user = cJSON_Parse(buf);
+    if (!user) {
+      ESP_LOGW(TAG, "Invalid user JSON in NVS, using empty object");
+      user = cJSON_CreateObject();
+    }
+  } else {
+    user = cJSON_CreateObject();
+  }
+
+  free(buf);
+}
+
+esp_err_t Settings::storeToNVS() {
+  char temp[JSON_MAX_SIZE];
+  if (internalGetJson(temp, sizeof(temp)) != ESP_OK) return ESP_FAIL;
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &handle);
+  if (err != ESP_OK) return err;
+  err = nvs_set_str(handle, SETTINGS_KEY, temp);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
   return err;
 }
 
-esp_err_t Settings::getJson(char *buf, size_t buflen) {
-  cJSON *root = cJSON_CreateObject();
-
-  char callsign[32] = "";
-  char locator[16] = "";
-  int powerMW = 0;
-  int powerDbm = 0;
-
-  getString(KEY_CALLSIGN, callsign, sizeof(callsign), DEFAULT_CALLSIGN);
-  getString(KEY_LOCATOR, locator, sizeof(locator), DEFAULT_LOCATOR);
-  powerMW = getInt(KEY_POWERMW, DEFAULT_POWERMW);
-  powerDbm = getInt(KEY_POWERDBM, DEFAULT_POWERDBM);
-
-  cJSON_AddStringToObject(root, KEY_CALLSIGN, callsign);
-  cJSON_AddStringToObject(root, KEY_LOCATOR, locator);
-  cJSON_AddNumberToObject(root, KEY_POWERMW, powerMW);
-  cJSON_AddNumberToObject(root, KEY_POWERDBM, powerDbm);
-
-  char *rendered = cJSON_PrintUnformatted(root);
-  if (rendered && strlen(rendered) < buflen) {
-    strcpy(buf, rendered);
-    cJSON_free(rendered);
-    cJSON_Delete(root);
-    return ESP_OK;
+esp_err_t Settings::internalGetJson(char *buf, size_t buflen) const {
+  if (!user || !buf) return ESP_FAIL;
+  cJSON *merged = cJSON_Duplicate(defaults, 1);
+  cJSON *it = nullptr;
+  cJSON_ArrayForEach(it, user) {
+    cJSON *inMerged = cJSON_GetObjectItem(merged, it->string);
+    if (inMerged && inMerged->type == it->type) {
+      cJSON_ReplaceItemInObject(merged, it->string, cJSON_Duplicate(it, 1));
+    } else if (!inMerged) {
+      cJSON_AddItemToObject(merged, it->string, cJSON_Duplicate(it, 1));
+    }
   }
-  if (rendered) cJSON_free(rendered);
-  cJSON_Delete(root);
-  return ESP_FAIL;
+  char *json = cJSON_PrintUnformatted(merged);
+  size_t len = strlen(json);
+  if (len >= buflen) {
+    cJSON_free(json);
+    cJSON_Delete(merged);
+    return ESP_FAIL;
+  }
+  strcpy(buf, json);
+  cJSON_free(json);
+  cJSON_Delete(merged);
+  return ESP_OK;
 }
 
-int Settings::getInt(const char *key, int defaultValue) {
-  nvs_handle_t nvsHandle;
-  int value = defaultValue;
-  if (nvs_open(SETTINGS_NAMESPACE, NVS_READONLY, &nvsHandle) == ESP_OK) {
-    int32_t temp = 0;
-    if (nvs_get_i32(nvsHandle, key, &temp) == ESP_OK) value = temp;
-    nvs_close(nvsHandle);
-  }
-  return value;
+esp_err_t Settings::getJSON(char *buf, size_t buflen) const {
+  return internalGetJson(buf, buflen);
 }
+
+// --- Getters ---
+
+int Settings::getInt(const char *key, int defaultValue) const {
+  cJSON *it = cJSON_GetObjectItem(user, key);
+  if (it && cJSON_IsNumber(it)) return it->valueint;
+  it = cJSON_GetObjectItem(defaults, key);
+  if (it && cJSON_IsNumber(it)) return it->valueint;
+  return defaultValue;
+}
+
+float Settings::getFloat(const char *key, float defaultValue) const {
+  cJSON *it = cJSON_GetObjectItem(user, key);
+  if (it && cJSON_IsNumber(it)) return (float)it->valuedouble;
+  it = cJSON_GetObjectItem(defaults, key);
+  if (it && cJSON_IsNumber(it)) return (float)it->valuedouble;
+  return defaultValue;
+}
+
+const char *Settings::getString(const char *key, const char *defaultValue) const {
+  cJSON *it = cJSON_GetObjectItem(user, key);
+  if (it && cJSON_IsString(it) && it->valuestring) {
+    return it->valuestring;
+  }
+  it = cJSON_GetObjectItem(defaults, key);
+  if (it && cJSON_IsString(it) && it->valuestring) {
+    return it->valuestring;
+  }
+  return defaultValue;
+}
+
+// --- Setters ---
 
 void Settings::setInt(const char *key, int value) {
-  nvs_handle_t nvsHandle;
-  if (nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &nvsHandle) == ESP_OK) {
-    nvs_set_i32(nvsHandle, key, value);
-    nvs_commit(nvsHandle);
-    nvs_close(nvsHandle);
+  if (!user) return;
+  cJSON *item = cJSON_GetObjectItem(user, key);
+  if (item) {
+    cJSON_ReplaceItemInObject(user, key, cJSON_CreateNumber(value));
+  } else {
+    cJSON_AddNumberToObject(user, key, value);
   }
 }
 
-void Settings::getString(const char *key, char *dst, size_t dstLen, const char *defaultValue) {
-  nvs_handle_t nvsHandle;
-  size_t required = 0;
-  dst[0] = 0;
-  if (nvs_open(SETTINGS_NAMESPACE, NVS_READONLY, &nvsHandle) == ESP_OK) {
-    if (nvs_get_str(nvsHandle, key, NULL, &required) == ESP_OK && required < dstLen) {
-      nvs_get_str(nvsHandle, key, dst, &required);
-    } else {
-      strncpy(dst, defaultValue, dstLen - 1);
-      dst[dstLen - 1] = 0;
-    }
-    nvs_close(nvsHandle);
+void Settings::setFloat(const char *key, float value) {
+  if (!user) return;
+  cJSON *item = cJSON_GetObjectItem(user, key);
+  if (item) {
+    cJSON_ReplaceItemInObject(user, key, cJSON_CreateNumber(value));
   } else {
-    strncpy(dst, defaultValue, dstLen - 1);
-    dst[dstLen - 1] = 0;
+    cJSON_AddNumberToObject(user, key, value);
   }
 }
 
 void Settings::setString(const char *key, const char *value) {
-  nvs_handle_t nvsHandle;
-  if (nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &nvsHandle) == ESP_OK) {
-    nvs_set_str(nvsHandle, key, value);
-    nvs_commit(nvsHandle);
-    nvs_close(nvsHandle);
+  if (!user) return;
+  cJSON *item = cJSON_GetObjectItem(user, key);
+  if (item) {
+    cJSON_ReplaceItemInObject(user, key, cJSON_CreateString(value));
+  } else {
+    cJSON_AddStringToObject(user, key, value);
   }
 }
