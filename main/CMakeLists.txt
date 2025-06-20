@@ -3,10 +3,7 @@ idf_component_register(
         "main.cpp"
         "BeaconFSM.cpp"
         "Settings.cpp"
-        "Scheduler.cpp"
-        "TimeManager.cpp"
         "WebServer.cpp"
-        "WifiManager.cpp"
     REQUIRES 
         cxx
         # ESP-IDF Framework Components
@@ -29,7 +26,6 @@ idf_component_register(
         dns-server
         jtencode
         si5351
-        tinyfsm
     INCLUDE_DIRS 
         "."
 )

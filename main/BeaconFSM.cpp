@@ -4,13 +4,13 @@
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_spiffs.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "driver/gpio.h"
 #include "si5351.h"
-#include "Scheduler.h"
 #include "WebServer.h"
 
 #define BYPASS_PROVISIONING
@@ -26,6 +26,9 @@ const int WIFI_CONNECTED_BIT = BIT0;
 const int WIFI_FAIL_BIT = BIT1;
 
 #define STATUS_LED_GPIO static_cast<gpio_num_t>(CONFIG_STATUS_LED_GPIO)
+#define STATUS_LED_OFF	1
+#define STATUS_LED_ON	(!STATUS_LED_OFF)
+
 
 
 static const char *defaultSettingsJson =
@@ -41,11 +44,9 @@ BeaconFSM::BeaconFSM()
   : currentState(State::BOOTING),
     webServer(nullptr),
     si5351(nullptr),
-    scheduler(nullptr),
     settings(nullptr) {}
 
 BeaconFSM::~BeaconFSM() {
-  delete scheduler;
   delete si5351;
   delete webServer;
   delete settings;
@@ -75,6 +76,7 @@ void BeaconFSM::initHardware() {
   settings = new Settings(defaultSettingsJson);
 
   gpio_reset_pin(STATUS_LED_GPIO);
+  gpio_set_level(STATUS_LED_GPIO, STATUS_LED_OFF);
   gpio_set_direction(STATUS_LED_GPIO, GPIO_MODE_OUTPUT);
   ESP_LOGI(TAG, "GPIO driver initialized for status LED.");
 }
@@ -116,7 +118,6 @@ void BeaconFSM::handleBooting() {
 
   webServer = new WebServer(settings);
   si5351 = new Si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL, CONFIG_I2C_MASTER_FREQUENCY);
-  scheduler = new Scheduler(si5351, settings, STATUS_LED_GPIO);
 
 #ifdef BYPASS_PROVISIONING
   ESP_LOGW(TAG, "Bypassing provisioning, connecting with credentials from secrets.h");
@@ -205,12 +206,47 @@ void BeaconFSM::handleStaConnecting() {
 }
 
 void BeaconFSM::handleBeaconing() {
-  ESP_LOGI(TAG, "State: BEACONING. Starting scheduler.");
-  if (scheduler) {
-    scheduler->start();
-  }
+  ESP_LOGI(TAG, "State: BEACONING. Starting scheduling.");
+
+  const esp_timer_create_args_t timerArgs = {
+    .callback = &BeaconFSM::timerCallback,
+    .arg = this,
+    .dispatch_method = ESP_TIMER_TASK,
+    .name = "beacon_timer",
+    .skip_unhandled_events = false
+  };
+
+  ESP_ERROR_CHECK(esp_timer_create(&timerArgs, &timer));
+  transmit();
 
   while (true) {
     vTaskDelay(portMAX_DELAY);
+  }
+}
+
+
+void BeaconFSM::timerCallback(void *arg) {
+  BeaconFSM *fsm = static_cast<BeaconFSM *>(arg);
+  fsm->transmit();
+}
+
+void BeaconFSM::transmit() {
+  const char *callsign = settings->getString("callsign");
+  const char *grid = settings->getString("grid");
+  const int powerDBm = settings->getInt("powerDBm", 10);
+
+  ESP_LOGI(TAG, "TX cycle: %s, %s, %ddBm.", callsign, grid, powerDBm);
+  gpio_set_level(STATUS_LED_GPIO, STATUS_LED_ON);
+
+  vTaskDelay(pdMS_TO_TICKS(110*1000)); // Simulate transmission duration
+
+  gpio_set_level(STATUS_LED_GPIO, STATUS_LED_OFF);
+
+  int txIntervalMinutes = settings->getInt("txIntervalMinutes", 10);
+  uint64_t intervalMicroseconds = (uint64_t) txIntervalMinutes * 60 * 1000 * 1000;
+
+  ESP_LOGI(TAG, "Transmission finished. Scheduling next in %d minutes.", txIntervalMinutes);
+  if (timer) {
+    ESP_ERROR_CHECK(esp_timer_start_once(timer, intervalMicroseconds));
   }
 }

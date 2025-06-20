@@ -3,10 +3,10 @@
 
 #include "WebServer.h"
 #include "esp_event.h"
+#include "esp_timer.h"
 #include "Settings.h"
 
 class Si5351;
-class Scheduler;
 
 class BeaconFSM {
 public:
@@ -32,11 +32,14 @@ private:
   void initHardware();
   static void wifiEventHandler(void *arg, esp_event_base_t eventBase, int32_t eventId, void *eventData);
 
+  static void timerCallback(void *arg);
+  void transmit();
+
   State currentState;
   WebServer *webServer;
   Si5351 *si5351;
-  Scheduler *scheduler;
   Settings *settings;
+  esp_timer_handle_t timer;
 };
 
 #endif // BEACONFSM_H
