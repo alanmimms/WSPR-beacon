@@ -1,0 +1,26 @@
+```mermaid
+stateDiagram-v2
+  [*] --> BOOTING
+  BOOTING --> STA_CONNECTING : boot complete (with WiFi creds)
+  BOOTING --> AP_MODE : boot complete (no WiFi creds)
+  STA_CONNECTING --> BEACONING : WiFi connected
+  STA_CONNECTING --> AP_MODE : WiFi failed
+  AP_MODE --> BEACONING : AP started
+
+  BEACONING --> TX_START : scheduleTimer fires and canTransmitNow
+  TX_START --> TX_END : txDurationTimer fires
+  TX_START --> TX_END : cancelTransmit
+  TX_END --> BEACONING : scheduleNextTransmit
+
+  BEACONING --> [*] : error
+  TX_START --> [*] : error
+  TX_END --> [*] : error
+  STA_CONNECTING --> [*] : error
+  AP_MODE --> [*] : error
+
+  %% Events
+  %% - scheduleTimer fires and canTransmitNow: FSM timer fires, slot available
+  %% - txDurationTimer fires: transmission duration complete
+  %% - cancelTransmit: WebServer/settings change or explicit cancel
+  %% - error: unrecoverable error
+```
