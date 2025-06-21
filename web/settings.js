@@ -73,9 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof s.txPercent === 'number') {
         document.getElementById('tx-percent').value = s.txPercent;
       }
-      if (typeof s.txSkip === 'number') {
-        document.getElementById('tx-skip').value = s.txSkip;
-      }
     } catch {
       // Optionally show error
     }
@@ -100,7 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
         locator: document.getElementById('locator').value,
         powerDbm: parseInt(powerDbmInput.value, 10),
         txPercent: parseInt(document.getElementById('tx-percent').value, 10),
-        txSkip: parseInt(document.getElementById('tx-skip').value, 10)
       };
       // Send as JSON!
       try {

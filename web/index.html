@@ -13,8 +13,7 @@
             Callsign: ${data.callsign || "?"}<br>
             Maidenhead Grid: ${data.locator || "?"}<br>
             Power: ${data.powerMW || 0}mW (${data.powerDbm || "?"}dBm)<br>
-            TX %: ${data.tx_percentage || "?"}<br>
-            TX Skip: ${data.tx_skip || "?"}<br>
+            Transmit %: ${data.tx_percentage || "?"}<br>
           `;
           document.getElementById('status-text').innerHTML = statusText;
         });

@@ -29,7 +29,7 @@
             <input type="password" id="wifi-password" name="wifiPassword" maxlength="64">
           </div>
           <div class="form-row">
-            <label for="hostname">Device Hostname</label>
+            <label for="hostname">Beacon Hostname</label>
             <input type="text" id="hostname" name="hostname" maxlength="32">
           </div>
         </fieldset>
@@ -41,7 +41,7 @@
             <input type="text" id="callsign" name="callsign" maxlength="12">
           </div>
           <div class="form-row">
-            <label for="locator">Maidenhead Locator</label>
+            <label for="locator">Maidenhead Grid</label>
             <input type="text" id="locator" name="locator" maxlength="8">
           </div>
           <div class="form-row power-row">
@@ -57,12 +57,8 @@
         <fieldset class="settings-zone tx-zone">
           <legend>Transmission</legend>
           <div class="form-row">
-            <label for="tx-percent">Tx %</label>
+            <label for="tx-percent">Transmit %</label>
             <input type="number" id="tx-percent" name="txPercent" min="0" max="100" step="1">
-          </div>
-          <div class="form-row">
-            <label for="tx-skip">Tx Skip</label>
-            <input type="number" id="tx-skip" name="txSkip" min="0" max="60" step="1">
           </div>
         </fieldset>
         <div class="form-actions">
