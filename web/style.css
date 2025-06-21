@@ -99,22 +99,33 @@ h1 {
   box-shadow: 0 1px 3px 0 rgba(30,50,80,0.04);
 }
 
-.wifi-zone legend {
-  color: #0065a2;
-  font-weight: 600;
-  padding: 0 0.5em;
+.wifi-zone {
+  background: hsl(201, 100%, 90%);
+  legend {
+    color: hsl(201, 100%, 32%);
+    font-weight: 600;
+    padding: 0 0.5em;
+  }
 }
 
-.beacon-zone legend {
-  color: #388e3c;
-  font-weight: 600;
-  padding: 0 0.5em;
+.beacon-zone {
+  background: hsl(123, 43%, 90%);
+
+  legend {
+    color: hsl(123, 43%, 39%);
+    font-weight: 600;
+    padding: 0 0.5em;
+  }
 }
 
-.tx-zone legend {
-  color: #a24c00;
-  font-weight: 600;
-  padding: 0 0.5em;
+.tx-zone {
+  background: hsl(28, 100%, 90%);
+
+  legend {
+    color: hsl(28, 100%, 20%);
+    font-weight: 600;
+    padding: 0 0.5em;
+  }
 }
 
 .form-row {
