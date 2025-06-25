@@ -1,9 +1,19 @@
-idf_component_register(
-    SRCS
+cmake_minimum_required(VERSION 3.16)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 11)
+
+project("wspr-beacon")
+
+# ESP32 build
+if(IDF_TARGET)
+  set(SOURCES
         "main.cpp"
         "BeaconFSM.cpp"
         "Settings.cpp"
-        "WebServer.cpp"
+        "WebServer.cpp")
+
+  idf_component_register
+    SRCS ${SOURCES}
     REQUIRES 
         cxx
         # ESP-IDF Framework Components
@@ -28,4 +38,8 @@ idf_component_register(
         si5351
     INCLUDE_DIRS 
         "."
-)
+  )
+else()
+  # Host-based test bench
+  add_subdirectory(host_testbench)
+endif()

@@ -1,0 +1,6 @@
+[submodule "main/host-testbench/external/cpp-httplib"]
+	path = main/host-testbench/external/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "main/host-testbench/external/json"]
+	path = main/host-testbench/external/json
+	url = https://github.com/nlohmann/json.git
