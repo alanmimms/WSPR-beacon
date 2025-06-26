@@ -5,14 +5,14 @@ set(CMAKE_C_STANDARD 11)
 project("wspr-beacon")
 
 # ESP32 build
-if(IDF_TARGET)
+if(DEFINED ENV{IDF_TARGET})
   set(SOURCES
         "main.cpp"
         "BeaconFSM.cpp"
         "Settings.cpp"
         "WebServer.cpp")
 
-  idf_component_register
+  idf_component_register(
     SRCS ${SOURCES}
     REQUIRES 
         cxx
