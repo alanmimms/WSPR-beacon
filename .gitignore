@@ -1,6 +1,6 @@
 *~
 .*~
-secrets.h
+**/secrets.h
 sdkconfig.old
 build/
 managed_components/
