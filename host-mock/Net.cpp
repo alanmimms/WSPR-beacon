@@ -60,7 +60,6 @@ int Net::receive(int clientId, void *buffer, int maxLen) {
     printf("[NetHostMock] receive: invalid clientId %d\n", clientId);
     return -1;
   }
-  // Mock: fill buffer with zeros, return maxLen
   memset(buffer, 0, maxLen);
   printf("[NetHostMock] receive from client %d, %d bytes\n", clientId, maxLen);
   return maxLen;

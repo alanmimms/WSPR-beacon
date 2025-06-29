@@ -19,7 +19,6 @@ public:
   void commit() override;
 
 private:
-  // For mock, use a simple in-memory map or static arrays
   static const int maxKeys = 32;
   struct Entry {
     char key[32];

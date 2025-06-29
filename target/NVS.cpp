@@ -1,61 +1,56 @@
 #include "NVS.h"
-// #include <nvs_flash.h>
-// #include <nvs.h>
-// #include <esp_log.h>
+#include <cstring>
+#include <nvs_flash.h>
+#include <esp_log.h>
 
-NVS::NVS() {
-  // Constructor implementation
+#define NVS_NAMESPACE "app"
+
+NVS::NVS() : handle(0), opened(false) {
+  nvs_flash_init();
+  if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK) opened = true;
 }
 
 NVS::~NVS() {
-  // Destructor implementation
+  if (opened) nvs_close(handle);
 }
 
 bool NVS::init() {
-  // Initialize NVS hardware (ESP-IDF)
-  return true;
+  return opened;
 }
 
 bool NVS::readU32(const char *key, unsigned int *value) {
-  // Read unsigned int value for key
-  return false;
+  return opened && nvs_get_u32(handle, key, value) == ESP_OK;
 }
 
 bool NVS::writeU32(const char *key, unsigned int value) {
-  // Write unsigned int value for key
-  return false;
+  return opened && nvs_set_u32(handle, key, value) == ESP_OK;
 }
 
 bool NVS::readI32(const char *key, int *value) {
-  // Read int value for key
-  return false;
+  return opened && nvs_get_i32(handle, key, value) == ESP_OK;
 }
 
 bool NVS::writeI32(const char *key, int value) {
-  // Write int value for key
-  return false;
+  return opened && nvs_set_i32(handle, key, value) == ESP_OK;
 }
 
 bool NVS::readStr(const char *key, char *value, unsigned int maxLen) {
-  // Read string value for key
-  return false;
+  size_t len = maxLen;
+  return opened && nvs_get_str(handle, key, value, &len) == ESP_OK;
 }
 
 bool NVS::writeStr(const char *key, const char *value) {
-  // Write string value for key
-  return false;
+  return opened && nvs_set_str(handle, key, value) == ESP_OK;
 }
 
 bool NVS::eraseKey(const char *key) {
-  // Erase key from NVS
-  return false;
+  return opened && nvs_erase_key(handle, key) == ESP_OK;
 }
 
 bool NVS::eraseAll() {
-  // Erase all keys from NVS
-  return false;
+  return opened && nvs_erase_all(handle) == ESP_OK;
 }
 
 void NVS::commit() {
-  // Commit pending NVS changes
+  if (opened) nvs_commit(handle);
 }

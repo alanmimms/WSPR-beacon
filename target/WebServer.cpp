@@ -1,5 +1,4 @@
 #include "WebServer.h"
-#include "Settings.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
@@ -15,8 +14,8 @@ static const char *SPIFFS_BASE_PATH = "/spiffs";
 
 WebServer *WebServer::instanceForApi = nullptr;
 
-WebServer::WebServer(Settings *settings, AppContext *ctx)
-  : server(nullptr), settings(settings), ctx(ctx) {
+WebServer::WebServer(SettingsIntf *settings)
+  : server(nullptr), settings(settings) {
   instanceForApi = this;
 }
 
@@ -24,8 +23,8 @@ WebServer::~WebServer() {
   stop();
 }
 
-void WebServer::setFsmCallback(const std::function<void()> &cb) {
-  fsmSettingsChangedCb = cb;
+void WebServer::setSettingsChangedCallback(const std::function<void()> &cb) {
+  settingsChangedCallback = cb;
 }
 
 esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {
@@ -93,7 +92,6 @@ esp_err_t WebServer::fileGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for GET /api/settings - returns all current settings as JSON
 esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   if (!self) {
@@ -113,7 +111,6 @@ esp_err_t WebServer::apiSettingsGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for POST /api/settings - receives JSON and updates settings
 esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   char content[1024];
@@ -134,9 +131,8 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  if (self->settings->storeToNVS() == ESP_OK) {
-    // Notify FSM that settings changed
-    if (self->fsmSettingsChangedCb) self->fsmSettingsChangedCb();
+  if (self->settings->store()) {
+    if (self->settingsChangedCallback) self->settingsChangedCallback();
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
   } else {
@@ -146,7 +142,6 @@ esp_err_t WebServer::apiSettingsPostHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// Handler for GET /api/status.json - returns system status as JSON
 esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   if (!self) {
@@ -166,17 +161,6 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-esp_err_t WebServer::getStatusJson(char *buf, size_t buflen) {
-  char *jsonStr = settings->toJsonString();
-  if (jsonStr && strlen(jsonStr) < buflen) {
-    strcpy(buf, jsonStr);
-    free(jsonStr);
-    return ESP_OK;
-  }
-  if (jsonStr) free(jsonStr);
-  return ESP_FAIL;
-}
-
 void WebServer::start() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.lru_purge_enable = true;
@@ -188,7 +172,6 @@ void WebServer::start() {
     return;
   }
 
-  // Register API handlers with user_ctx pointing to this instance
   const httpd_uri_t apiStatus = {
     .uri = "/api/status.json",
     .method = HTTP_GET,

@@ -1,15 +1,8 @@
 #include "Net.h"
-// #include <esp_wifi.h>
-// #include <lwip/sockets.h>
-// #include <esp_log.h>
+#include <esp_log.h>
 
-Net::Net() {
-  // Constructor implementation
-}
-
-Net::~Net() {
-  // Destructor implementation
-}
+Net::Net() {}
+Net::~Net() {}
 
 bool Net::init() {
   // Initialize Wi-Fi/network hardware (ESP-IDF)
@@ -17,7 +10,8 @@ bool Net::init() {
 }
 
 bool Net::connect(const char *ssid, const char *password) {
-  // Connect to Wi-Fi AP
+  // Configure and connect to Wi-Fi AP
+  // See esp_wifi.h for setup
   return false;
 }
 

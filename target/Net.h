@@ -1,6 +1,8 @@
 #pragma once
 
 #include "NetIntf.h"
+#include <esp_wifi.h>
+#include <esp_netif.h>
 
 class Net : public NetIntf {
 public:
@@ -19,5 +21,5 @@ public:
   int waitForClient() override;
 
 private:
-  // Add ESP-IDF Wi-Fi and socket state here
+  // WiFi state, server sockets, etc
 };

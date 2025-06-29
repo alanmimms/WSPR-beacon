@@ -39,20 +39,19 @@ static const char *defaultSettingsJson =
     "\"txIntervalMinutes\":4"
   "}";
 
-BeaconFSM::BeaconFSM()
+BeaconFSM::BeaconFSM(AppContext *ctx)
   : currentState(State::BOOTING),
     webServer(nullptr),
-    si5351(nullptr),
     settings(nullptr),
     txDurationTimer(nullptr),
     txScheduleTimer(nullptr),
     txCanceled(false),
-    txInProgress(false) {}
+    txInProgress(false),
+    ctx(ctx) {}
 
 BeaconFSM::~BeaconFSM() {
   if (txDurationTimer) esp_timer_delete(txDurationTimer);
   if (txScheduleTimer) esp_timer_delete(txScheduleTimer);
-  delete si5351;
   delete webServer;
   delete settings;
 }
@@ -80,9 +79,14 @@ void BeaconFSM::initHardware() {
   ESP_LOGI(TAG, "constructing and loading Settings");
   settings = new Settings(defaultSettingsJson);
 
-  gpio_reset_pin(STATUS_LED_GPIO);
-  gpio_set_level(STATUS_LED_GPIO, STATUS_LED_OFF);
-  gpio_set_direction(STATUS_LED_GPIO, GPIO_MODE_OUTPUT);
+  if (ctx && ctx->gpio) {
+    ctx->gpio->init();
+    ctx->gpio->setOutput(CONFIG_STATUS_LED_GPIO, STATUS_LED_OFF);
+  } else {
+    gpio_reset_pin(STATUS_LED_GPIO);
+    gpio_set_level(STATUS_LED_GPIO, STATUS_LED_OFF);
+    gpio_set_direction(STATUS_LED_GPIO, GPIO_MODE_OUTPUT);
+  }
   ESP_LOGI(TAG, "GPIO driver initialized for status LED.");
 }
 
@@ -123,10 +127,11 @@ void BeaconFSM::handleBooting() {
 
   initHardware();
 
-  webServer = new WebServer(settings);
+  webServer = new WebServer(settings, ctx);
   webServer->setFsmCallback([this]() { this->onSettingsChanged(); });
 
-  si5351 = new Si5351(CONFIG_SI5351_ADDRESS, CONFIG_I2C_MASTER_SDA, CONFIG_I2C_MASTER_SCL, CONFIG_I2C_MASTER_FREQUENCY);
+  // Si5351 is now from context, not allocated here
+  // ctx->si5351 should be set up in main/platform code
 
   // Set up SNTP
   syncTime();
@@ -262,13 +267,21 @@ void BeaconFSM::handleTxEnd() {
 
 void BeaconFSM::startTransmit() {
   ESP_LOGI(TAG, "TX cycle: %s, %s, %ddBm.", settings->getString("callsign"), settings->getString("locator"), settings->getInt("powerDbm", 10));
-  gpio_set_level(STATUS_LED_GPIO, STATUS_LED_ON);
-  // TODO: Actual transmit logic
+  if (ctx && ctx->gpio) {
+    ctx->gpio->setOutput(CONFIG_STATUS_LED_GPIO, STATUS_LED_ON);
+  } else {
+    gpio_set_level(STATUS_LED_GPIO, STATUS_LED_ON);
+  }
+  // TODO: Actual transmit logic using ctx->si5351 etc.
 }
 
 void BeaconFSM::endTransmit() {
   ESP_LOGI(TAG, "TX end (normal/cancel).");
-  gpio_set_level(STATUS_LED_GPIO, STATUS_LED_OFF);
+  if (ctx && ctx->gpio) {
+    ctx->gpio->setOutput(CONFIG_STATUS_LED_GPIO, STATUS_LED_OFF);
+  } else {
+    gpio_set_level(STATUS_LED_GPIO, STATUS_LED_OFF);
+  }
   // TODO: Clean up TX hardware if needed
 }
 

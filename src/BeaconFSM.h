@@ -5,12 +5,11 @@
 #include "esp_event.h"
 #include "esp_timer.h"
 #include "Settings.h"
-
-class Si5351;
+#include "AppContext.h"
 
 class BeaconFSM {
 public:
-  BeaconFSM();
+  BeaconFSM(AppContext *ctx);
   ~BeaconFSM();
 
   void run();
@@ -58,7 +57,6 @@ private:
 
   State currentState;
   WebServer *webServer;
-  Si5351 *si5351;
   Settings *settings;
 
   esp_timer_handle_t txDurationTimer;
@@ -66,6 +64,8 @@ private:
 
   bool txCanceled;
   bool txInProgress;
+
+  AppContext *ctx;
 };
 
 #endif // BEACONFSM_H

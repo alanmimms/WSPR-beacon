@@ -4,10 +4,11 @@
 #include "esp_http_server.h"
 #include "Settings.h"
 #include <functional>
+#include "AppContext.h"
 
 class WebServer {
 public:
-  WebServer(Settings *settings);
+  WebServer(Settings *settings, AppContext *ctx);
   ~WebServer();
 
   void start();
@@ -31,6 +32,7 @@ private:
 
   httpd_handle_t server;
   Settings *settings;
+  AppContext *ctx;
 
   std::function<void()> fsmSettingsChangedCb;
   static WebServer *instanceForApi; // For static handler access

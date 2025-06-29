@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NVSIntf.h"
+#include <nvs.h>
 
 class NVS : public NVSIntf {
 public:
@@ -19,5 +20,6 @@ public:
   void commit() override;
 
 private:
-  // Add ESP-IDF NVS handle or context here
+  nvs_handle_t handle;
+  bool opened;
 };
