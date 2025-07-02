@@ -7,6 +7,9 @@
 #include "FileSystem.h"
 #include "Settings.h"
 #include "WebServer.h"
+#include "Timer.h"
+#include "Task.h"
+#include "EventGroup.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 
@@ -21,9 +24,15 @@ AppContext::AppContext() {
   fileSystem = new FileSystem();
   settings = new Settings();
   webServer = new WebServer(settings);
+  timer = new Timer();
+  task = new Task();
+  eventGroup = new EventGroup();
 }
 
 AppContext::~AppContext() {
+  delete eventGroup;
+  delete task;
+  delete timer;
   delete webServer;
   delete settings;
   delete fileSystem;

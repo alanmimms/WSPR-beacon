@@ -1,5 +1,6 @@
 #include "BeaconFSM.h"
 #include <cstring>
+#include <cstdio>
 #include <ctime>
 
 static const char *defaultSettingsJson =
@@ -64,8 +65,8 @@ void BeaconFSM::handleBooting() {
   }
 
   // WiFi credentials check via settings abstraction:
-  char ssid[64] = "";
-  if (ctx->settings) ctx->settings->getString("ssid", ssid, sizeof(ssid), "");
+  const char* ssid = "";
+  if (ctx->settings) ssid = ctx->settings->getString("ssid", "");
   if (ssid[0]) currentState = State::STA_CONNECTING;
   else currentState = State::AP_MODE;
 }
@@ -79,10 +80,11 @@ void BeaconFSM::handleApMode() {
 
 void BeaconFSM::handleStaConnecting() {
   if (ctx->logger) ctx->logger->logInfo("State: STA_CONNECTING");
-  char ssid[64] = "", password[64] = "";
+  const char* ssid = "";
+  const char* password = "";
   if (ctx->settings) {
-    ctx->settings->getString("ssid", ssid, sizeof(ssid), "");
-    ctx->settings->getString("password", password, sizeof(password), "");
+    ssid = ctx->settings->getString("ssid", "");
+    password = ctx->settings->getString("password", "");
   }
   bool connected = ctx->net && ctx->net->connect(ssid, password);
   if (connected) {

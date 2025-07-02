@@ -1,4 +1,4 @@
-#include "si5351.h"
+#include "Si5351.h"
 #include <stdio.h>
 #include <string.h>
 

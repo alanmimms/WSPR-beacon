@@ -22,6 +22,18 @@ add_executable(host-testbench
   main.cpp
   test-server.cpp
   test-server.h
+  AppContext.cpp
+  FileSystem.cpp
+  GPIO.cpp
+  Logger.cpp
+  Net.cpp
+  NVS.cpp
+  Settings.cpp
+  Si5351.cpp
+  WebServer.cpp
+  Timer.cpp
+  Task.cpp
+  EventGroup.cpp
 )
 
 target_include_directories(host-testbench PRIVATE

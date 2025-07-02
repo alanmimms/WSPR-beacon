@@ -24,7 +24,7 @@ int NVS::findKey(const char *key) const {
   return -1;
 }
 
-int NVS::allocKey(const char *key, Entry::type type) {
+int NVS::allocKey(const char *key, Entry::Type type) {
   int idx = findKey(key);
   if (idx >= 0) return idx;
   if (entryCount >= maxKeys) return -1;

@@ -4,9 +4,12 @@
 #include "Net.h"
 #include "NVS.h"
 #include "Si5351.h"
-#include "FileSystemIntf.h"
+#include "FileSystem.h"
 #include "Settings.h"
 #include "WebServer.h"
+#include "Timer.h"
+#include "Task.h"
+#include "EventGroup.h"
 
 AppContext::AppContext() {
   logger = new Logger();
@@ -17,9 +20,15 @@ AppContext::AppContext() {
   fileSystem = new FileSystem();
   settings = new Settings();
   webServer = new WebServer(settings);
+  timer = new Timer();
+  task = new Task();
+  eventGroup = new EventGroup();
 }
 
 AppContext::~AppContext() {
+  delete eventGroup;
+  delete task;
+  delete timer;
   delete webServer;
   delete settings;
   delete fileSystem;

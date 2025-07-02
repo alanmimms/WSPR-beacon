@@ -22,7 +22,7 @@ private:
   static const int maxKeys = 32;
   struct Entry {
     char key[32];
-    enum { TypeU32, TypeI32, TypeStr } type;
+    enum Type { TypeU32, TypeI32, TypeStr } type;
     union {
       unsigned int u32;
       int i32;
@@ -33,5 +33,5 @@ private:
   int entryCount;
 
   int findKey(const char *key) const;
-  int allocKey(const char *key, Entry::type) ;
+  int allocKey(const char *key, Entry::Type type);
 };

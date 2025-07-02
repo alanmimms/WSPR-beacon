@@ -7,6 +7,18 @@ set(EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/target/components")
 idf_component_register(
   SRCS
     main.cpp
+    AppContext.cpp
+    FileSystem.cpp
+    GPIO.cpp
+    Logger.cpp
+    Net.cpp
+    NVS.cpp
+    Settings.cpp
+    Si5351.cpp
+    WebServer.cpp
+    Timer.cpp
+    Task.cpp
+    EventGroup.cpp
   REQUIRES 
     cxx
     # ESP-IDF Framework Components

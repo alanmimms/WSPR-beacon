@@ -48,8 +48,8 @@ private:
 
   AppContext *ctx;
 
-  TimerIntf *txDurationTimer;
-  TimerIntf *txScheduleTimer;
+  TimerIntf::Timer *txDurationTimer;
+  TimerIntf::Timer *txScheduleTimer;
 };
 
 #endif // BEACONFSM_H
