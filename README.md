@@ -7,7 +7,12 @@ source code and rewrote most of it by [vibe coding with Google Gemini
 simpler and easier to use and understand. I enjoyed using AI to do
 this, although it was not without its frustrations.
 
-I'm continuing my AI journey with Claude Code, which is _much_ closer
+I also tried Github Copilot. But it kept being limited (couldn't even
+look at my Github repo, which is public!) and got stupid after some
+number of interactions.
+
+I'm continuing my AI journey with [Claude
+Code](https://www.anthropic.com/claude-code), which is _much_ closer
 to the model I want to use in my daily work.
 
 This beacon project can be built two ways, with the possibility of
