@@ -16,25 +16,29 @@
         <legend><span class="collapse-icon">▼</span>Current Status</legend>
         <div class="fieldset-content">
           <div class="status-grid">
-          <div class="status-item">
+          <div class="status-item inline">
             <label>Callsign</label>
             <span id="current-callsign">Loading...</span>
           </div>
-          <div class="status-item">
+          <div class="status-item inline">
             <label>Grid Locator</label>
             <span id="current-locator">Loading...</span>
           </div>
-          <div class="status-item">
+          <div class="status-item inline">
             <label>Power</label>
             <span id="current-power">Loading...</span>
           </div>
-          <div class="status-item">
+          <div class="status-item inline">
             <label>Current Band</label>
             <span id="current-band">Loading...</span>
           </div>
-          <div class="status-item">
-            <label>Last Reset</label>
-            <span id="last-reset">Loading...</span>
+          <div class="status-item time-item">
+            <label>Last Reset (UTC)</label>
+            <span id="last-reset" class="clock-time">Loading...</span>
+          </div>
+          <div class="status-item time-item">
+            <label>Current Time (UTC)</label>
+            <span id="current-time" class="clock-time">--:--:-- UTC</span>
           </div>
           </div>
         </div>

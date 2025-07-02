@@ -19,6 +19,7 @@ idf_component_register(
     Timer.cpp
     Task.cpp
     EventGroup.cpp
+    Time.cpp
   REQUIRES 
     cxx
     # ESP-IDF Framework Components
@@ -36,6 +37,7 @@ idf_component_register(
     mdns
     nvs_flash 
     spiffs
+    esp_netif_sntp
 
     # Local Project Components
     dns-server

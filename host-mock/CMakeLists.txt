@@ -34,6 +34,7 @@ add_executable(host-testbench
   Timer.cpp
   Task.cpp
   EventGroup.cpp
+  Time.cpp
 )
 
 target_include_directories(host-testbench PRIVATE

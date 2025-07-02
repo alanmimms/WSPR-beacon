@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize collapsible fieldsets
     initializeCollapsibleFieldsets();
     
+    // Start the UTC clock
+    startUTCClock();
+    
     await loadSettings(); // Load settings first to get band configs
     await loadStatus();
   } catch (error) {
@@ -41,7 +44,11 @@ async function loadStatus() {
     // Format last reset time
     if (status.lastResetTime) {
       const resetDate = new Date(status.lastResetTime);
-      document.getElementById('last-reset').textContent = resetDate.toLocaleString();
+      // Format as UTC time with line break between date and time
+      const isoString = resetDate.toISOString();
+      const datePart = isoString.substring(0, 10); // YYYY-MM-DD
+      const timePart = isoString.substring(11, 19) + ' UTC'; // HH:MM:SS UTC
+      document.getElementById('last-reset').innerHTML = `<div style="text-align: right;">${datePart}<br>${timePart}</div>`;
     }
     
     // Update statistics
@@ -121,7 +128,7 @@ function updateBandStats(bandStats, bandConfigs) {
         </div>
       </div>
       <div class="band-hours">
-        Schedule:
+        Schedule (UTC):
         <div class="hour-indicators">
           <div class="hour-row">${firstRow}</div>
           <div class="hour-row">${secondRow}</div>
@@ -183,4 +190,65 @@ function updateScheduleOverview(bands) {
   });
   
   container.appendChild(timeline);
+}
+
+function startUTCClock() {
+  let serverTimeOffset = 0; // Offset between server time and local time in milliseconds
+  let lastSyncTime = Date.now();
+  
+  function updateClock() {
+    const localTime = Date.now();
+    const adjustedTime = new Date(localTime + serverTimeOffset);
+    
+    // Format with line break between date and time
+    const isoString = adjustedTime.toISOString();
+    const datePart = isoString.substring(0, 10); // YYYY-MM-DD
+    const timePart = isoString.substring(11, 19) + ' UTC'; // HH:MM:SS UTC
+    
+    const clockElement = document.getElementById('current-time');
+    if (clockElement) {
+      clockElement.innerHTML = `<div style="text-align: right;">${datePart}<br>${timePart}</div>`;
+    }
+  }
+  
+  async function syncWithServer() {
+    try {
+      const syncStart = Date.now();
+      const response = await fetch('/api/time');
+      const syncEnd = Date.now();
+      
+      if (response.ok) {
+        const data = await response.json();
+        const networkDelay = (syncEnd - syncStart) / 2; // Estimate one-way delay
+        const serverTime = data.unixTime * 1000; // Convert to milliseconds
+        const localTime = syncEnd - networkDelay; // Adjust for network delay
+        
+        serverTimeOffset = serverTime - localTime;
+        lastSyncTime = Date.now();
+        
+        console.log(`Clock synced with server. Offset: ${serverTimeOffset}ms, Synced: ${data.synced}`);
+      } else {
+        console.warn('Failed to sync time with server');
+      }
+    } catch (error) {
+      console.error('Error syncing time with server:', error);
+    }
+  }
+  
+  function checkSync() {
+    const timeSinceSync = Date.now() - lastSyncTime;
+    // Sync every 7 minutes (7 * 60 * 1000 = 420000 ms)
+    if (timeSinceSync >= 420000) {
+      syncWithServer();
+    }
+  }
+  
+  // Initial sync with server
+  syncWithServer();
+  
+  // Update clock every second
+  setInterval(updateClock, 1000);
+  
+  // Check if sync is needed every 30 seconds
+  setInterval(checkSync, 30000);
 }

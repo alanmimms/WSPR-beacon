@@ -275,6 +275,27 @@ else
     ((TESTS_FAILED++))
 fi
 
+# Test 14: Verify time API endpoint
+print_status "INFO" "Testing: Time API endpoint"
+response=$(curl -s --max-time $TEST_TIMEOUT "$BASE_URL/api/time" 2>/dev/null)
+if echo "$response" | grep -q '"unixTime"' && \
+   echo "$response" | grep -q '"isoTime"' && \
+   echo "$response" | grep -q '"synced"'; then
+    # Verify unixTime is a reasonable number (between 2020 and 2030)
+    unix_time=$(echo "$response" | grep -o '"unixTime":[0-9]*' | cut -d: -f2)
+    if [ "$unix_time" -gt 1577836800 ] && [ "$unix_time" -lt 1893456000 ]; then
+        print_status "PASS" "Time API endpoint working correctly"
+        ((TESTS_PASSED++))
+    else
+        print_status "FAIL" "Time API returned invalid unix timestamp: $unix_time"
+        ((TESTS_FAILED++))
+    fi
+else
+    print_status "FAIL" "Time API missing required fields"
+    echo "  Response: $response"
+    ((TESTS_FAILED++))
+fi
+
 if [ $TESTS_FAILED -eq 0 ]; then
     print_status "PASS" "All tests passed!"
     exit 0

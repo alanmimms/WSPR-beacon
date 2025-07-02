@@ -6,6 +6,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <iomanip>
+#include <sstream>
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (8192)
@@ -14,8 +16,8 @@ static const char *SPIFFS_BASE_PATH = "/spiffs";
 
 WebServer *WebServer::instanceForApi = nullptr;
 
-WebServer::WebServer(SettingsIntf *settings)
-  : server(nullptr), settings(settings) {
+WebServer::WebServer(SettingsIntf *settings, TimeIntf *time)
+  : server(nullptr), settings(settings), time(time) {
   instanceForApi = this;
 }
 
@@ -161,6 +163,42 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+std::string formatTimeISO(int64_t unixTime) {
+  std::time_t time = static_cast<std::time_t>(unixTime);
+  struct tm utc_tm;
+  
+  if (gmtime_r(&time, &utc_tm) == nullptr) {
+    return "1970-01-01T00:00:00Z";
+  }
+
+  std::ostringstream oss;
+  oss << std::put_time(&utc_tm, "%Y-%m-%dT%H:%M:%SZ");
+  return oss.str();
+}
+
+esp_err_t WebServer::apiTimeGetHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
+  if (!self || !self->time) {
+    ESP_LOGE(TAG, "apiTimeGetHandler: self or time interface is null");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  
+  int64_t currentTime = self->time->getTime();
+  std::string isoTime = formatTimeISO(currentTime);
+  bool synced = self->time->isTimeSynced();
+  
+  // Build JSON response
+  char jsonResponse[256];
+  snprintf(jsonResponse, sizeof(jsonResponse),
+           "{\"unixTime\":%lld,\"isoTime\":\"%s\",\"synced\":%s}",
+           (long long)currentTime, isoTime.c_str(), synced ? "true" : "false");
+  
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, jsonResponse, strlen(jsonResponse));
+  return ESP_OK;
+}
+
 void WebServer::start() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.lru_purge_enable = true;
@@ -195,6 +233,14 @@ void WebServer::start() {
     .user_ctx = this
   };
   httpd_register_uri_handler(server, &apiGet);
+
+  const httpd_uri_t apiTime = {
+    .uri = "/api/time",
+    .method = HTTP_GET,
+    .handler = apiTimeGetHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiTime);
 
   const httpd_uri_t root = {
     .uri = "/",

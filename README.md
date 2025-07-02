@@ -55,6 +55,23 @@ idf.py build
 idf.py flash
 ```
 
+### Time Synchronization
+
+The beacon includes proper time synchronization support:
+
+**ESP32 Target:**
+- SNTP (Simple Network Time Protocol) client for automatic time sync
+- Tracks accurate boot time from first successful SNTP synchronization  
+- All scheduling and timing operations use UTC
+- Automatic timezone handling (always UTC for WSPR operations)
+
+**Host Mock:**
+- Uses system time (assumed to be synchronized)
+- Tracks application start time for reset tracking
+- All times displayed in UTC format
+
+The web interface clearly indicates all times are in UTC, which is essential for proper WSPR operation and coordination with other stations worldwide.
+
 ### Portability
 
 Given the abstractions I built into the code, you can port this to

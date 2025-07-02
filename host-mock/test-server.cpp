@@ -1,4 +1,5 @@
 #include "test-server.h"
+#include "Time.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
@@ -8,6 +9,7 @@
 #include <filesystem>
 #include <atomic>
 #include <limits.h>
+#include <iomanip>
 #ifdef _WIN32
 #include <winsock2.h>
 #else
@@ -20,6 +22,7 @@ using nlohmann::json;
 namespace fs = std::filesystem;
 
 static std::atomic<bool> running{true};
+static Time timeInterface;
 
 static std::string readFile(const std::string &path) {
   std::ifstream f(path, std::ios::in | std::ios::binary);
@@ -27,6 +30,25 @@ static std::string readFile(const std::string &path) {
   std::ostringstream ss;
   ss << f.rdbuf();
   return ss.str();
+}
+
+static std::string formatTimeISO(int64_t unixTime) {
+  std::time_t time = static_cast<std::time_t>(unixTime);
+  struct tm utc_tm;
+  
+#ifdef _WIN32
+  if (gmtime_s(&utc_tm, &time) != 0) {
+    return "1970-01-01T00:00:00Z";
+  }
+#else
+  if (gmtime_r(&time, &utc_tm) == nullptr) {
+    return "1970-01-01T00:00:00Z";
+  }
+#endif
+
+  std::ostringstream oss;
+  oss << std::put_time(&utc_tm, "%Y-%m-%dT%H:%M:%SZ");
+  return oss.str();
 }
 
 static json settings = {
@@ -93,7 +115,7 @@ static json status = {
   {"txPercent", 20},
   {"hostname", "wspr-beacon"},
   {"currentBand", "20m"},
-  {"lastResetTime", "2025-01-01T00:00:00Z"},
+  {"lastResetTime", formatTimeISO(timeInterface.getStartTime())},
   {"statistics", {
     {"totalTransmissions", 0},
     {"totalMinutes", 0},
@@ -199,6 +221,15 @@ void startTestServer(int port) {
 
   svr.Get("/api/status.json", [](const httplib::Request &, httplib::Response &res) {
     res.set_content(status.dump(), "application/json");
+  });
+
+  svr.Get("/api/time", [](const httplib::Request &, httplib::Response &res) {
+    json timeResponse = {
+      {"unixTime", timeInterface.getTime()},
+      {"isoTime", formatTimeISO(timeInterface.getTime())},
+      {"synced", timeInterface.isTimeSynced()}
+    };
+    res.set_content(timeResponse.dump(), "application/json");
   });
 
   // Serve static files - dynamically find web directory
