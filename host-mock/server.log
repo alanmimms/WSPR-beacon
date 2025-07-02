@@ -2,3 +2,12 @@ Starting host test bench web server for WSPR beacon UI...
 [TestServer] Found web directory at: "/home/alan/ham/WSPR-beacon/WSPR-beacon/web"
 Host testbench web server running at http://localhost:8080
 Press Ctrl+C to stop.
+[TestServer] POST /api/settings - Content-Type: application/json
+[TestServer] Body: {"callsign":"TEST123","locator":"AA00aa","powerDbm":10,"txPercent":25}
+[TestServer] Settings updated successfully
+[TestServer] POST /api/settings - Content-Type: application/json
+[TestServer] Body: {"invalid_json"
+[TestServer] Error parsing settings: [json.exception.parse_error.101] parse error at line 1, column 16: syntax error while parsing object separator - unexpected end of input; expected ':'
+[TestServer] POST /api/settings - Content-Type: application/json
+[TestServer] Body: {"wifiSsid":"TestNetwork","wifiPassword":"password123","hostname":"test-beacon","callsign":"WB7NAB","locator":"CN87xx","powerDbm":30,"txPercent":50}
+[TestServer] Settings updated successfully

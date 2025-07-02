@@ -32,20 +32,27 @@ static std::string readFile(const std::string &path) {
 static json settings = {
   {"callsign", "N0CALL"},
   {"locator", "AA00aa"},
-  {"powerDbm", 23}
+  {"powerDbm", 23},
+  {"txPercent", 20},
+  {"wifiSsid", ""},
+  {"wifiPassword", ""},
+  {"hostname", "wspr-beacon"}
 };
 
 static json status = {
   {"callsign", "N0CALL"},
   {"locator", "AA00aa"},
   {"powerDbm", 23},
-  {"hostname", "testbench.local"}
+  {"txPercent", 20},
+  {"hostname", "wspr-beacon"}
 };
 
 static void updateStatusFromSettings() {
   status["callsign"] = settings["callsign"];
   status["locator"] = settings["locator"];
   status["powerDbm"] = settings["powerDbm"];
+  status["txPercent"] = settings["txPercent"];
+  status["hostname"] = settings["hostname"];
 }
 
 std::string findWebDirectoryForTestServer() {
@@ -91,6 +98,9 @@ void startTestServer(int port) {
 
   svr.Post("/api/settings", [](const httplib::Request &req, httplib::Response &res) {
     try {
+      std::cout << "[TestServer] POST /api/settings - Content-Type: " << req.get_header_value("Content-Type") << std::endl;
+      std::cout << "[TestServer] Body: " << req.body << std::endl;
+      
       // Parse as form if the Content-Type is application/x-www-form-urlencoded
       auto contentType = req.get_header_value("Content-Type");
       if (contentType.find("application/x-www-form-urlencoded") != std::string::npos) {
@@ -102,13 +112,22 @@ void startTestServer(int port) {
         // Otherwise, treat as JSON
         auto j = json::parse(req.body);
         for (auto it = j.begin(); it != j.end(); ++it) {
-          settings[it.key()] = it.value();
+          // Skip null values to avoid overwriting existing settings with nulls
+          if (!it.value().is_null()) {
+            settings[it.key()] = it.value();
+          }
         }
       }
       updateStatusFromSettings();
+      std::cout << "[TestServer] Settings updated successfully" << std::endl;
       res.status = 204;
       res.set_content("", "application/json");
+    } catch (const std::exception& e) {
+      std::cout << "[TestServer] Error parsing settings: " << e.what() << std::endl;
+      res.status = 400;
+      res.set_content("{\"error\":\"Invalid settings format\"}", "application/json");
     } catch (...) {
+      std::cout << "[TestServer] Unknown error parsing settings" << std::endl;
       res.status = 400;
       res.set_content("{\"error\":\"Invalid settings format\"}", "application/json");
     }

@@ -152,7 +152,7 @@ run_test "REST API - GET /api/settings" "$BASE_URL/api/settings" "callsign"
 run_test "REST API - GET /api/status.json" "$BASE_URL/api/status.json" "callsign"
 
 # Test 7: REST API - POST settings (test with valid JSON)
-valid_json='{"callsign":"TEST123","locator":"AA00aa","powerDbm":10,"txIntervalMinutes":4}'
+valid_json='{"callsign":"TEST123","locator":"AA00aa","powerDbm":10,"txPercent":25}'
 run_test "REST API - POST /api/settings (valid)" "$BASE_URL/api/settings" "" "POST" "$valid_json"
 
 # Test 8: REST API - POST settings (test with invalid JSON)
@@ -191,6 +191,30 @@ print_status "INFO" "Test Summary:"
 print_status "INFO" "  Passed: $TESTS_PASSED"
 print_status "INFO" "  Failed: $TESTS_FAILED"
 print_status "INFO" "  Total:  $((TESTS_PASSED + TESTS_FAILED))"
+
+# Test 10: REST API - POST settings with browser-like data (form fields)
+print_status "INFO" "Testing: Browser-like form submission"
+browser_json='{"wifiSsid":"TestNetwork","wifiPassword":"password123","hostname":"test-beacon","callsign":"WB7NAB","locator":"CN87xx","powerDbm":30,"txPercent":50}'
+response=$(curl -s -w "\n%{http_code}" --max-time $TEST_TIMEOUT \
+               -X POST -H "Content-Type: application/json" \
+               -d "$browser_json" "$BASE_URL/api/settings" 2>/dev/null || echo -e "\n000")
+http_code=$(echo "$response" | tail -n1)
+
+if [ "$http_code" = "204" ]; then
+    # Verify the settings were actually saved
+    saved_settings=$(curl -s --max-time $TEST_TIMEOUT "$BASE_URL/api/settings" 2>/dev/null)
+    if echo "$saved_settings" | grep -q "WB7NAB" && echo "$saved_settings" | grep -q "CN87xx" && echo "$saved_settings" | grep -q "TestNetwork"; then
+        print_status "PASS" "Browser-like form submission (HTTP $http_code)"
+        ((TESTS_PASSED++))
+    else
+        print_status "FAIL" "Browser-like form submission - Settings not saved correctly"
+        echo "  Saved settings: $saved_settings"
+        ((TESTS_FAILED++))
+    fi
+else
+    print_status "FAIL" "Browser-like form submission - HTTP $http_code"
+    ((TESTS_FAILED++))
+fi
 
 if [ $TESTS_FAILED -eq 0 ]; then
     print_status "PASS" "All tests passed!"

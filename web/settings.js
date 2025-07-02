@@ -95,8 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hostname: document.getElementById('hostname').value,
         callsign: document.getElementById('callsign').value,
         locator: document.getElementById('locator').value,
-        powerDbm: parseInt(powerDbmInput.value, 10),
-        txPercent: parseInt(document.getElementById('tx-percent').value, 10),
+        powerDbm: parseInt(powerDbmInput.value, 10) || 0,
+        txPercent: parseInt(document.getElementById('tx-percent').value, 10) || 0,
       };
       // Send as JSON!
       try {
