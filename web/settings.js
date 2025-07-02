@@ -77,6 +77,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof s.txPercent === 'number') {
         document.getElementById('tx-percent').value = s.txPercent;
       }
+      
+      // Load band configurations
+      if (s.bands) {
+        loadBandConfiguration(s.bands);
+      }
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -101,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         locator: document.getElementById('locator').value,
         powerDbm: parseInt(powerDbmInput.value, 10) || 0,
         txPercent: parseInt(document.getElementById('tx-percent').value, 10) || 0,
+        bands: collectBandConfiguration()
       };
       // Send as JSON!
       try {
@@ -122,5 +128,85 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.textContent = 'Save Settings';
       }
     });
+  }
+
+  // Band configuration functions
+  function loadBandConfiguration(bands) {
+    const container = document.getElementById('band-config');
+    container.innerHTML = '';
+    
+    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    
+    bandOrder.forEach(bandName => {
+      const bandConfig = bands[bandName] || {
+        enabled: false,
+        frequency: getDefaultFrequency(bandName),
+        schedule: []
+      };
+      
+      const bandDiv = document.createElement('div');
+      bandDiv.className = 'band-config-item';
+      bandDiv.innerHTML = `
+        <div class="band-header">
+          <label class="band-enable">
+            <input type="checkbox" id="band-${bandName}-enabled" ${bandConfig.enabled ? 'checked' : ''}>
+            <strong>${bandName}</strong>
+          </label>
+          <div class="band-frequency">
+            <label for="band-${bandName}-freq">Frequency (Hz):</label>
+            <input type="number" id="band-${bandName}-freq" value="${bandConfig.frequency}" min="1000000" max="30000000" step="1">
+          </div>
+        </div>
+        <div class="band-schedule">
+          <label>Active Hours (UTC):</label>
+          <div class="schedule-hours" id="schedule-${bandName}">
+            ${Array.from({length: 24}, (_, hour) => `
+              <label class="hour-checkbox">
+                <input type="checkbox" value="${hour}" ${bandConfig.schedule.includes(hour) ? 'checked' : ''}>
+                ${hour.toString().padStart(2, '0')}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      
+      container.appendChild(bandDiv);
+    });
+  }
+  
+  function collectBandConfiguration() {
+    const bands = {};
+    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    
+    bandOrder.forEach(bandName => {
+      const enabled = document.getElementById(`band-${bandName}-enabled`).checked;
+      const frequency = parseInt(document.getElementById(`band-${bandName}-freq`).value) || getDefaultFrequency(bandName);
+      
+      const scheduleCheckboxes = document.querySelectorAll(`#schedule-${bandName} input[type="checkbox"]:checked`);
+      const schedule = Array.from(scheduleCheckboxes).map(cb => parseInt(cb.value));
+      
+      bands[bandName] = {
+        enabled,
+        frequency,
+        schedule
+      };
+    });
+    
+    return bands;
+  }
+  
+  function getDefaultFrequency(bandName) {
+    const defaults = {
+      '160m': 1838100,
+      '80m': 3570100,
+      '40m': 7040100,
+      '30m': 10140200,
+      '20m': 14097100,
+      '17m': 18106100,
+      '15m': 21096100,
+      '12m': 24926100,
+      '10m': 28126100
+    };
+    return defaults[bandName] || 14097100;
   }
 });

@@ -1,24 +1,80 @@
 <!DOCTYPE html>
-<html>
-<head><title>Index</title></head>
-<body>
-  <main>
-    <h2>Status</h2>
-    <p id="status-text">Loading current beacon status...</p>
-    <script>
-      fetch('/api/status.json')
-        .then(res => res.json())
-        .then(data => {
-          const statusText = `
-            Callsign: ${data.callsign || "?"}<br>
-            Maidenhead Grid: ${data.locator || "?"}<br>
-            Power: ${data.powerMW || 0}mW (${data.powerDbm || "?"}dBm)<br>
-            Transmit %: ${data.tx_percentage || "?"}<br>
-          `;
-          document.getElementById('status-text').innerHTML = statusText;
-        });
-    </script>
-  </main>
-  <script src="common.js"></script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WSPR Beacon - Home</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="home">
+  <div class="layout-container">
+    <div id="nav-container"></div>
+    <main>
+      <h1>WSPR Beacon Status</h1>
+      
+      <!-- Current Status Section -->
+      <fieldset class="settings-zone status-zone">
+        <legend>Current Status</legend>
+        <div class="status-grid">
+          <div class="status-item">
+            <label>Callsign</label>
+            <span id="current-callsign">Loading...</span>
+          </div>
+          <div class="status-item">
+            <label>Grid Locator</label>
+            <span id="current-locator">Loading...</span>
+          </div>
+          <div class="status-item">
+            <label>Power</label>
+            <span id="current-power">Loading...</span>
+          </div>
+          <div class="status-item">
+            <label>Current Band</label>
+            <span id="current-band">Loading...</span>
+          </div>
+          <div class="status-item">
+            <label>Last Reset</label>
+            <span id="last-reset">Loading...</span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Transmission Statistics -->
+      <fieldset class="settings-zone stats-zone">
+        <legend>Transmission Statistics</legend>
+        <div class="stats-summary">
+          <div class="stat-total">
+            <h3>Total Since Reset</h3>
+            <div class="stat-value">
+              <span id="total-transmissions">0</span> transmissions
+            </div>
+            <div class="stat-value">
+              <span id="total-minutes">0</span> minutes
+            </div>
+          </div>
+        </div>
+        
+        <div class="stats-by-band">
+          <h3>By Band</h3>
+          <div class="band-stats-grid" id="band-stats">
+            <!-- Band statistics will be populated here -->
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Band Schedule Overview -->
+      <fieldset class="settings-zone schedule-zone">
+        <legend>Band Schedule (24-hour)</legend>
+        <div class="schedule-overview" id="schedule-overview">
+          <!-- Schedule visualization will be populated here -->
+        </div>
+      </fieldset>
+    </main>
+  </div>
+  <footer>
+    <div id="callsign-div">Callsign: <span id="callsign-span">?</span></div>
+    <div id="hostname-div">Hostname: <span id="hostname-span">?</span></div>
+  </footer>
+  <script src="nav.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>

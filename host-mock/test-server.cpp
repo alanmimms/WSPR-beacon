@@ -36,7 +36,54 @@ static json settings = {
   {"txPercent", 20},
   {"wifiSsid", ""},
   {"wifiPassword", ""},
-  {"hostname", "wspr-beacon"}
+  {"hostname", "wspr-beacon"},
+  {"bands", {
+    {"160m", {
+      {"enabled", true},
+      {"frequency", 1838100},
+      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 22, 23}}
+    }},
+    {"80m", {
+      {"enabled", true},
+      {"frequency", 3570100},
+      {"schedule", {8, 9, 10, 11, 20, 21, 22, 23}}
+    }},
+    {"40m", {
+      {"enabled", true},
+      {"frequency", 7040100},
+      {"schedule", {0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19}}
+    }},
+    {"30m", {
+      {"enabled", true},
+      {"frequency", 10140200},
+      {"schedule", {6, 7, 8, 9, 10, 11, 20, 21}}
+    }},
+    {"20m", {
+      {"enabled", true},
+      {"frequency", 14097100},
+      {"schedule", {12, 13, 14, 15, 16, 17}}
+    }},
+    {"17m", {
+      {"enabled", false},
+      {"frequency", 18106100},
+      {"schedule", {10, 11, 12, 13, 14, 15}}
+    }},
+    {"15m", {
+      {"enabled", true},
+      {"frequency", 21096100},
+      {"schedule", {14, 15, 16, 17, 18, 19}}
+    }},
+    {"12m", {
+      {"enabled", false},
+      {"frequency", 24926100},
+      {"schedule", {16, 17, 18, 19}}
+    }},
+    {"10m", {
+      {"enabled", true},
+      {"frequency", 28126100},
+      {"schedule", {18, 19, 20, 21}}
+    }}
+  }}
 };
 
 static json status = {
@@ -44,7 +91,24 @@ static json status = {
   {"locator", "AA00aa"},
   {"powerDbm", 23},
   {"txPercent", 20},
-  {"hostname", "wspr-beacon"}
+  {"hostname", "wspr-beacon"},
+  {"currentBand", "20m"},
+  {"lastResetTime", "2025-01-01T00:00:00Z"},
+  {"statistics", {
+    {"totalTransmissions", 0},
+    {"totalMinutes", 0},
+    {"byBand", {
+      {"160m", {"transmissions", 0, "minutes", 0}},
+      {"80m", {"transmissions", 0, "minutes", 0}},
+      {"40m", {"transmissions", 0, "minutes", 0}},
+      {"30m", {"transmissions", 0, "minutes", 0}},
+      {"20m", {"transmissions", 0, "minutes", 0}},
+      {"17m", {"transmissions", 0, "minutes", 0}},
+      {"15m", {"transmissions", 0, "minutes", 0}},
+      {"12m", {"transmissions", 0, "minutes", 0}},
+      {"10m", {"transmissions", 0, "minutes", 0}}
+    }}
+  }}
 };
 
 static void updateStatusFromSettings() {

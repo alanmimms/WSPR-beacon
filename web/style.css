@@ -294,3 +294,256 @@ footer {
     gap: 1em;
   }
 }
+
+/* Band Configuration Styles */
+.band-zone {
+  background: hsl(280, 40%, 92%);
+}
+
+.band-zone legend {
+  color: hsl(280, 40%, 30%);
+  font-weight: 600;
+  padding: 0 0.5em;
+}
+
+.band-config-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5em;
+}
+
+.band-config-item {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1em;
+  background: white;
+}
+
+.band-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+  flex-wrap: wrap;
+  gap: 1em;
+}
+
+.band-enable {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 1.1em;
+}
+
+.band-frequency {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.band-frequency input {
+  width: 120px;
+  padding: 0.4em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.band-schedule label {
+  font-weight: 500;
+  margin-bottom: 0.5em;
+  display: block;
+}
+
+.schedule-hours {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(3em, 1fr));
+  gap: 0.3em;
+}
+
+.hour-checkbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.3em;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9em;
+  cursor: pointer;
+  background: white;
+  transition: background 0.2s;
+}
+
+.hour-checkbox:hover {
+  background: #f0f0f0;
+}
+
+.hour-checkbox input[type="checkbox"] {
+  margin-bottom: 0.2em;
+}
+
+.hour-checkbox input[type="checkbox"]:checked + * {
+  font-weight: bold;
+}
+
+/* Home Page Styles */
+.status-zone {
+  background: hsl(200, 50%, 92%);
+}
+
+.status-zone legend {
+  color: hsl(200, 50%, 30%);
+  font-weight: 600;
+  padding: 0 0.5em;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1em;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5em;
+}
+
+.status-item label {
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 0.3em;
+}
+
+.status-item span {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.stats-zone {
+  background: hsl(120, 30%, 92%);
+}
+
+.stats-zone legend {
+  color: hsl(120, 30%, 30%);
+  font-weight: 600;
+  padding: 0 0.5em;
+}
+
+.stats-summary {
+  margin-bottom: 1.5em;
+}
+
+.stat-total h3 {
+  margin: 0 0 0.5em 0;
+}
+
+.stat-value {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin-bottom: 0.3em;
+}
+
+.band-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.8em;
+}
+
+.band-stat {
+  text-align: center;
+  padding: 0.6em;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+}
+
+.band-name {
+  font-weight: 600;
+  margin-bottom: 0.3em;
+  color: #333;
+}
+
+.band-numbers div {
+  font-size: 0.9em;
+  color: #666;
+}
+
+.schedule-zone {
+  background: hsl(45, 60%, 92%);
+}
+
+.schedule-zone legend {
+  color: hsl(45, 60%, 30%);
+  font-weight: 600;
+  padding: 0 0.5em;
+}
+
+.schedule-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.hour-labels {
+  display: grid;
+  grid-template-columns: 80px repeat(24, 1fr);
+  gap: 1px;
+  margin-bottom: 0.5em;
+}
+
+.hour-label {
+  text-align: center;
+  font-size: 0.8em;
+  padding: 0.2em;
+  background: #f0f0f0;
+}
+
+.schedule-band-row {
+  display: grid;
+  grid-template-columns: 80px repeat(24, 1fr);
+  gap: 1px;
+  align-items: center;
+}
+
+.schedule-band-label {
+  text-align: right;
+  padding-right: 0.5em;
+  font-weight: 500;
+}
+
+.schedule-bar {
+  display: contents;
+}
+
+.schedule-hour {
+  height: 20px;
+  background: #f5f5f5;
+  border-radius: 2px;
+}
+
+.schedule-hour.active {
+  background: #4CAF50;
+}
+
+@media (max-width: 700px) {
+  .band-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .schedule-hours {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  
+  .hour-labels {
+    grid-template-columns: 60px repeat(24, 1fr);
+  }
+  
+  .schedule-band-row {
+    grid-template-columns: 60px repeat(24, 1fr);
+  }
+  
+  .schedule-band-label {
+    font-size: 0.9em;
+  }
+}

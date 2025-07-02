@@ -245,6 +245,36 @@ else
     ((TESTS_FAILED++))
 fi
 
+# Test 12: Verify band configuration API
+print_status "INFO" "Testing: Band configuration in settings"
+response=$(curl -s --max-time $TEST_TIMEOUT "$BASE_URL/api/settings" 2>/dev/null)
+if echo "$response" | grep -q '"bands"' && \
+   echo "$response" | grep -q '"160m"' && \
+   echo "$response" | grep -q '"frequency"' && \
+   echo "$response" | grep -q '"schedule"'; then
+    print_status "PASS" "Band configuration present in settings"
+    ((TESTS_PASSED++))
+else
+    print_status "FAIL" "Band configuration missing or incomplete"
+    echo "  Response: $response"
+    ((TESTS_FAILED++))
+fi
+
+# Test 13: Verify statistics in status API
+print_status "INFO" "Testing: Statistics in status API"
+response=$(curl -s --max-time $TEST_TIMEOUT "$BASE_URL/api/status.json" 2>/dev/null)
+if echo "$response" | grep -q '"statistics"' && \
+   echo "$response" | grep -q '"totalTransmissions"' && \
+   echo "$response" | grep -q '"byBand"' && \
+   echo "$response" | grep -q '"currentBand"'; then
+    print_status "PASS" "Statistics present in status API"
+    ((TESTS_PASSED++))
+else
+    print_status "FAIL" "Statistics missing or incomplete"
+    echo "  Response: $response"
+    ((TESTS_FAILED++))
+fi
+
 if [ $TESTS_FAILED -eq 0 ]; then
     print_status "PASS" "All tests passed!"
     exit 0
