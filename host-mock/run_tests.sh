@@ -216,6 +216,35 @@ else
     ((TESTS_FAILED++))
 fi
 
+# Test 11: Verify settings persistence after save/load cycle
+print_status "INFO" "Testing: Settings persistence after save/load"
+test_settings='{"callsign":"TEST456","locator":"DM13","powerDbm":20,"txPercent":75}'
+# Save test settings
+save_response=$(curl -s -w "%{http_code}" --max-time $TEST_TIMEOUT \
+                     -X POST -H "Content-Type: application/json" \
+                     -d "$test_settings" "$BASE_URL/api/settings" 2>/dev/null || echo "000")
+save_code=$(echo "$save_response" | tail -c 4)
+
+if [ "$save_code" = "204" ]; then
+    # Retrieve and verify all fields are present
+    loaded_settings=$(curl -s --max-time $TEST_TIMEOUT "$BASE_URL/api/settings" 2>/dev/null)
+    if echo "$loaded_settings" | grep -q '"callsign":"TEST456"' && \
+       echo "$loaded_settings" | grep -q '"locator":"DM13"' && \
+       echo "$loaded_settings" | grep -q '"powerDbm":20' && \
+       echo "$loaded_settings" | grep -q '"txPercent":75'; then
+        print_status "PASS" "Settings persistence after save/load"
+        ((TESTS_PASSED++))
+    else
+        print_status "FAIL" "Settings persistence - Not all fields preserved correctly"
+        echo "  Expected: TEST456, DM13, powerDbm:20, txPercent:75"
+        echo "  Got: $loaded_settings"
+        ((TESTS_FAILED++))
+    fi
+else
+    print_status "FAIL" "Settings persistence - Save failed with HTTP $save_code"
+    ((TESTS_FAILED++))
+fi
+
 if [ $TESTS_FAILED -eq 0 ]; then
     print_status "PASS" "All tests passed!"
     exit 0

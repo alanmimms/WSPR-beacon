@@ -11,3 +11,6 @@ Press Ctrl+C to stop.
 [TestServer] POST /api/settings - Content-Type: application/json
 [TestServer] Body: {"wifiSsid":"TestNetwork","wifiPassword":"password123","hostname":"test-beacon","callsign":"WB7NAB","locator":"CN87xx","powerDbm":30,"txPercent":50}
 [TestServer] Settings updated successfully
+[TestServer] POST /api/settings - Content-Type: application/json
+[TestServer] Body: {"callsign":"TEST456","locator":"DM13","powerDbm":20,"txPercent":75}
+[TestServer] Settings updated successfully

@@ -48,33 +48,37 @@ document.addEventListener('DOMContentLoaded', () => {
       const r = await fetch('/api/settings');
       if (!r.ok) throw new Error('Failed to load settings');
       const s = await r.json();
-      if (s.wifiSsid) document.getElementById('wifi-ssid').value = s.wifiSsid;
-      if (s.wifiPassword) document.getElementById('wifi-password').value = s.wifiPassword;
+      console.log('Loaded settings:', s);
+      
+      // Load all settings, including empty strings
+      document.getElementById('wifi-ssid').value = s.wifiSsid || '';
+      document.getElementById('wifi-password').value = s.wifiPassword || '';
+      document.getElementById('hostname').value = s.hostname || '';
+      document.getElementById('callsign').value = s.callsign || '';
+      document.getElementById('locator').value = s.locator || '';
 
-      if (s.callsign) {
-	document.getElementById('callsign').value = s.callsign;
-	document.getElementById('footer span#callsign-span').textContent = s.callsign;
-      }
+      // Update footer elements (fix CSS selectors)
+      const callsignSpan = document.getElementById('callsign-span');
+      if (callsignSpan) callsignSpan.textContent = s.callsign || '?';
+      
+      const hostnameSpan = document.getElementById('hostname-span');
+      if (hostnameSpan) hostnameSpan.textContent = s.hostname || '?';
 
-      if (s.hostname) {
-	document.getElementById('hostname').value = s.hostname;
-	document.getElementById('footer span#hostname-span').textContent = s.hostname;
-      }
-
-      if (s.locator) document.getElementById('locator').value = s.locator;
+      // Load power settings (prefer powerDbm over powerMw)
       if (typeof s.powerDbm === 'number') {
         powerDbmInput.value = s.powerDbm;
         powerMwInput.value = dbmToMw(s.powerDbm);
-      }
-      if (typeof s.powerMw === 'number') {
+      } else if (typeof s.powerMw === 'number') {
         powerMwInput.value = s.powerMw;
         powerDbmInput.value = mwToDbm(s.powerMw);
       }
+      
+      // Load transmit percentage
       if (typeof s.txPercent === 'number') {
         document.getElementById('tx-percent').value = s.txPercent;
       }
-    } catch {
-      // Optionally show error
+    } catch (error) {
+      console.error('Error loading settings:', error);
     }
   }
   loadSettings();
