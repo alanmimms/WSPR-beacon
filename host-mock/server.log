@@ -1,0 +1,4 @@
+Starting host test bench web server for WSPR beacon UI...
+[TestServer] Found web directory at: "/home/alan/ham/WSPR-beacon/WSPR-beacon/web"
+Host testbench web server running at http://localhost:8080
+Press Ctrl+C to stop.

@@ -50,3 +50,11 @@ target_link_libraries(host-testbench PRIVATE nlohmann_json::nlohmann_json)
 # Link OpenSSL for cpp-httplib if SSL support is enabled
 find_package(OpenSSL REQUIRED)
 target_link_libraries(host-testbench PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+
+# Add test target
+add_custom_target(tests
+  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/host-testbench
+  DEPENDS host-testbench
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMENT "Running web server tests"
+)

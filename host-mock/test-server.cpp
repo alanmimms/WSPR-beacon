@@ -7,6 +7,7 @@
 #include <sstream>
 #include <filesystem>
 #include <atomic>
+#include <limits.h>
 #ifdef _WIN32
 #include <winsock2.h>
 #else
@@ -47,6 +48,40 @@ static void updateStatusFromSettings() {
   status["powerDbm"] = settings["powerDbm"];
 }
 
+std::string findWebDirectoryForTestServer() {
+  // Get the executable path
+  char exePath[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+  if (len == -1) {
+    std::cerr << "[TestServer] Warning: Could not determine executable path, using current directory" << std::endl;
+    return "../../web";
+  }
+  exePath[len] = '\0';
+  
+  // Start from the executable directory and search up the tree for web directory
+  fs::path currentPath = fs::path(exePath).parent_path();
+  
+  for (int i = 0; i < 5; ++i) { // Limit search to 5 levels up
+    fs::path webPath = currentPath / "web";
+    if (fs::exists(webPath) && fs::is_directory(webPath)) {
+      std::cout << "[TestServer] Found web directory at: " << webPath << std::endl;
+      return webPath.string();
+    }
+    
+    // Go up one level
+    fs::path parentPath = currentPath.parent_path();
+    if (parentPath == currentPath) {
+      // Reached filesystem root
+      break;
+    }
+    currentPath = parentPath;
+  }
+  
+  // Fallback to relative path
+  std::cerr << "[TestServer] Warning: Could not find web directory, using fallback ../../web" << std::endl;
+  return "../../web";
+}
+
 void startTestServer(int port) {
   httplib::Server svr;
 
@@ -83,8 +118,9 @@ void startTestServer(int port) {
     res.set_content(status.dump(), "application/json");
   });
 
-  // Serve static files - assumes cwd is project root, looks in ../../web
-  svr.set_mount_point("/", "../../web");
+  // Serve static files - dynamically find web directory
+  std::string webDir = findWebDirectoryForTestServer();
+  svr.set_mount_point("/", webDir);
 
   std::cout << "Host testbench web server running at http://localhost:" << port << std::endl;
   std::cout << "Press Ctrl+C to stop." << std::endl;
