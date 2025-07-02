@@ -1,9 +1,24 @@
 // Home page logic for displaying status and statistics
 
+let bandConfigs = {};
+
+// Collapsible fieldsets functionality
+function initializeCollapsibleFieldsets() {
+  document.querySelectorAll('.collapsible-fieldset legend').forEach(legend => {
+    legend.addEventListener('click', () => {
+      const fieldset = legend.closest('.collapsible-fieldset');
+      fieldset.classList.toggle('collapsed');
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    // Initialize collapsible fieldsets
+    initializeCollapsibleFieldsets();
+    
+    await loadSettings(); // Load settings first to get band configs
     await loadStatus();
-    await loadSettings(); // For footer info
   } catch (error) {
     console.error('Error loading home page data:', error);
   }
@@ -35,7 +50,7 @@ async function loadStatus() {
       document.getElementById('total-minutes').textContent = status.statistics.totalMinutes || 0;
       
       // Update band statistics
-      updateBandStats(status.statistics.byBand || {});
+      updateBandStats(status.statistics.byBand || {}, bandConfigs);
     }
     
   } catch (error) {
@@ -59,8 +74,9 @@ async function loadSettings() {
     if (callsignSpan) callsignSpan.textContent = settings.callsign || '?';
     if (hostnameSpan) hostnameSpan.textContent = settings.hostname || '?';
     
-    // Update schedule overview
+    // Store band configs for use in updateBandStats
     if (settings.bands) {
+      bandConfigs = settings.bands;
       updateScheduleOverview(settings.bands);
     }
     
@@ -69,7 +85,7 @@ async function loadSettings() {
   }
 }
 
-function updateBandStats(bandStats) {
+function updateBandStats(bandStats, bandConfigs) {
   const container = document.getElementById('band-stats');
   container.innerHTML = '';
   
@@ -77,14 +93,39 @@ function updateBandStats(bandStats) {
   
   bands.forEach(band => {
     const stats = bandStats[band] || { transmissions: 0, minutes: 0 };
+    const config = bandConfigs && bandConfigs[band] ? bandConfigs[band] : { enabled: false, schedule: [] };
     
     const bandDiv = document.createElement('div');
     bandDiv.className = 'band-stat';
+    
+    // Create hour indicators in two rows of 12
+    const firstRow = Array.from({length: 12}, (_, hour) => {
+      const isActive = config.schedule && config.schedule.includes(hour);
+      const hourStr = hour.toString().padStart(2, '0');
+      return `<div class="hour-indicator ${isActive ? 'active' : ''}">${hourStr}</div>`;
+    }).join('');
+    
+    const secondRow = Array.from({length: 12}, (_, hour) => {
+      const actualHour = hour + 12;
+      const isActive = config.schedule && config.schedule.includes(actualHour);
+      const hourStr = actualHour.toString().padStart(2, '0');
+      return `<div class="hour-indicator ${isActive ? 'active' : ''}">${hourStr}</div>`;
+    }).join('');
+    
     bandDiv.innerHTML = `
-      <div class="band-name">${band}</div>
-      <div class="band-numbers">
-        <div>${stats.transmissions} TX</div>
-        <div>${stats.minutes} min</div>
+      <div class="band-header">
+        <div class="band-name">${band}</div>
+        <div class="band-numbers">
+          <div>${stats.transmissions || 0} Tx</div>
+          <div>${stats.minutes || 0} mins</div>
+        </div>
+      </div>
+      <div class="band-hours">
+        Schedule:
+        <div class="hour-indicators">
+          <div class="hour-row">${firstRow}</div>
+          <div class="hour-row">${secondRow}</div>
+        </div>
       </div>
     `;
     

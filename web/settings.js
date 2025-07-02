@@ -10,8 +10,20 @@ function dbmToMw(dbm) {
   return Math.round(Math.pow(10, (dbm / 10)));
 }
 
+// Collapsible fieldsets functionality
+function initializeCollapsibleFieldsets() {
+  document.querySelectorAll('.collapsible-fieldset legend').forEach(legend => {
+    legend.addEventListener('click', () => {
+      const fieldset = legend.closest('.collapsible-fieldset');
+      fieldset.classList.toggle('collapsed');
+    });
+  });
+}
+
 // Auto-link power fields
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize collapsible fieldsets
+  initializeCollapsibleFieldsets();
   const powerMwInput = document.getElementById('power-mw');
   const powerDbmInput = document.getElementById('power-dbm');
 
@@ -149,19 +161,19 @@ document.addEventListener('DOMContentLoaded', () => {
       bandDiv.innerHTML = `
         <div class="band-header">
           <label class="band-enable">
-            <input type="checkbox" id="band-${bandName}-enabled" ${bandConfig.enabled ? 'checked' : ''}>
+            <input type="checkbox" id="band-${bandName}-enabled" ${bandConfig.enabled ? 'checked' : ''} title="Enable transmissions on the ${bandName} band">
             <strong>${bandName}</strong>
           </label>
           <div class="band-frequency">
             <label for="band-${bandName}-freq">Frequency (Hz):</label>
-            <input type="number" id="band-${bandName}-freq" value="${bandConfig.frequency}" min="1000000" max="30000000" step="1">
+            <input type="number" id="band-${bandName}-freq" value="${bandConfig.frequency}" min="1000000" max="30000000" step="1" title="Transmit frequency in Hz for ${bandName} band (override WSPR default if needed)">
           </div>
         </div>
         <div class="band-schedule">
           <label>Active Hours (UTC):</label>
           <div class="schedule-hours" id="schedule-${bandName}">
             ${Array.from({length: 24}, (_, hour) => `
-              <label class="hour-checkbox">
+              <label class="hour-checkbox" title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
                 <input type="checkbox" value="${hour}" ${bandConfig.schedule.includes(hour) ? 'checked' : ''}>
                 ${hour.toString().padStart(2, '0')}
               </label>

@@ -12,9 +12,10 @@
       <h1>WSPR Beacon Status</h1>
       
       <!-- Current Status Section -->
-      <fieldset class="settings-zone status-zone">
-        <legend>Current Status</legend>
-        <div class="status-grid">
+      <fieldset class="settings-zone status-zone collapsible-fieldset">
+        <legend><span class="collapse-icon">▼</span>Current Status</legend>
+        <div class="fieldset-content">
+          <div class="status-grid">
           <div class="status-item">
             <label>Callsign</label>
             <span id="current-callsign">Loading...</span>
@@ -35,20 +36,22 @@
             <label>Last Reset</label>
             <span id="last-reset">Loading...</span>
           </div>
+          </div>
         </div>
       </fieldset>
 
       <!-- Transmission Statistics -->
-      <fieldset class="settings-zone stats-zone">
-        <legend>Transmission Statistics</legend>
-        <div class="stats-summary">
-          <div class="stat-total">
+      <fieldset class="settings-zone stats-zone collapsible-fieldset">
+        <legend><span class="collapse-icon">▼</span>Transmission Statistics</legend>
+        <div class="fieldset-content">
+          <div class="stats-summary">
+          <div class="stat-totals">
             <h3>Total Since Reset</h3>
             <div class="stat-value">
-              <span id="total-transmissions">0</span> transmissions
+              <span id="total-transmissions">0</span> Tx
             </div>
             <div class="stat-value">
-              <span id="total-minutes">0</span> minutes
+              <span id="total-minutes">0</span> mins
             </div>
           </div>
         </div>
@@ -59,15 +62,9 @@
             <!-- Band statistics will be populated here -->
           </div>
         </div>
-      </fieldset>
-
-      <!-- Band Schedule Overview -->
-      <fieldset class="settings-zone schedule-zone">
-        <legend>Band Schedule (24-hour)</legend>
-        <div class="schedule-overview" id="schedule-overview">
-          <!-- Schedule visualization will be populated here -->
         </div>
       </fieldset>
+
     </main>
   </div>
   <footer>

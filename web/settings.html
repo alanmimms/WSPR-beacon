@@ -12,55 +12,63 @@
       <h1>Device Settings</h1>
       <form id="settings-form" autocomplete="off">
         <!-- WiFi Settings Zone -->
-        <fieldset class="settings-zone wifi-zone">
-          <legend>WiFi &amp; Hostname</legend>
-          <div class="form-row">
-            <label for="wifi-ssid">WiFi SSID</label>
-            <input type="text" id="wifi-ssid" name="wifiSsid" maxlength="32">
-          </div>
-          <div class="form-row">
-            <label for="wifi-password">WiFi Password</label>
-            <input type="password" id="wifi-password" name="wifiPassword" maxlength="64">
-          </div>
-          <div class="form-row">
-            <label for="hostname">Beacon Hostname</label>
-            <input type="text" id="hostname" name="hostname" maxlength="32">
+        <fieldset class="settings-zone wifi-zone collapsible-fieldset">
+          <legend><span class="collapse-icon">▼</span>WiFi &amp; Hostname</legend>
+          <div class="fieldset-content">
+            <div class="form-row">
+              <label for="wifi-ssid">WiFi SSID</label>
+              <input type="text" id="wifi-ssid" name="wifiSsid" maxlength="32" title="The name of your WiFi network that the beacon will connect to">
+            </div>
+            <div class="form-row">
+              <label for="wifi-password">WiFi Password</label>
+              <input type="password" id="wifi-password" name="wifiPassword" maxlength="64" title="Password for your WiFi network">
+            </div>
+            <div class="form-row">
+              <label for="hostname">Beacon Hostname</label>
+              <input type="text" id="hostname" name="hostname" maxlength="32" title="The network name the beacon will identify itself as when it connects">
+            </div>
           </div>
         </fieldset>
         <!-- Callsign/Locator/Power Zone -->
-        <fieldset class="settings-zone beacon-zone">
-          <legend>Beacon Identification</legend>
-          <div class="form-row">
-            <label for="callsign">Callsign</label>
-            <input type="text" id="callsign" name="callsign" maxlength="12">
-          </div>
-          <div class="form-row">
-            <label for="locator">Maidenhead Grid</label>
-            <input type="text" id="locator" name="locator" maxlength="8">
-          </div>
+        <fieldset class="settings-zone beacon-zone collapsible-fieldset">
+          <legend><span class="collapse-icon">▼</span>Beacon Identification</legend>
+          <div class="fieldset-content">
+            <div class="form-row">
+              <label for="callsign">Callsign</label>
+              <input type="text" id="callsign" name="callsign" maxlength="12" title="Your amateur radio callsign as assigned by your country's licensing authority">
+            </div>
+            <div class="form-row">
+              <label for="locator">Maidenhead Grid</label>
+              <input type="text" id="locator" name="locator" maxlength="8" title="Your Maidenhead grid square locator (e.g., CN87xx) indicating your geographic position">
+            </div>
           <div class="form-row power-row">
             <label for="power-mw">Power</label>
-            <input type="number" id="power-mw" name="powerMw" min="1" max="1000" step="1">
+            <input type="number" id="power-mw" name="powerMw" min="1" max="1000" step="1" title="Transmitter power output in milliwatts">
             <span class="power-units">mW</span>
             <span class="power-link" id="power-link-icon">&#8646;</span>
-            <input type="number" id="power-dbm" name="powerDbm" min="0" max="60" step="1">
+            <input type="number" id="power-dbm" name="powerDbm" min="0" max="60" step="1" title="Transmitter power output in decibels above 1 milliwatt">
             <span class="power-units">dBm</span>
+          </div>
           </div>
         </fieldset>
         <!-- Transmission Zone -->
-        <fieldset class="settings-zone tx-zone">
-          <legend>Transmission</legend>
-          <div class="form-row">
-            <label for="tx-percent">Transmit %</label>
-            <input type="number" id="tx-percent" name="txPercent" min="0" max="100" step="1">
+        <fieldset class="settings-zone tx-zone collapsible-fieldset">
+          <legend><span class="collapse-icon">▼</span>Transmission</legend>
+          <div class="fieldset-content">
+            <div class="form-row">
+              <label for="tx-percent">Transmit %</label>
+              <input type="number" id="tx-percent" name="txPercent" min="0" max="100" step="1" title="Percentage of time slots the beacon should transmit (0-100%)">
+            </div>
           </div>
         </fieldset>
         
         <!-- Band Configuration Zone -->
-        <fieldset class="settings-zone band-zone">
-          <legend>Band Configuration & Scheduling</legend>
-          <div class="band-config-container" id="band-config">
-            <!-- Band configurations will be populated here -->
+        <fieldset class="settings-zone band-zone collapsible-fieldset">
+          <legend><span class="collapse-icon">▼</span>Band Configuration & Scheduling</legend>
+          <div class="fieldset-content">
+            <div class="band-config-container" id="band-config">
+              <!-- Band configurations will be populated here -->
+            </div>
           </div>
         </fieldset>
         
