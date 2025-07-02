@@ -4,8 +4,46 @@
 #include <iostream>
 #include <atomic>
 #include <thread>
+#include <filesystem>
+#include <unistd.h>
+#include <limits.h>
 
 using nlohmann::json;
+namespace fs = std::filesystem;
+
+std::string findWebDirectory() {
+  // Get the executable path
+  char exePath[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+  if (len == -1) {
+    std::cerr << "[WebServer] Warning: Could not determine executable path, using current directory" << std::endl;
+    return "../web";
+  }
+  exePath[len] = '\0';
+  
+  // Start from the executable directory and search up the tree for web directory
+  fs::path currentPath = fs::path(exePath).parent_path();
+  
+  for (int i = 0; i < 5; ++i) { // Limit search to 5 levels up
+    fs::path webPath = currentPath / "web";
+    if (fs::exists(webPath) && fs::is_directory(webPath)) {
+      std::cout << "[WebServer] Found web directory at: " << webPath << std::endl;
+      return webPath.string();
+    }
+    
+    // Go up one level
+    fs::path parentPath = currentPath.parent_path();
+    if (parentPath == currentPath) {
+      // Reached filesystem root
+      break;
+    }
+    currentPath = parentPath;
+  }
+  
+  // Fallback to relative path
+  std::cerr << "[WebServer] Warning: Could not find web directory, using fallback ../web" << std::endl;
+  return "../web";
+}
 
 WebServer::WebServer(SettingsIntf *settings)
   : settings(settings), running(false) {}
@@ -48,7 +86,8 @@ void WebServer::start() {
       free(jsonStr);
     });
 
-    svr.set_mount_point("/", "../web");
+    std::string webDir = findWebDirectory();
+    svr.set_mount_point("/", webDir);
 
     std::cout << "[WebServerMock] Listening on http://localhost:8080" << std::endl;
     svr.listen("0.0.0.0", 8080);
