@@ -4,3 +4,4 @@
 sdkconfig.old
 build/
 managed_components/
+server.log
