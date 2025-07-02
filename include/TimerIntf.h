@@ -1,27 +1,33 @@
 #pragma once
 
-#include <stdint.h>
 #include <functional>
 
-/**
- * Abstract interface for timers.
- * Allows scheduling one-shot and periodic timers with callback.
- * Host: can use std::thread + sleep or POSIX timer.
- * Target: wraps esp_timer or FreeRTOS timers.
- */
+// Abstract timer interface and timer object for cross-platform use.
+
 class TimerIntf {
 public:
+  class Timer {
+  public:
+    virtual ~Timer() {}
+  };
+
   virtual ~TimerIntf() {}
 
-  // Start a one-shot timer. Fires once after delayMs, calls cb(arg).
-  virtual void startOneShot(uint32_t delayMs, std::function<void(void *)> cb, void *arg) = 0;
+  // Create a one-shot timer (fires after timeout, once)
+  virtual Timer *createOneShot(const std::function<void()> &callback) = 0;
 
-  // Start a periodic timer. Calls cb(arg) every periodMs.
-  virtual void startPeriodic(uint32_t periodMs, std::function<void(void *)> cb, void *arg) = 0;
+  // Start the timer; timeoutMs is in milliseconds
+  virtual void start(Timer *timer, unsigned int timeoutMs) = 0;
 
-  // Stop the timer if running.
-  virtual void stop() = 0;
+  // Stop the timer if running
+  virtual void stop(Timer *timer) = 0;
 
-  // Returns true if the timer is running.
-  virtual bool isActive() const = 0;
+  // Destroy and free the timer object
+  virtual void destroy(Timer *timer) = 0;
+
+  // Optional: delay for specified milliseconds
+  virtual void delayMs(int timeoutMs) = 0;
+
+  // Optional: sync time (e.g., SNTP)
+  virtual void syncTime() = 0;
 };

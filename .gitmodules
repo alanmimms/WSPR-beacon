@@ -1,6 +1,6 @@
-[submodule "main/host-testbench/external/cpp-httplib"]
-	path = host-mock/host-testbench/external/cpp-httplib
+[submodule "host-mock/external/cpp-httplib"]
+	path = host-mock/external/cpp-httplib
 	url = https://github.com/yhirose/cpp-httplib.git
-[submodule "main/host-testbench/external/json"]
-	path = host-mock/host-testbench/external/json
+[submodule "host-mock/external/json"]
+	path = host-mock/external/json
 	url = https://github.com/nlohmann/json.git

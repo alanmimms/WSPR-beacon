@@ -5,10 +5,12 @@
 #include "NetIntf.h"
 #include "NVSIntf.h"
 #include "Si5351Intf.h"
+#include "EventGroupIntf.h"
 #include "FileSystemIntf.h"
 #include "SettingsIntf.h"
+#include "TaskIntf.h"
+#include "TimerIntf.h"
 #include "WebServerIntf.h"
-// Add TimerIntf, TaskIntf, EventGroupIntf as you have them
 
 struct AppContext {
   LoggerIntf *logger;
@@ -19,7 +21,11 @@ struct AppContext {
   FileSystemIntf *fileSystem;
   SettingsIntf *settings;
   WebServerIntf *webServer;
-  // Add TimerIntf *timer, TaskIntf *task, EventGroupIntf *eventGroup as needed
+  TimerIntf *timer;
+  TaskIntf *task;
+  EventGroupIntf *eventGroup;
+
+  static constexpr int statusLEDGPIO = 8;
 
   AppContext();
   ~AppContext();

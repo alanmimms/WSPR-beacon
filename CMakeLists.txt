@@ -5,8 +5,14 @@ cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(beacon)
 
+# This builds either platform: target or host-mock based on IDF_TARGET
+#  environment variable.
+
+# Sources common to both platforms.
+add_subdirectory(src)
+
 # ESP32 build
-if(DEFINED ENV{IDF_TARGET} OR ESP_TARGET)
+if(DEFINED ENV{IDF_TARGET})
   add_subdirectory(target)
 else()
   add_subdirectory(host-mock)

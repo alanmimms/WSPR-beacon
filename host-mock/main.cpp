@@ -1,10 +1,8 @@
-#include "AppContext.h"
-#include "BeaconFSM.h"
+#include "test-server.h"
 #include <iostream>
 
-int main() {
-  AppContext ctx;
-  BeaconFSM fsm(&ctx);
-  fsm.run();
+int main(int argc, char **argv) {
+  std::cout << "Starting host test bench web server for WSPR beacon UI..." << std::endl;
+  startTestServer(8080);
   return 0;
 }

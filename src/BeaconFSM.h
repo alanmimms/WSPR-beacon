@@ -1,10 +1,6 @@
 #ifndef BEACONFSM_H
 #define BEACONFSM_H
 
-#include "WebServer.h"
-#include "esp_event.h"
-#include "esp_timer.h"
-#include "Settings.h"
 #include "AppContext.h"
 
 class BeaconFSM {
@@ -13,18 +9,10 @@ public:
   ~BeaconFSM();
 
   void run();
-
-  // Called by WebServer when settings are changed
   void onSettingsChanged();
-
-  // For testing or external control, allow canceling TX
   void cancelTransmit();
-
-  // SNTP/time sync support
   void syncTime();
   void periodicTimeSync();
-
-  // Returns true if allowed to transmit at 'now'
   bool canTransmitNow();
 
 private:
@@ -46,26 +34,22 @@ private:
   void handleTxEnd();
 
   void initHardware();
-  static void wifiEventHandler(void *arg, esp_event_base_t eventBase, int32_t eventId, void *eventData);
-
-  static void txDurationTimerCallback(void *arg);
-  static void txScheduleTimerCallback(void *arg);
-
+  void scheduleNextTransmit();
   void startTransmit();
   void endTransmit();
-  void scheduleNextTransmit();
+
+  void onTxDurationTimeout();
+  void onTxScheduleTimeout();
 
   State currentState;
-  WebServer *webServer;
-  Settings *settings;
-
-  esp_timer_handle_t txDurationTimer;
-  esp_timer_handle_t txScheduleTimer;
 
   bool txCanceled;
   bool txInProgress;
 
   AppContext *ctx;
+
+  TimerIntf *txDurationTimer;
+  TimerIntf *txScheduleTimer;
 };
 
 #endif // BEACONFSM_H

@@ -1,27 +1,28 @@
 #pragma once
 
-#include <stdint.h>
 #include <functional>
 
-/**
- * Abstract interface for task/thread creation and sleep/yield.
- * For host: can use std::thread or pthreads.
- * For target: wraps FreeRTOS tasks.
- */
 class TaskIntf {
 public:
+  class Task {
+  public:
+    virtual ~Task() {}
+  };
+
   virtual ~TaskIntf() {}
 
-  // Start a new task executing func(arg).
-  // Return true on success, false on failure.
-  virtual bool startTask(const char *name, std::function<void(void *)> func, void *arg, uint32_t stackSize = 4096, int priority = 5) = 0;
+  // Start a new task/thread, returns a Task object pointer
+  virtual Task *start(const char *name, void (*taskFunc)(void *), void *arg, int stackSize = 4096, int priority = 1) = 0;
 
-  // Sleep current task for ms milliseconds.
-  virtual void sleepMs(uint32_t ms) = 0;
+  // Overload to support std::function, if desired
+  virtual Task *start(const char *name, const std::function<void()> &func, int stackSize = 4096, int priority = 1) = 0;
 
-  // Yield the current task.
+  // Stop a running task
+  virtual void stop(Task *task) = 0;
+
+  // Yield to other tasks
   virtual void yield() = 0;
 
-  // Optionally: stop current task (terminate)
-  // virtual void stopTask() = 0;
+  // Destroy task object and release resources
+  virtual void destroy(Task *task) = 0;
 };
