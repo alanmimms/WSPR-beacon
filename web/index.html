@@ -12,7 +12,7 @@
       <h1>WSPR Beacon Status</h1>
       
       <!-- Current Status Section -->
-      <fieldset class="settings-zone status-zone collapsible-fieldset">
+      <fieldset class="settings-zone status-zone collapsible-fieldset" id="status-fieldset">
         <legend><span class="collapse-icon">▼</span>Current Status</legend>
         <div class="fieldset-content">
           <div class="status-grid">
@@ -40,6 +40,25 @@
             <label>Current Time (UTC)</label>
             <span id="current-time" class="clock-time">--:--:-- UTC</span>
           </div>
+          <div class="status-item inline">
+            <label>Network State</label>
+            <span id="network-state">Loading...</span>
+          </div>
+          <div class="status-item inline">
+            <label>Transmission State</label>
+            <span id="transmission-state">Loading...</span>
+          </div>
+          <div class="status-item inline">
+            <label>Next TX In</label>
+            <span id="next-tx-countdown">Loading...</span>
+          </div>
+          <div class="status-item inline">
+            <label>Total Transmissions</label>
+            <span id="tx-count">0</span>
+          </div>
+          </div>
+          <div id="transmission-indicator" class="transmission-indicator hidden">
+            [TRANSMITTING]
           </div>
         </div>
       </fieldset>

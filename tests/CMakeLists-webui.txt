@@ -1,0 +1,37 @@
+cmake_minimum_required(VERSION 3.16)
+project(WSPRBeaconWebUITest)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Include directories
+include_directories(../../include)
+include_directories(../../host-mock)
+include_directories(../../host-mock/external/json/include)
+include_directories(../../host-mock/external/cpp-httplib)
+
+# Source files for the components being tested
+set(SCHEDULER_SOURCES
+    ../../src/Scheduler.cpp
+    ../../src/FSM.cpp
+)
+
+# Mock implementations
+set(MOCK_SOURCES
+    ../../host-mock/MockTimer.cpp
+    ../../host-mock/Settings.cpp
+)
+
+# WebUI test executable
+add_executable(webui_test
+    ../WebUITest.cpp
+    ${SCHEDULER_SOURCES}
+    ${MOCK_SOURCES}
+)
+
+# Link pthread for threading support
+find_package(Threads REQUIRED)
+target_link_libraries(webui_test Threads::Threads)
+
+# Compiler flags
+target_compile_options(webui_test PRIVATE -Wall -Wextra)

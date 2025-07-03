@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <ctime>
 
 // Abstract timer interface and timer object for cross-platform use.
 
@@ -30,4 +31,7 @@ public:
 
   // Optional: sync time (e.g., SNTP)
   virtual void syncTime() = 0;
+  
+  // Get current time (for testing/mocking)
+  virtual time_t getCurrentTime() = 0;
 };

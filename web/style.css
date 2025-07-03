@@ -401,34 +401,48 @@ footer {
 }
 
 .schedule-hours {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+}
+
+.hour-group {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(3em, 1fr));
+  grid-template-columns: repeat(12, 1fr);
   gap: 0.3em;
 }
 
-.hour-checkbox {
+.hour-box {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 0.3em;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  justify-content: center;
+  padding: 0.5em 0.3em;
+  border: 2px solid #e5e9f0;
+  border-radius: 6px;
   font-size: 0.9em;
+  font-weight: 500;
   cursor: pointer;
   background: white;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+  min-height: 2.2em;
+  box-sizing: border-box;
 }
 
-.hour-checkbox:hover {
-  background: #f0f0f0;
+.hour-box:hover {
+  border-color: #2196f3;
+  background: #f3f9ff;
 }
 
-.hour-checkbox input[type="checkbox"] {
-  margin-bottom: 0.2em;
+.hour-box.selected {
+  background: #2196f3;
+  border-color: #1976d2;
+  color: white;
+  font-weight: 600;
 }
 
-.hour-checkbox input[type="checkbox"]:checked + * {
-  font-weight: bold;
+.hour-box.selected:hover {
+  background: #1976d2;
+  border-color: #1565c0;
 }
 
 /* Home Page Styles */
@@ -642,6 +656,62 @@ footer {
 
 .schedule-hour.active {
   background: #4CAF50;
+}
+
+/* Transmission indicator styles */
+.transmission-indicator {
+  background: #d32f2f;
+  color: white;
+  text-align: center;
+  padding: 8px;
+  margin-top: 10px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 1.1em;
+  letter-spacing: 1px;
+  animation: pulse-red 1s infinite;
+}
+
+.transmission-indicator.hidden {
+  display: none;
+}
+
+/* Transmitting state styling */
+.status-zone.transmitting {
+  border: 3px solid #d32f2f !important;
+  box-shadow: 0 0 10px rgba(211, 47, 47, 0.3);
+}
+
+.status-zone.transmitting .fieldset-content {
+  background: linear-gradient(135deg, #ffffff 0%, #ffebee 100%);
+}
+
+/* Pulse animation for transmission indicator */
+@keyframes pulse-red {
+  0% { 
+    background-color: #d32f2f;
+    box-shadow: 0 0 5px rgba(211, 47, 47, 0.7);
+  }
+  50% { 
+    background-color: #f44336;
+    box-shadow: 0 0 15px rgba(244, 67, 54, 0.9);
+  }
+  100% { 
+    background-color: #d32f2f;
+    box-shadow: 0 0 5px rgba(211, 47, 47, 0.7);
+  }
+}
+
+/* Live update indicators */
+.status-item.updating {
+  background: rgba(76, 175, 80, 0.1);
+  transition: background 0.3s ease;
+}
+
+.status-item span.changed {
+  color: #4CAF50;
+  font-weight: bold;
+  transition: color 0.5s ease, font-weight 0.5s ease;
 }
 
 @media (max-width: 700px) {

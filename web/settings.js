@@ -172,17 +172,40 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="band-schedule">
           <label>Active Hours (UTC):</label>
           <div class="schedule-hours" id="schedule-${bandName}">
-            ${Array.from({length: 24}, (_, hour) => `
-              <label class="hour-checkbox" title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
-                <input type="checkbox" value="${hour}" ${bandConfig.schedule.includes(hour) ? 'checked' : ''}>
-                ${hour.toString().padStart(2, '0')}
-              </label>
-            `).join('')}
+            <div class="hour-group">
+              ${Array.from({length: 12}, (_, hour) => `
+                <div class="hour-box ${bandConfig.schedule.includes(hour) ? 'selected' : ''}" 
+                     data-hour="${hour}" 
+                     title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
+                  ${hour.toString().padStart(2, '0')}
+                </div>
+              `).join('')}
+            </div>
+            <div class="hour-group">
+              ${Array.from({length: 12}, (_, i) => {
+                const hour = i + 12;
+                return `
+                  <div class="hour-box ${bandConfig.schedule.includes(hour) ? 'selected' : ''}" 
+                       data-hour="${hour}" 
+                       title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
+                    ${hour.toString().padStart(2, '0')}
+                  </div>
+                `;
+              }).join('')}
+            </div>
           </div>
         </div>
       `;
       
       container.appendChild(bandDiv);
+      
+      // Add click handlers for hour boxes
+      const hourBoxes = bandDiv.querySelectorAll('.hour-box');
+      hourBoxes.forEach(box => {
+        box.addEventListener('click', function() {
+          this.classList.toggle('selected');
+        });
+      });
     });
   }
   
@@ -194,8 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const enabled = document.getElementById(`band-${bandName}-enabled`).checked;
       const frequency = parseInt(document.getElementById(`band-${bandName}-freq`).value) || getDefaultFrequency(bandName);
       
-      const scheduleCheckboxes = document.querySelectorAll(`#schedule-${bandName} input[type="checkbox"]:checked`);
-      const schedule = Array.from(scheduleCheckboxes).map(cb => parseInt(cb.value));
+      const selectedHours = document.querySelectorAll(`#schedule-${bandName} .hour-box.selected`);
+      const schedule = Array.from(selectedHours).map(box => parseInt(box.dataset.hour));
       
       bands[bandName] = {
         enabled,

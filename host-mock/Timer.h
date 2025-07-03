@@ -39,6 +39,9 @@ public:
 
   // Optional: sync time (e.g., SNTP)
   void syncTime() override;
+  
+  // Get current time (returns system time for host-mock)
+  time_t getCurrentTime() override;
 
 private:
   std::mutex mutex_;

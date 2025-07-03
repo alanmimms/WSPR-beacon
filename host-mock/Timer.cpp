@@ -1,5 +1,6 @@
 #include "Timer.h"
 #include <iostream>
+#include <ctime>
 
 Timer::Timer() {}
 
@@ -85,4 +86,8 @@ void Timer::delayMs(int timeoutMs) {
 void Timer::syncTime() {
   // Mock implementation - just print a message
   std::cout << "Timer::syncTime() called (mock implementation)" << std::endl;
+}
+
+time_t Timer::getCurrentTime() {
+  return time(nullptr);
 }
