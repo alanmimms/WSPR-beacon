@@ -102,7 +102,7 @@ private:
             json status = {
                 {"callsign", settings.getString("callsign", "N0CALL")},
                 {"locator", settings.getString("locator", "AA00aa")},
-                {"powerDbm", settings.getInt("powerDbm", 20)},
+                {"powerDbm", settings.getInt("powerDbm", 10)},
                 {"currentBand", currentBand.name},
                 {"currentFrequency", currentBand.frequency},
                 {"networkState", fsm.getNetworkStateString()},

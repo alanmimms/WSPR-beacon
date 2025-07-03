@@ -22,22 +22,22 @@ set(MOCK_SOURCES
 )
 
 # Test executable
-add_executable(test_runner
-    TestRunner.cpp
+add_executable(test-runner
+    test-runner.cpp
     ${SCHEDULER_SOURCES}
     ${MOCK_SOURCES}
 )
 
 # Compiler flags
-target_compile_options(test_runner PRIVATE -Wall -Wextra)
+target_compile_options(test-runner PRIVATE -Wall -Wextra)
 
 # Optional: Enable debug symbols for testing
 set(CMAKE_BUILD_TYPE Debug)
 
 # Custom target to run tests
-add_custom_target(run_tests
-    COMMAND test_runner
-    DEPENDS test_runner
+add_custom_target(run-tests
+    COMMAND test-runner
+    DEPENDS test-runner
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Running WSPR Beacon component tests"
 )

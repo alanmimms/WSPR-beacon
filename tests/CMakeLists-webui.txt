@@ -23,15 +23,15 @@ set(MOCK_SOURCES
 )
 
 # WebUI test executable
-add_executable(webui_test
-    ../WebUITest.cpp
+add_executable(webui-test
+    ../webui-test.cpp
     ${SCHEDULER_SOURCES}
     ${MOCK_SOURCES}
 )
 
 # Link pthread for threading support
 find_package(Threads REQUIRED)
-target_link_libraries(webui_test Threads::Threads)
+target_link_libraries(webui-test Threads::Threads)
 
 # Compiler flags
-target_compile_options(webui_test PRIVATE -Wall -Wextra)
+target_compile_options(webui-test PRIVATE -Wall -Wextra)

@@ -1,6 +1,6 @@
-#include "SchedulerTest.cpp"
-#include "FSMTest.cpp" 
-#include "IntegratedTest.cpp"
+#include "scheduler-test.cpp"
+#include "fsm-test.cpp" 
+#include "integrated-test.cpp"
 #include <iostream>
 #include <stdexcept>
 

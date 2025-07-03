@@ -97,7 +97,7 @@ cd tests
 mkdir build && cd build
 cmake ..
 make
-./test_runner
+./test-runner
 ```
 
 **Output Example:**
@@ -124,8 +124,8 @@ cd tests
 mkdir webui-build && cd webui-build
 cp ../CMakeLists-webui.txt ./CMakeLists.txt
 cmake .
-make webui_test
-./webui_test
+make webui-test
+./webui-test
 ```
 
 Then open http://localhost:8080 in your browser.

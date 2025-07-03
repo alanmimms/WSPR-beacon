@@ -5,3 +5,34 @@ sdkconfig.old
 build/
 managed_components/
 server.log
+
+# CMake build artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Test build directories
+tests/build/
+tests/test-build/
+tests/webui-build/
+tests/webui-test/
+**/test-runner
+**/webui-test
+
+# Compiled objects and executables
+*.o
+*.so
+*.a
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
