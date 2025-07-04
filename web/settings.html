@@ -79,6 +79,14 @@
               <label for="tx-percent">Transmit %</label>
               <input type="number" id="tx-percent" name="txPercent" min="0" max="100" step="1" title="Percentage of time slots the beacon should transmit (0-100%)">
             </div>
+            <div class="form-row">
+              <label for="band-selection-mode">Band Selection</label>
+              <select id="band-selection-mode" name="bandSelectionMode" title="How bands are selected for each transmission">
+                <option value="sequential">Sequential (Single Band)</option>
+                <option value="roundRobin">Round Robin (Cycle Through)</option>
+                <option value="randomExhaustive">Random (Each Band Once)</option>
+              </select>
+            </div>
           </div>
         </fieldset>
         

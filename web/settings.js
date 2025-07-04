@@ -90,6 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('tx-percent').value = s.txPercent;
       }
       
+      // Load band selection mode
+      if (s.bandSelectionMode) {
+        document.getElementById('band-selection-mode').value = s.bandSelectionMode;
+      }
+      
       // Load band configurations
       if (s.bands) {
         loadBandConfiguration(s.bands);
@@ -118,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         locator: document.getElementById('locator').value,
         powerDbm: parseInt(powerDbmInput.value, 10) || 0,
         txPercent: parseInt(document.getElementById('tx-percent').value, 10) || 0,
+        bandSelectionMode: document.getElementById('band-selection-mode').value,
         bands: collectBandConfiguration()
       };
       // Send as JSON!

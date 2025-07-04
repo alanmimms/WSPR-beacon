@@ -3,6 +3,7 @@
   "locator": "AA00aa",
   "powerDbm": 23,
   "txPercent": 20,
+  "bandSelectionMode": "roundRobin",
   "hostname": "wspr-beacon",
   "currentBand": "20m",
   "wifiSsid": "MyHomeWiFi",

@@ -1,14 +1,24 @@
 #include "Beacon.h"
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#include <vector>
+#include <algorithm>
 
 Beacon::Beacon(AppContext* ctx)
     : ctx(ctx),
       fsm(),
       scheduler(ctx->timer, ctx->settings),
       running(false),
-      lastTimeSync(0)
-{}
+      lastTimeSync(0),
+      bandSelectionMode(BandSelectionMode::SEQUENTIAL),
+      currentBandIndex(0),
+      currentHour(-1)
+{
+    strcpy(currentBand, "20m");  // Default band
+    memset(usedBands, 0, sizeof(usedBands));
+}
 
 Beacon::~Beacon() {
     stop();
@@ -35,6 +45,9 @@ void Beacon::initialize() {
     if (ctx->logger) {
         ctx->logger->logInfo("Beacon initializing...");
     }
+    
+    // Initialize random number generator for band selection
+    srand(time(nullptr));
     
     initializeHardware();
     
@@ -137,13 +150,34 @@ void Beacon::onSettingsChanged() {
 }
 
 void Beacon::startTransmission() {
+    // Select the band for this transmission
+    selectNextBand();
+    
+    if (ctx->settings && ctx->si5351) {
+        // Get frequency for selected band
+        const char* freqKey = getBandFrequencyKey(currentBand);
+        uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);  // Default to 20m WSPR
+        
+        // Set the frequency on the Si5351
+        ctx->si5351->setFrequency(0, frequency);  // Clock 0
+        ctx->si5351->enableOutput(0, true);
+        
+        // Store current band in settings for status display
+        ctx->settings->setString("currentBand", currentBand);
+        ctx->settings->setInt("frequency", frequency);
+    }
+    
     if (ctx->logger && ctx->settings) {
         char logMsg[256];
-        snprintf(logMsg, sizeof(logMsg), "TX start: %s, %s, %ddBm, next in %ds",
+        const char* freqKey = getBandFrequencyKey(currentBand);
+        uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
+        
+        snprintf(logMsg, sizeof(logMsg), "TX start: %s, %s, %ddBm on %s (%.6f MHz)",
             ctx->settings->getString("callsign", "N0CALL"),
             ctx->settings->getString("locator", "AA00aa"), 
             ctx->settings->getInt("powerDbm", 10),
-            scheduler.getSecondsUntilNextTransmission()
+            currentBand,
+            frequency / 1000000.0
         );
         ctx->logger->logInfo(logMsg);
     }
@@ -151,18 +185,22 @@ void Beacon::startTransmission() {
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true);
     }
-    
 }
 
 void Beacon::endTransmission() {
     if (ctx->logger) {
-        ctx->logger->logInfo("TX end");
+        char logMsg[128];
+        snprintf(logMsg, sizeof(logMsg), "TX end on %s", currentBand);
+        ctx->logger->logInfo(logMsg);
+    }
+    
+    if (ctx->si5351) {
+        ctx->si5351->enableOutput(0, false);  // Disable clock 0
     }
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, false);
     }
-    
 }
 
 void Beacon::syncTime() {
@@ -220,4 +258,148 @@ void Beacon::startAccessPoint() {
     if (ctx->net) {
         ctx->net->startServer(80);
     }
+}
+
+// Band selection implementation
+void Beacon::selectNextBand() {
+    if (!ctx->settings) return;
+    
+    // Get current UTC hour
+    time_t now = time(nullptr);
+    struct tm* utc = gmtime(&now);
+    int hour = utc->tm_hour;
+    
+    // Check if hour has changed - reset tracking if needed
+    if (hour != currentHour) {
+        currentHour = hour;
+        resetBandTracking();
+    }
+    
+    // Get band selection mode from settings
+    const char* modeStr = ctx->settings->getString("bandSelectionMode", "sequential");
+    if (strcmp(modeStr, "roundRobin") == 0) {
+        bandSelectionMode = BandSelectionMode::ROUND_ROBIN;
+    } else if (strcmp(modeStr, "randomExhaustive") == 0) {
+        bandSelectionMode = BandSelectionMode::RANDOM_EXHAUSTIVE;
+    } else {
+        bandSelectionMode = BandSelectionMode::SEQUENTIAL;
+    }
+    
+    // Get list of enabled bands for current hour
+    std::vector<int> enabledBandIndices;
+    for (int i = 0; i < 9; i++) {
+        if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
+            enabledBandIndices.push_back(i);
+        }
+    }
+    
+    if (enabledBandIndices.empty()) {
+        // No bands enabled for this hour
+        return;
+    }
+    
+    int selectedIndex = -1;
+    
+    switch (bandSelectionMode) {
+        case BandSelectionMode::SEQUENTIAL:
+            // Always use the first enabled band
+            selectedIndex = enabledBandIndices[0];
+            break;
+            
+        case BandSelectionMode::ROUND_ROBIN:
+            // Find current band in enabled list and move to next
+            {
+                auto it = std::find(enabledBandIndices.begin(), enabledBandIndices.end(), currentBandIndex);
+                if (it != enabledBandIndices.end()) {
+                    // Move to next band
+                    ++it;
+                    if (it == enabledBandIndices.end()) {
+                        it = enabledBandIndices.begin();  // Wrap around
+                    }
+                    selectedIndex = *it;
+                } else {
+                    // Current band not in enabled list, start from beginning
+                    selectedIndex = enabledBandIndices[0];
+                }
+            }
+            break;
+            
+        case BandSelectionMode::RANDOM_EXHAUSTIVE:
+            // Select randomly from unused bands
+            {
+                std::vector<int> unusedEnabledBands;
+                for (int idx : enabledBandIndices) {
+                    if (!usedBands[idx]) {
+                        unusedEnabledBands.push_back(idx);
+                    }
+                }
+                
+                if (unusedEnabledBands.empty()) {
+                    // All bands used, reset and select from all enabled
+                    resetBandTracking();
+                    unusedEnabledBands = enabledBandIndices;
+                }
+                
+                // Random selection
+                int randomIdx = rand() % unusedEnabledBands.size();
+                selectedIndex = unusedEnabledBands[randomIdx];
+                usedBands[selectedIndex] = true;
+            }
+            break;
+    }
+    
+    if (selectedIndex >= 0 && selectedIndex < 9) {
+        currentBandIndex = selectedIndex;
+        strcpy(currentBand, BAND_NAMES[selectedIndex]);
+        
+        // Log band selection
+        if (ctx->logger) {
+            char logMsg[128];
+            snprintf(logMsg, sizeof(logMsg), "Selected band: %s", currentBand);
+            ctx->logger->logInfo(logMsg);
+        }
+    }
+}
+
+bool Beacon::isBandEnabledForCurrentHour(const char* band) {
+    if (!ctx->settings || !band) return false;
+    
+    // Build key for band enabled state
+    char key[32];
+    snprintf(key, sizeof(key), "bands.%s.enabled", band);
+    if (ctx->settings->getInt(key, 0) == 0) {  // 0 = false, 1 = true
+        return false;
+    }
+    
+    // Check if band is scheduled for current hour
+    snprintf(key, sizeof(key), "bands.%s.schedule", band);
+    
+    // Get current UTC hour
+    time_t now = time(nullptr);
+    struct tm* utc = gmtime(&now);
+    int hour = utc->tm_hour;
+    
+    // TODO: Parse schedule array from JSON settings
+    // For now, assume all enabled bands are active all hours
+    return true;
+}
+
+void Beacon::resetBandTracking() {
+    memset(usedBands, 0, sizeof(usedBands));
+}
+
+int Beacon::getEnabledBandCount() {
+    int count = 0;
+    for (int i = 0; i < 9; i++) {
+        if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
+            count++;
+        }
+    }
+    return count;
+}
+
+const char* Beacon::getBandFrequencyKey(const char* band) {
+    static char key[64];
+    snprintf(key, sizeof(key), "bands.%s.frequency", band);
+    return key;
 }
