@@ -13,10 +13,39 @@ number of interactions.
 
 I'm continuing my AI journey with [Claude
 Code](https://www.anthropic.com/claude-code), which is _much_ closer
-to the model I want to use in my daily work.
+to the model I use in my daily work.
 
 This beacon project can be built two ways, with the possibility of
 adding more in the future because of some interface abstraction.
+
+# Features and Requirements
+The web user interface must be responsive so it adapts to screen size,
+whether desktop, phone, or table browser.
+
+There is a persistent header on each web page presented by the Beacon.
+This lists:
+
+* The call sign being used.
+
+* Indicator of the beacon's current state: active, idle, error,
+  config. When the beacon is active, the beacon's current transmit
+  frequency is shown.
+
+* The current time in UTC, which is updated every second in the
+  browser view and kept in sync with the Beacon's time of day, which
+  itself is kept in sync by period requests to Internet NTP servers.
+  
+There is a persistent navigation bar on the left side of the display
+that shows a set of buttons to switch between the various pages the
+Beacon provides for configuration and status.
+
+# Structure of the Code
+The code is organized into a `target-esp32` subtree for the target
+microcontroller, a `host-mock` subtree for testing the components of
+the beacon using the host and mocked interfaces that can operate
+without a micrcontroller, and a `src` subtree for the application code
+that is common across these two targets. The name `target-esp32` was
+chosen to allow for future targeting to other platforms.
 
 ## Build Options
 

@@ -19,27 +19,27 @@ add_subdirectory(external/json)
 include_directories(${CMAKE_CURRENT_LIST_DIR}/external/cpp-httplib)
 
 add_executable(host-testbench
-  main.cpp
-  test-server.cpp
-  test-server.h
-  AppContext.cpp
-  FileSystem.cpp
-  GPIO.cpp
-  Logger.cpp
-  Net.cpp
-  NVS.cpp
-  Settings.cpp
-  Si5351.cpp
-  WebServer.cpp
-  Timer.cpp
-  Task.cpp
-  EventGroup.cpp
-  Time.cpp
+  ../platform/host-mock/main.cpp
+  ../platform/host-mock/test-server.cpp
+  ../platform/host-mock/AppContext.cpp
+  ../platform/host-mock/FileSystem.cpp
+  ../platform/host-mock/GPIO.cpp
+  ../platform/host-mock/Logger.cpp
+  ../platform/host-mock/Net.cpp
+  ../platform/host-mock/NVS.cpp
+  ../platform/host-mock/Settings.cpp
+  ../platform/host-mock/Si5351.cpp
+  ../platform/host-mock/WebServer.cpp
+  ../platform/host-mock/Timer.cpp
+  ../platform/host-mock/Task.cpp
+  ../platform/host-mock/EventGroup.cpp
+  ../platform/host-mock/Time.cpp
 )
 
 target_include_directories(host-testbench PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../include
   ${CMAKE_CURRENT_LIST_DIR}/../src
+  ${CMAKE_CURRENT_LIST_DIR}/../platform/host-mock
   ${CMAKE_CURRENT_LIST_DIR}/external/cpp-httplib
 )
 

@@ -1,8 +1,8 @@
 #include "AppContext.h"
-#include "BeaconFSM.h"
+#include "Beacon.h"
 
 extern "C" void app_main(void) {
   static AppContext ctx;
-  BeaconFSM fsm(&ctx);
-  fsm.run();
+  Beacon beacon(&ctx);
+  beacon.run();
 }

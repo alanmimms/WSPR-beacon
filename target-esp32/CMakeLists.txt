@@ -2,24 +2,24 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
-set(EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/target/components")
+set(EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/target-esp32/components")
 
 idf_component_register(
   SRCS
-    main.cpp
-    AppContext.cpp
-    FileSystem.cpp
-    GPIO.cpp
-    Logger.cpp
-    Net.cpp
-    NVS.cpp
-    Settings.cpp
-    Si5351.cpp
-    WebServer.cpp
-    Timer.cpp
-    Task.cpp
-    EventGroup.cpp
-    Time.cpp
+    ../platform/esp32/main.cpp
+    ../platform/esp32/AppContext.cpp
+    ../platform/esp32/FileSystem.cpp
+    ../platform/esp32/GPIO.cpp
+    ../platform/esp32/Logger.cpp
+    ../platform/esp32/Net.cpp
+    ../platform/esp32/NVS.cpp
+    ../platform/esp32/Settings.cpp
+    ../platform/esp32/Si5351.cpp
+    ../platform/esp32/WebServer.cpp
+    ../platform/esp32/Timer.cpp
+    ../platform/esp32/Task.cpp
+    ../platform/esp32/EventGroup.cpp
+    ../platform/esp32/Time.cpp
   REQUIRES 
     cxx
     # ESP-IDF Framework Components
@@ -46,6 +46,7 @@ idf_component_register(
   INCLUDE_DIRS 
     "."
     "../include"
+    "../platform/esp32"
 )
 
 # This is the command that handles the web assets.
