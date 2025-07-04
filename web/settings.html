@@ -26,6 +26,20 @@
     </div>
   </header>
   
+  <!-- Secondary Header for Settings Page -->
+  <div class="secondary-header" id="settings-secondary-header">
+    <div class="secondary-header-content">
+      <div class="settings-status">
+        <span id="settings-status-text">Settings unchanged</span>
+      </div>
+      <div class="settings-actions">
+        <button type="button" id="save-settings-btn" class="save-settings-btn" disabled>
+          Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+  
   <div class="layout-container">
     <div id="nav-container"></div>
     <main>
@@ -132,7 +146,6 @@
         </fieldset>
         
         <div class="form-actions">
-          <button type="submit" id="submit-btn">Save Settings</button>
           <span id="status-message"></span>
         </div>
       </form>

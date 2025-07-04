@@ -23,9 +23,83 @@ body {
   justify-content: space-between;
   font-size: 14px;
   font-weight: 500;
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 300;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Secondary Header for Settings Page */
+.secondary-header {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  position: sticky;
+  top: 58px;
+  z-index: 250;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.secondary-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 600px;
+}
+
+.settings-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #666;
+  font-weight: 500;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.save-settings-btn {
+  background: #388e3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.save-settings-btn:hover:not(:disabled) {
+  background: #2e7d32;
+}
+
+.save-settings-btn:disabled {
+  background: #ccc;
+  color: #888;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.settings-status.modified {
+  color: #f57c00;
+  font-weight: 600;
+}
+
+.settings-status.modified::before {
+  content: "●";
+  color: #f57c00;
+  margin-right: 4px;
 }
 
 .header-left {
@@ -433,6 +507,23 @@ h1 {
   cursor: not-allowed;
 }
 
+.back-to-dropdown-btn {
+  background: #388e3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5em;
+  font-size: 1.1em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  min-width: 2.5em;
+}
+
+.back-to-dropdown-btn:hover {
+  background: #2e7d32;
+}
+
 .form-row select {
   flex: 1;
   padding: 0.5em 0.7em;
@@ -590,6 +681,40 @@ h1 {
   border-radius: 8px;
   padding: 1em;
   background: white;
+  transition: all 0.3s ease;
+}
+
+.band-config-item.collapsed {
+  padding-bottom: 0.5em;
+}
+
+.band-config-item.collapsed .band-details {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  margin-top: 0;
+  transition: all 0.3s ease;
+}
+
+.band-details {
+  margin-top: 1em;
+  transition: all 0.3s ease;
+}
+
+.band-collapse-toggle {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  margin-left: 8px;
+  transition: transform 0.3s ease;
+  user-select: none;
+}
+
+.band-config-item.collapsed .band-collapse-toggle {
+  transform: rotate(-90deg);
 }
 
 .band-header {

@@ -1,5 +1,9 @@
 // Settings page logic for auto-updating power mW <-> dBm and loading/saving settings
 
+// Settings tracking for secondary header
+let originalSettings = {};
+let currentSettings = {};
+
 // Conversion helpers
 function mwToDbm(mw) {
   if (!mw || mw <= 0) return 0;
@@ -8,6 +12,104 @@ function mwToDbm(mw) {
 
 function dbmToMw(dbm) {
   return Math.round(Math.pow(10, (dbm / 10)));
+}
+
+// Settings change tracking functions
+function captureCurrentSettings() {
+  const wifiMode = document.getElementById('wifi-mode')?.value || '';
+  const ssidSelect = document.getElementById('wifi-ssid-select');
+  const ssidInput = document.getElementById('wifi-ssid-sta');
+  
+  let ssid = '';
+  if (wifiMode === 'sta' && ssidSelect && ssidInput) {
+    if (ssidInput.style.display === 'block') {
+      ssid = ssidInput.value || '';
+    } else {
+      const selectedValue = ssidSelect.value;
+      if (selectedValue && selectedValue !== '__custom__') {
+        ssid = selectedValue;
+      } else {
+        ssid = ssidInput.value || '';
+      }
+    }
+  }
+  
+  return {
+    wifiMode: wifiMode,
+    ssid: ssid,
+    wifiPassword: wifiMode === 'sta' ? (document.getElementById('wifi-password-sta')?.value || '') : '',
+    ssidAp: wifiMode === 'ap' ? (document.getElementById('wifi-ssid-ap')?.value || '') : '',
+    wifiPasswordAp: wifiMode === 'ap' ? (document.getElementById('wifi-password-ap')?.value || '') : '',
+    hostname: document.getElementById('hostname')?.value || '',
+    callsign: document.getElementById('callsign')?.value || '',
+    locator: document.getElementById('locator')?.value || '',
+    powerDbm: document.getElementById('power-dbm')?.value || '',
+    txPercent: document.getElementById('tx-percent')?.value || '',
+    bandSelectionMode: document.getElementById('band-selection-mode')?.value || '',
+    bands: (typeof collectBandConfiguration === 'function') ? collectBandConfiguration() : {}
+  };
+}
+
+function settingsChanged() {
+  currentSettings = captureCurrentSettings();
+  
+  // Compare with original settings
+  const changed = JSON.stringify(originalSettings) !== JSON.stringify(currentSettings);
+  
+  // Update secondary header
+  const statusText = document.getElementById('settings-status-text');
+  const statusContainer = document.querySelector('.settings-status');
+  const saveBtn = document.getElementById('save-settings-btn');
+  
+  if (statusText && statusContainer && saveBtn) {
+    if (changed) {
+      statusText.textContent = 'Settings modified';
+      statusContainer.classList.add('modified');
+      saveBtn.disabled = false;
+    } else {
+      statusText.textContent = 'Settings unchanged';
+      statusContainer.classList.remove('modified');
+      saveBtn.disabled = true;
+    }
+  }
+}
+
+function attachSettingsChangeListeners() {
+  // Use event delegation for comprehensive coverage of all form elements
+  document.addEventListener('input', (event) => {
+    if (event.target.closest('#settings-form')) {
+      settingsChanged();
+    }
+  });
+  
+  document.addEventListener('change', (event) => {
+    if (event.target.closest('#settings-form')) {
+      settingsChanged();
+    }
+  });
+  
+  // Monitor hour box clicks for band configuration
+  document.addEventListener('click', (event) => {
+    if (event.target.classList.contains('hour-box')) {
+      setTimeout(settingsChanged, 10); // Small delay to let the class change take effect
+    }
+  });
+  
+  // Monitor power field synchronization (when one updates the other)
+  const powerMwInput = document.getElementById('power-mw');
+  const powerDbmInput = document.getElementById('power-dbm');
+  
+  if (powerMwInput) {
+    powerMwInput.addEventListener('input', () => {
+      setTimeout(settingsChanged, 10); // Small delay for conversion
+    });
+  }
+  
+  if (powerDbmInput) {
+    powerDbmInput.addEventListener('input', () => {
+      setTimeout(settingsChanged, 10); // Small delay for conversion
+    });
+  }
 }
 
 // Collapsible fieldsets functionality
@@ -52,7 +154,13 @@ function initializeWifiModeHandling() {
   }
   
   // Handle mode changes
-  wifiModeSelect.addEventListener('change', updateWifiModeUI);
+  wifiModeSelect.addEventListener('change', () => {
+    updateWifiModeUI();
+    // Trigger settings change detection
+    if (typeof settingsChanged === 'function') {
+      settingsChanged();
+    }
+  });
   
   // Handle scan button
   scanBtn.addEventListener('click', async () => {
@@ -99,38 +207,83 @@ function initializeWifiModeHandling() {
       // Show text input for custom SSID
       ssidSelect.style.display = 'none';
       ssidInput.style.display = 'block';
+      ssidInput.value = '';  // Clear any previous value
       ssidInput.focus();
     } else {
       // Use selected network SSID
       ssidInput.value = selectedValue;
-    }
-  });
-  
-  // Handle custom SSID input (allow switching back to dropdown)
-  ssidInput.addEventListener('blur', () => {
-    // If the input is empty, switch back to dropdown
-    if (!ssidInput.value.trim()) {
-      ssidInput.style.display = 'none';
+      // Keep dropdown visible and input hidden
       ssidSelect.style.display = 'block';
-      ssidSelect.value = '';
+      ssidInput.style.display = 'none';
+    }
+    // Trigger settings change detection
+    if (typeof settingsChanged === 'function') {
+      settingsChanged();
     }
   });
   
-  // Add click handler to switch back to dropdown when clicking outside
-  document.addEventListener('click', (event) => {
-    const clickedInside = ssidInput.contains(event.target) || ssidSelect.contains(event.target) || event.target === ssidInput || event.target === ssidSelect;
-    if (!clickedInside) {
-      // If custom input is visible and has no value, switch back
-      if (ssidInput.style.display === 'block' && !ssidInput.value.trim()) {
-        ssidInput.style.display = 'none';
-        ssidSelect.style.display = 'block';
-        ssidSelect.value = '';
+  // Add button to switch back to dropdown from custom input
+  const backToDropdownBtn = document.createElement('button');
+  backToDropdownBtn.type = 'button';
+  backToDropdownBtn.textContent = '↺';
+  backToDropdownBtn.className = 'back-to-dropdown-btn';
+  backToDropdownBtn.title = 'Switch back to network list';
+  backToDropdownBtn.style.display = 'none';
+  
+  // Insert the button after the text input
+  ssidInput.parentNode.insertBefore(backToDropdownBtn, scanBtn);
+  
+  // Handle click on back button
+  backToDropdownBtn.addEventListener('click', () => {
+    // Always switch back to dropdown, preserving current input value
+    const currentValue = ssidInput.value.trim();
+    ssidInput.style.display = 'none';
+    backToDropdownBtn.style.display = 'none';
+    ssidSelect.style.display = 'block';
+    
+    // Try to find current value in dropdown options
+    let foundMatch = false;
+    for (let option of ssidSelect.options) {
+      if (option.value === currentValue) {
+        ssidSelect.value = currentValue;
+        foundMatch = true;
+        break;
       }
     }
+    
+    // If no match found, add current value as a temporary option
+    if (currentValue && !foundMatch) {
+      const tempOption = document.createElement('option');
+      tempOption.value = currentValue;
+      tempOption.textContent = `${currentValue} (entered)`;
+      ssidSelect.insertBefore(tempOption, ssidSelect.children[1]);
+      ssidSelect.value = currentValue;
+    } else if (!currentValue) {
+      ssidSelect.value = '';  // Reset to default
+    }
+    
+    // Trigger settings change detection
+    if (typeof settingsChanged === 'function') {
+      settingsChanged();
+    }
   });
+  
+  // Show back button when in custom input mode
+  function updateCustomInputUI() {
+    if (ssidInput.style.display === 'block') {
+      backToDropdownBtn.style.display = 'inline-block';
+    } else {
+      backToDropdownBtn.style.display = 'none';
+    }
+  }
+  
+  // Update UI when switching to custom mode
+  const originalChangeHandler = ssidSelect.onchange;
+  ssidSelect.addEventListener('change', updateCustomInputUI);
   
   // Initialize mode display
   updateWifiModeUI();
+  updateCustomInputUI();
 }
 
 function populateNetworkList(networks) {
@@ -320,81 +473,104 @@ document.addEventListener('DOMContentLoaded', () => {
       if (s.bands) {
         loadBandConfiguration(s.bands);
       }
+      
+      // Capture original settings after loading (with a small delay to ensure everything is ready)
+      setTimeout(() => {
+        originalSettings = captureCurrentSettings();
+        settingsChanged(); // Update secondary header state
+      }, 100);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
   }
   loadSettings();
+  
+  // Initialize settings change tracking
+  attachSettingsChangeListeners();
+  
+  // Save settings function
+  async function saveSettings() {
+    const statusMessage = document.getElementById('status-message');
+    const saveBtn = document.getElementById('save-settings-btn');
+    
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
 
-  // Intercept form submit to send JSON (not URL-encoded!) to backend
+    const wifiMode = document.getElementById('wifi-mode').value;
+    const powerDbmInput = document.getElementById('power-dbm');
+    const data = {
+      wifiMode: wifiMode,
+      host: document.getElementById('hostname').value,
+      call: document.getElementById('callsign').value,
+      loc: document.getElementById('locator').value,
+      pwr: parseInt(powerDbmInput.value, 10) || 0,
+      txPct: parseInt(document.getElementById('tx-percent').value, 10) || 0,
+      bandMode: document.getElementById('band-selection-mode').value,
+      bands: collectBandConfiguration()
+    };
+    
+    // Add WiFi settings based on mode
+    if (wifiMode === 'sta') {
+      const ssidSelect = document.getElementById('wifi-ssid-select');
+      const ssidInput = document.getElementById('wifi-ssid-sta');
+      
+      let ssid = '';
+      if (ssidInput.style.display === 'block') {
+        ssid = ssidInput.value;
+      } else {
+        const selectedValue = ssidSelect.value;
+        if (selectedValue && selectedValue !== '__custom__') {
+          ssid = selectedValue;
+        } else {
+          ssid = ssidInput.value;
+        }
+      }
+      
+      data.ssid = ssid;
+      data.pwd = document.getElementById('wifi-password-sta').value;
+    } else {
+      data.ssidAp = document.getElementById('wifi-ssid-ap').value;
+      data.pwdAp = document.getElementById('wifi-password-ap').value;
+    }
+    
+    try {
+      const resp = await fetch('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (resp.ok) {
+        if (statusMessage) statusMessage.textContent = 'Settings saved!';
+        setTimeout(() => { if (statusMessage) statusMessage.textContent = ''; }, 3200);
+        
+        // Update original settings and reset status
+        originalSettings = captureCurrentSettings();
+        settingsChanged();
+      } else {
+        if (statusMessage) statusMessage.textContent = 'Failed to save settings.';
+      }
+    } catch {
+      if (statusMessage) statusMessage.textContent = 'Error saving settings.';
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Settings';
+    }
+  }
+
+  // Handle save button in secondary header
+  const saveSettingsBtn = document.getElementById('save-settings-btn');
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', async () => {
+      await saveSettings();
+    });
+  }
+
+  // Intercept form submit to use the new save function
   const form = document.getElementById('settings-form');
   if (form) {
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const statusMessage = document.getElementById('status-message');
-      const submitBtn = document.getElementById('submit-btn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Saving...';
-
-      const wifiMode = document.getElementById('wifi-mode').value;
-      const data = {
-        wifiMode: wifiMode,
-        host: document.getElementById('hostname').value,
-        call: document.getElementById('callsign').value,
-        loc: document.getElementById('locator').value,
-        pwr: parseInt(powerDbmInput.value, 10) || 0,
-        txPct: parseInt(document.getElementById('tx-percent').value, 10) || 0,
-        bandMode: document.getElementById('band-selection-mode').value,
-        bands: collectBandConfiguration()
-      };
-      
-      // Add WiFi settings based on mode
-      if (wifiMode === 'sta') {
-        // Get SSID from either dropdown or custom input
-        const ssidSelect = document.getElementById('wifi-ssid-select');
-        const ssidInput = document.getElementById('wifi-ssid-sta');
-        
-        let ssid = '';
-        if (ssidInput.style.display === 'block') {
-          // Custom input is visible, use its value
-          ssid = ssidInput.value;
-        } else {
-          // Dropdown is visible
-          const selectedValue = ssidSelect.value;
-          if (selectedValue && selectedValue !== '__custom__') {
-            // Use selected network from dropdown
-            ssid = selectedValue;
-          } else {
-            // No selection or custom selected, use hidden input value
-            ssid = ssidInput.value;
-          }
-        }
-        
-        data.ssid = ssid;
-        data.pwd = document.getElementById('wifi-password-sta').value;
-      } else {
-        data.ssidAp = document.getElementById('wifi-ssid-ap').value;
-        data.pwdAp = document.getElementById('wifi-password-ap').value;
-      }
-      // Send as JSON!
-      try {
-        const resp = await fetch('/api/settings', {
-          method: 'POST',
-          body: JSON.stringify(data),
-          headers: { 'Content-Type': 'application/json' }
-        });
-        if (resp.ok) {
-          if (statusMessage) statusMessage.textContent = 'Settings saved!';
-          setTimeout(() => { statusMessage.textContent = ''; }, 3200);
-        } else {
-          if (statusMessage) statusMessage.textContent = 'Failed to save settings.';
-        }
-      } catch {
-        if (statusMessage) statusMessage.textContent = 'Error saving settings.';
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Save Settings';
-      }
+      await saveSettings();
     });
   }
 
@@ -419,35 +595,38 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="band-enable">
             <input type="checkbox" id="band-${bandName}-enabled" ${bandConfig.en ? 'checked' : ''} title="Enable transmissions on the ${bandName} band">
             <strong>${bandName}</strong>
+            <button type="button" class="band-collapse-toggle" title="Expand/collapse band configuration">▼</button>
           </label>
           <div class="band-frequency">
             <label for="band-${bandName}-freq">Frequency (Hz):</label>
             <input type="number" id="band-${bandName}-freq" value="${bandConfig.freq}" min="1000000" max="30000000" step="1" title="Transmit frequency in Hz for ${bandName} band (override WSPR default if needed)">
           </div>
         </div>
-        <div class="band-schedule">
-          <label>Active Hours (UTC):</label>
-          <div class="schedule-hours" id="schedule-${bandName}">
-            <div class="hour-group">
-              ${Array.from({length: 12}, (_, hour) => `
-                <div class="hour-box ${bandConfig.sched.includes(hour) ? 'selected' : ''}" 
-                     data-hour="${hour}" 
-                     title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
-                  ${hour.toString().padStart(2, '0')}
-                </div>
-              `).join('')}
-            </div>
-            <div class="hour-group">
-              ${Array.from({length: 12}, (_, i) => {
-                const hour = i + 12;
-                return `
+        <div class="band-details">
+          <div class="band-schedule">
+            <label>Active Hours (UTC):</label>
+            <div class="schedule-hours" id="schedule-${bandName}">
+              <div class="hour-group">
+                ${Array.from({length: 12}, (_, hour) => `
                   <div class="hour-box ${bandConfig.sched.includes(hour) ? 'selected' : ''}" 
                        data-hour="${hour}" 
                        title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
                     ${hour.toString().padStart(2, '0')}
                   </div>
-                `;
-              }).join('')}
+                `).join('')}
+              </div>
+              <div class="hour-group">
+                ${Array.from({length: 12}, (_, i) => {
+                  const hour = i + 12;
+                  return `
+                    <div class="hour-box ${bandConfig.sched.includes(hour) ? 'selected' : ''}" 
+                         data-hour="${hour}" 
+                         title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
+                      ${hour.toString().padStart(2, '0')}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
             </div>
           </div>
         </div>
@@ -462,6 +641,16 @@ document.addEventListener('DOMContentLoaded', () => {
           this.classList.toggle('selected');
         });
       });
+      
+      // Add collapse toggle functionality
+      const collapseToggle = bandDiv.querySelector('.band-collapse-toggle');
+      if (collapseToggle) {
+        collapseToggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          bandDiv.classList.toggle('collapsed');
+        });
+      }
     });
   }
   
