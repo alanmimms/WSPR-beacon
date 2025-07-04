@@ -25,19 +25,42 @@ whether desktop, phone, or table browser.
 There is a persistent header on each web page presented by the Beacon.
 This lists:
 
-* The call sign being used.
+* The call sign, grid square, and transmit power (in both dBm and
+  watts) being used.
 
-* Indicator of the beacon's current state: active, idle, error,
-  config. When the beacon is active, the beacon's current transmit
-  frequency is shown.
+* Centered in the header, an indicator of the beacon's current state:
+  active, idle, error, config. When the beacon is active, the beacon's
+  current transmit frequency is shown.
 
 * The current time in UTC, which is updated every second in the
   browser view and kept in sync with the Beacon's time of day, which
   itself is kept in sync by period requests to Internet NTP servers.
   
+There is a persistent footer at the bottom of each web page that shows
+
+* The node name of the beacon on the Wi-Fi network.
+
+* The time/date of the last beacon reset in UTC.
+
+* The time (in minutes and seconds) until the next transmission and
+  the frequency that transmission will use.
+
+* The number of transmissions since last reset.
+  
 There is a persistent navigation bar on the left side of the display
 that shows a set of buttons to switch between the various pages the
 Beacon provides for configuration and status.
+
+## Mock for Testing
+The Beacon's code can be built to run on a host Linux machine with
+"mock" functions for the hardware components of the beacon like
+Si5351, the various target microcontroller functions like
+non-voltatile storage, etc. This allows a lot of testing and playing
+around with the UI without having to flash each time onto the
+microcontroller, and it provides a way to do much more automated
+testing of the software than running on the target would easily
+accomplish.
+
 
 # Structure of the Code
 The code is organized into a `target-esp32` subtree for the target

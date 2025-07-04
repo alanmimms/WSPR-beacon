@@ -4,65 +4,30 @@
   <meta charset="UTF-8">
   <title>WSPR Beacon - Home</title>
   <link rel="stylesheet" href="style.css">
+  <script src="header.js"></script>
 </head>
 <body data-page="home">
+  <!-- Persistent Header -->
+  <header class="persistent-header">
+    <div class="header-left">
+      <span class="header-callsign" id="header-callsign">N0CALL</span>
+      <span class="header-locator" id="header-locator">AA00aa</span>
+      <span class="header-power" id="header-power">10dBm (10mW)</span>
+    </div>
+    <div class="header-center">
+      <span class="header-state" id="header-state">idle</span>
+      <span class="header-frequency" id="header-frequency"></span>
+    </div>
+    <div class="header-right">
+      <span class="header-time" id="header-time">--:--:-- UTC</span>
+    </div>
+  </header>
+  
   <div class="layout-container">
     <div id="nav-container"></div>
     <main>
       <h1>WSPR Beacon Status</h1>
       
-      <!-- Current Status Section -->
-      <fieldset class="settings-zone status-zone collapsible-fieldset" id="status-fieldset">
-        <legend><span class="collapse-icon">▼</span>Current Status</legend>
-        <div class="fieldset-content">
-          <div class="status-grid">
-          <div class="status-item inline">
-            <label>Callsign</label>
-            <span id="current-callsign">Loading...</span>
-          </div>
-          <div class="status-item inline">
-            <label>Grid Locator</label>
-            <span id="current-locator">Loading...</span>
-          </div>
-          <div class="status-item inline">
-            <label>Power</label>
-            <span id="current-power">Loading...</span>
-          </div>
-          <div class="status-item inline">
-            <label>Current Band</label>
-            <span id="current-band">Loading...</span>
-          </div>
-          <div class="status-item time-item">
-            <label>Last Reset (UTC)</label>
-            <span id="last-reset" class="clock-time">Loading...</span>
-          </div>
-          <div class="status-item time-item">
-            <label>Current Time (UTC)</label>
-            <span id="current-time" class="clock-time">--:--:-- UTC</span>
-          </div>
-          <div class="status-item inline">
-            <label>Network State</label>
-            <span id="network-state">Loading...</span>
-          </div>
-          <div class="status-item inline">
-            <label>Transmission State</label>
-            <span id="transmission-state">Loading...</span>
-          </div>
-          <div class="status-item inline">
-            <label>Next TX In</label>
-            <span id="next-tx-countdown">Loading...</span>
-          </div>
-          <div class="status-item inline">
-            <label>Total Transmissions</label>
-            <span id="tx-count">0</span>
-          </div>
-          </div>
-          <div id="transmission-indicator" class="transmission-indicator hidden">
-            [TRANSMITTING]
-          </div>
-        </div>
-      </fieldset>
-
       <!-- Transmission Statistics -->
       <fieldset class="settings-zone stats-zone collapsible-fieldset">
         <legend><span class="collapse-icon">▼</span>Transmission Statistics</legend>
@@ -90,9 +55,24 @@
 
     </main>
   </div>
-  <footer>
-    <div id="callsign-div">Callsign: <span id="callsign-span">?</span></div>
-    <div id="hostname-div">Hostname: <span id="hostname-span">?</span></div>
+  <!-- Persistent Footer -->
+  <footer class="persistent-footer">
+    <div class="footer-item">
+      <span class="footer-label">Node:</span>
+      <span id="footer-hostname">wspr-beacon</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">Last Reset:</span>
+      <span id="footer-reset-time">Loading...</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">Next TX:</span>
+      <span id="footer-next-tx">2m 0s @ 14.097100 MHz</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">TX Count:</span>
+      <span id="footer-tx-count">0</span>
+    </div>
   </footer>
   <script src="nav.js"></script>
   <script src="home.js"></script>

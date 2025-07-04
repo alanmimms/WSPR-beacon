@@ -38,22 +38,6 @@ async function loadStatus() {
     
     console.log('Loaded status:', status);
     
-    // Update current status
-    document.getElementById('current-callsign').textContent = status.callsign || '?';
-    document.getElementById('current-locator').textContent = status.locator || '?';
-    document.getElementById('current-power').textContent = `${status.powerDbm || '?'}dBm`;
-    document.getElementById('current-band').textContent = status.currentBand || '?';
-    
-    // Format last reset time
-    if (status.lastResetTime) {
-      const resetDate = new Date(status.lastResetTime);
-      // Format as UTC time with line break between date and time
-      const isoString = resetDate.toISOString();
-      const datePart = isoString.substring(0, 10); // YYYY-MM-DD
-      const timePart = isoString.substring(11, 19) + ' UTC'; // HH:MM:SS UTC
-      document.getElementById('last-reset').innerHTML = `<div style="text-align: right;">${datePart}<br>${timePart}</div>`;
-    }
-    
     // Update statistics
     if (status.statistics) {
       document.getElementById('total-transmissions').textContent = status.statistics.totalTransmissions || 0;
@@ -273,83 +257,49 @@ function stopLiveUpdates() {
 
 async function updateLiveStatus() {
   try {
-    const response = await fetch('/api/live-status');
-    if (!response.ok) throw new Error('Failed to fetch live status');
+    // Try live-status first, fallback to status.json for host-mock
+    let response = await fetch('/api/live-status');
+    if (!response.ok) {
+      response = await fetch('/api/status.json');
+    }
+    if (!response.ok) throw new Error('Failed to fetch status');
     const status = await response.json();
     
-    // Update transmission state and visual indicators
-    updateTransmissionState(status);
+    // Provide defaults for host-mock (which doesn't have live status fields)
+    const liveStatus = {
+      networkState: status.networkState || 'READY',
+      transmissionState: status.transmissionState || 'IDLE',
+      isTransmitting: status.isTransmitting || false,
+      transmissionInProgress: status.transmissionInProgress || false,
+      nextTransmissionIn: status.nextTransmissionIn || 120, // 2 minutes default
+      transmissionCount: status.statistics?.totalTransmissions || 0,
+      ...status
+    };
     
-    // Update countdown timer
-    updateCountdown(status.nextTransmissionIn);
+    // Update transmission state and visual indicators  
+    updateTransmissionState(liveStatus);
     
-    // Update transmission count
-    updateElement('tx-count', status.transmissionCount);
-    
-    // Update network and transmission states
-    updateElement('network-state', status.networkState);
-    updateElement('transmission-state', status.transmissionState);
+    // Update transmission count in statistics section only
+    updateElement('total-transmissions', liveStatus.transmissionCount);
     
     // Store current status for next comparison
-    previousStatus = status;
+    previousStatus = liveStatus;
     
   } catch (error) {
     console.error('Error updating live status:', error);
+    // No need for fallback values since status box is removed
   }
 }
 
 function updateTransmissionState(status) {
-  const statusFieldset = document.getElementById('status-fieldset');
-  const transmissionIndicator = document.getElementById('transmission-indicator');
-  
-  if (status.isTransmitting || status.transmissionInProgress) {
-    // Show transmission state
-    statusFieldset.classList.add('transmitting');
-    transmissionIndicator.classList.remove('hidden');
-    
-    // Update page title to show transmission
-    document.title = '[TX] WSPR Beacon - Home';
-  } else {
-    // Hide transmission state
-    statusFieldset.classList.remove('transmitting');
-    transmissionIndicator.classList.add('hidden');
-    
-    // Reset page title
-    document.title = 'WSPR Beacon - Home';
-  }
+  // Transmission state is now handled by the header manager
+  // No need for visual indicators since the header shows the state
+  // The header manager will update the page title
 }
 
 function updateCountdown(secondsRemaining) {
-  const countdownElement = document.getElementById('next-tx-countdown');
-  if (!countdownElement) return;
-  
-  if (secondsRemaining <= 0) {
-    countdownElement.textContent = 'Now';
-    countdownElement.style.color = '#d32f2f';
-    countdownElement.style.fontWeight = 'bold';
-  } else if (secondsRemaining < 60) {
-    countdownElement.textContent = `${secondsRemaining}s`;
-    countdownElement.style.color = '#ff9800';
-    countdownElement.style.fontWeight = 'bold';
-  } else if (secondsRemaining < 300) { // Less than 5 minutes
-    const minutes = Math.floor(secondsRemaining / 60);
-    const seconds = secondsRemaining % 60;
-    countdownElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    countdownElement.style.color = '#ff9800';
-    countdownElement.style.fontWeight = 'normal';
-  } else {
-    const minutes = Math.floor(secondsRemaining / 60);
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    
-    if (hours > 0) {
-      countdownElement.textContent = `${hours}h ${remainingMinutes}m`;
-    } else {
-      countdownElement.textContent = `${minutes}m`;
-    }
-    countdownElement.style.color = '#4CAF50';
-    countdownElement.style.fontWeight = 'normal';
-  }
+  // Countdown is now handled by the footer via header manager
+  // No need for separate countdown element
 }
 
 function updateElement(elementId, newValue, highlightChange = true) {

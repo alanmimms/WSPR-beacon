@@ -13,6 +13,120 @@ body {
   flex-direction: column;
 }
 
+/* Persistent Header */
+.persistent-header {
+  background: #1976d2;
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 500;
+  position: relative;
+  z-index: 300;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.header-callsign {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.header-locator {
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.header-power {
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.header-separator {
+  opacity: 0.7;
+  font-weight: normal;
+}
+
+.header-state {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.2);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.header-state.active {
+  background: #4CAF50;
+  color: white;
+}
+
+.header-state.transmitting {
+  background: #d32f2f;
+  color: white;
+  animation: pulse-header 1s infinite;
+}
+
+.header-state.error {
+  background: #f44336;
+  color: white;
+}
+
+.header-state.config {
+  background: #ff9800;
+  color: white;
+}
+
+.header-frequency {
+  font-weight: 600;
+  margin-left: -4px;
+}
+
+.header-time {
+  margin-left: auto;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+@keyframes pulse-header {
+  0% { 
+    background: #d32f2f;
+    box-shadow: 0 0 0 rgba(211, 47, 47, 0.7);
+  }
+  50% { 
+    background: #f44336;
+    box-shadow: 0 0 8px rgba(244, 67, 54, 0.8);
+  }
+  100% { 
+    background: #d32f2f;
+    box-shadow: 0 0 0 rgba(211, 47, 47, 0.7);
+  }
+}
+
 .layout-container {
   flex: 1 0 auto;
   display: flex;
@@ -30,9 +144,9 @@ body {
   flex-direction: column;
   padding-top: 0;
   padding-bottom: 0;
-  height: 100vh;
+  height: calc(100vh - 48px);
   position: fixed;
-  top: 0;
+  top: 48px;
   left: 0;
   z-index: 200;
 }
@@ -262,32 +376,55 @@ h1 {
   color: #388e3c;
 }
 
-footer {
+/* Persistent Footer */
+.persistent-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   box-sizing: border-box;
-
   position: fixed;
   left: 0;
   bottom: 0;
   width: 100vw;
-
   background: #243447;
   color: #dce3ea;
-
-  padding: 1em 2em 1em 2em;
-  gap: 2em;
-  border-top: 1.5px solid #dee2ec;
-  font-size: 1.1em;
+  padding: 8px 20px;
+  gap: 20px;
+  border-top: 1px solid #374857;
+  font-size: 13px;
   z-index: 100;
-  box-shadow: 0 -1px 6px 0 rgba(30,50,80,0.10);
+  box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+}
+
+.footer-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.footer-label {
+  font-weight: 500;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.footer-item span:last-child {
+  font-weight: 600;
+  color: #ffffff;
 }
 
 /* Ensure main content does not get hidden behind the fixed footer */
 @media (min-width: 701px) {
   main {
-    margin-bottom: 6em;
+    margin-bottom: 4em;
+  }
+}
+
+@media (max-width: 700px) {
+  main {
+    margin-bottom: 5em;
   }
 }
 
@@ -734,5 +871,62 @@ footer {
   
   .schedule-band-label {
     font-size: 0.9em;
+  }
+  
+  /* Responsive header for mobile */
+  .persistent-header {
+    padding: 8px 12px;
+    font-size: 11px;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .header-left, .header-center, .header-right {
+    flex: none;
+    justify-content: center;
+  }
+  
+  .header-left {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  
+  .header-callsign {
+    font-size: 12px;
+  }
+  
+  .header-state {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+  
+  .header-time {
+    font-size: 11px;
+  }
+  
+  .header-frequency {
+    font-size: 10px;
+  }
+  
+  .header-locator {
+    font-size: 10px;
+  }
+  
+  .header-power {
+    font-size: 10px;
+  }
+  
+  /* Responsive footer for mobile */
+  .persistent-footer {
+    padding: 6px 12px;
+    font-size: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .footer-item {
+    gap: 4px;
+    flex: none;
+    min-width: 45%;
   }
 }
