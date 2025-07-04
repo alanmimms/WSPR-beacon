@@ -478,6 +478,23 @@ h1 {
   }
 }
 
+/* RSSI Signal Quality Colors */
+.rssi-excellent {
+  color: #4caf50; /* Green */
+}
+
+.rssi-good {
+  color: #8bc34a; /* Light green */
+}
+
+.rssi-fair {
+  color: #ff9800; /* Orange */
+}
+
+.rssi-poor {
+  color: #f44336; /* Red */
+}
+
 /* Band Configuration Styles */
 .band-zone {
   background: hsl(280, 40%, 92%);

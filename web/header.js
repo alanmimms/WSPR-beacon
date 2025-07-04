@@ -12,12 +12,15 @@ class HeaderManager {
     
     this.footerElements = {
       hostname: document.getElementById('footer-hostname'),
-      resetTime: document.getElementById('footer-reset-time'),
+      uptime: document.getElementById('footer-uptime'),
+      wifi: document.getElementById('footer-wifi'),
+      rssi: document.getElementById('footer-rssi'),
       nextTx: document.getElementById('footer-next-tx'),
       txCount: document.getElementById('footer-tx-count')
     };
     
     this.currentState = 'idle';
+    this.lastStatus = null;
   }
 
   // Map FSM states to UI requirements from README
@@ -83,8 +86,65 @@ class HeaderManager {
     }
   }
 
+  // Calculate uptime from reset time
+  calculateUptime(lastResetTime) {
+    if (!lastResetTime) return '0d 0h 0m';
+    
+    const resetTime = new Date(lastResetTime);
+    const now = new Date();
+    const uptimeMs = now.getTime() - resetTime.getTime();
+    
+    const days = Math.floor(uptimeMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((uptimeMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  // Format WiFi connection status
+  formatWifiStatus(networkState, ssid) {
+    if (networkState === 'AP_MODE') {
+      return '[AP mode]';
+    } else if (networkState === 'READY' && ssid) {
+      return ssid;
+    } else if (networkState === 'STA_CONNECTING') {
+      return 'Connecting...';
+    } else {
+      return 'Disconnected';
+    }
+  }
+
+  // Format RSSI signal strength with quality indicator
+  formatRssi(rssi) {
+    if (!rssi || rssi === 0) return { text: '-', cssClass: '' };
+    
+    // Determine signal quality and color class based on WiFi standards
+    let quality, cssClass;
+    if (rssi > -50) {
+      quality = 'Excellent';
+      cssClass = 'rssi-excellent';
+    } else if (rssi > -60) {
+      quality = 'Good';
+      cssClass = 'rssi-good';
+    } else if (rssi > -70) {
+      quality = 'Fair';
+      cssClass = 'rssi-fair';
+    } else {
+      quality = 'Poor';
+      cssClass = 'rssi-poor';
+    }
+    
+    return {
+      text: `${rssi}dBm (${quality})`,
+      cssClass: cssClass
+    };
+  }
+
   // Update the persistent header
   updateHeader(status) {
+    // Store latest status for uptime updates
+    this.lastStatus = status;
+    
     // Update callsign
     if (status.callsign && this.elements.callsign) {
       this.elements.callsign.textContent = status.callsign;
@@ -144,12 +204,30 @@ class HeaderManager {
       this.footerElements.hostname.textContent = status.hostname;
     }
 
-    // Update last reset time
-    if (status.lastResetTime && this.footerElements.resetTime) {
-      const resetDate = new Date(status.lastResetTime);
-      const dateStr = resetDate.toISOString().substr(0, 10);
-      const timeStr = resetDate.toISOString().substr(11, 8);
-      this.footerElements.resetTime.textContent = `${dateStr} ${timeStr} UTC`;
+    // Update uptime
+    if (this.footerElements.uptime) {
+      this.footerElements.uptime.textContent = this.calculateUptime(status.lastResetTime);
+    }
+
+    // Update WiFi status
+    if (this.footerElements.wifi) {
+      const networkState = status.networkState || 'READY';
+      const ssid = status.wifiSsid || status.ssid || 'Unknown';
+      this.footerElements.wifi.textContent = this.formatWifiStatus(networkState, ssid);
+    }
+
+    // Update RSSI
+    if (this.footerElements.rssi) {
+      // Mock values for host-mock, real values from ESP32
+      const rssi = status.wifiRssi || status.rssi || (status.networkState === 'READY' ? -65 : null);
+      const rssiInfo = this.formatRssi(rssi);
+      this.footerElements.rssi.textContent = rssiInfo.text;
+      
+      // Remove old RSSI classes and apply new one
+      this.footerElements.rssi.className = '';
+      if (rssiInfo.cssClass) {
+        this.footerElements.rssi.classList.add(rssiInfo.cssClass);
+      }
     }
 
     // Update next transmission info
@@ -243,6 +321,7 @@ class HeaderManager {
 
   // Start live status updates
   startLiveUpdates() {
+    // Status updates every 5 seconds
     setInterval(async () => {
       try {
         // Try live-status first, fallback to status.json for host-mock
@@ -255,7 +334,14 @@ class HeaderManager {
       } catch (error) {
         console.warn('Live status update failed:', error);
       }
-    }, 5000); // Slower updates for status.json
+    }, 5000);
+    
+    // Uptime only updates every minute for efficiency
+    setInterval(() => {
+      if (this.footerElements.uptime && this.lastStatus) {
+        this.footerElements.uptime.textContent = this.calculateUptime(this.lastStatus.lastResetTime);
+      }
+    }, 60000); // Every minute
   }
 }
 

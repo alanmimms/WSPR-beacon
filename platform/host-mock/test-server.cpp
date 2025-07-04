@@ -116,6 +116,9 @@ static json status = {
   {"hostname", "wspr-beacon"},
   {"currentBand", "20m"},
   {"lastResetTime", formatTimeISO(timeInterface.getStartTime())},
+  {"wifiSsid", "MyHomeWiFi"},
+  {"wifiRssi", -65},
+  {"networkState", "READY"},
   {"statistics", {
     {"totalTransmissions", 0},
     {"totalMinutes", 0},
