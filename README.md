@@ -97,6 +97,7 @@ make
 Usage: ./bin/host-testbench [options]
 Options:
   --mock-data <file>  Path to mock data JSON file (default: mock-data.txt)
+  --log-file <file>   Path to detailed operation log file (default: stderr only)
   --port <port>       Server port (default: 8080)
   --time-scale <n>    Time acceleration factor (default: 1.0)
                       > 1.0 = faster, < 1.0 = slower
@@ -122,6 +123,10 @@ Options:
 ./bin/host-testbench --mock-data ../../platform/host-mock/test-sta-mode.txt --time-scale 10
 ./bin/host-testbench --mock-data ../../platform/host-mock/test-ap-mode.txt --time-scale 10
 ./bin/host-testbench --mock-data ../../platform/host-mock/test-disconnected.txt
+
+# Test with comprehensive operation logging
+./bin/host-testbench --log-file beacon_ops.log --time-scale 60
+./bin/host-testbench --mock-data ../../platform/host-mock/test-sta-mode.txt --log-file wifi_test.log --time-scale 10
 ```
 
 Then open http://localhost:8080 in your browser.
@@ -150,6 +155,23 @@ The mock server simulates both Station (STA) and Access Point (AP) WiFi modes:
 - **AP Mode**: Shows "AP: N clients" in footer, RSSI field shows "-" (not applicable)
 - **WiFi Scan**: Returns realistic networks with varying signal strengths over time
 - **Dynamic Updates**: Client counts and RSSI values change during testing
+
+**Comprehensive Operation Logging:**
+The mock server provides detailed logging for complete verification of beacon operation:
+
+- **Every API Request**: Method, path, status code, response size
+- **WiFi Operations**: Scan results with SSID, RSSI, encryption for each network
+- **Transmission Events**: Start/stop events, band selection, timing calculations
+- **Time-based Events**: Accelerated time changes, scheduling decisions
+- **Settings Changes**: Field-by-field tracking of configuration updates
+- **System Events**: Server startup, initialization, errors
+
+All log entries include UTC timestamps and subsystem identification:
+```
+2025-07-04 19:12:57.633 UTC [WIFI] Scan completed | networks_found=6, networks=[MyHomeWiFi(-50dBm,WPA2), ...]
+2025-07-04 19:13:18.457 UTC [TX] Transmission ended | band=20m
+2025-07-04 19:13:18.457 UTC [API] Request: /api/status.json | method=GET, status=200, response_size=580 bytes
+```
 
 **Mock Data Files Provided:**
 - `mock-data.txt`: Default configuration (20% TX, STA mode, -65dBm WiFi)

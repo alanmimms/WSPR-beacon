@@ -7,6 +7,7 @@ int main(int argc, char **argv) {
   
   // Parse command line arguments
   std::string mockDataFile = "mock-data.txt";  // Default file
+  std::string logFile = "";  // Default: no file logging
   int port = 8080;
   double timeScale = 1.0;  // Default: real-time
   
@@ -14,6 +15,8 @@ int main(int argc, char **argv) {
     std::string arg = argv[i];
     if (arg == "--mock-data" && i + 1 < argc) {
       mockDataFile = argv[++i];
+    } else if (arg == "--log-file" && i + 1 < argc) {
+      logFile = argv[++i];
     } else if (arg == "--port" && i + 1 < argc) {
       port = std::stoi(argv[++i]);
     } else if (arg == "--time-scale" && i + 1 < argc) {
@@ -26,6 +29,7 @@ int main(int argc, char **argv) {
       std::cout << "Usage: " << argv[0] << " [options]\n";
       std::cout << "Options:\n";
       std::cout << "  --mock-data <file>  Path to mock data JSON file (default: mock-data.txt)\n";
+      std::cout << "  --log-file <file>   Path to detailed operation log file (default: stderr only)\n";
       std::cout << "  --port <port>       Server port (default: 8080)\n";
       std::cout << "  --time-scale <n>    Time acceleration factor (default: 1.0)\n";
       std::cout << "                      > 1.0 = faster, < 1.0 = slower\n";
@@ -36,9 +40,12 @@ int main(int argc, char **argv) {
   }
   
   std::cout << "Using mock data file: " << mockDataFile << std::endl;
+  if (!logFile.empty()) {
+    std::cout << "Logging to file: " << logFile << std::endl;
+  }
   if (timeScale != 1.0) {
     std::cout << "Time scale: " << timeScale << "x (1 real second = " << timeScale << " mock seconds)" << std::endl;
   }
-  startTestServer(port, mockDataFile, timeScale);
+  startTestServer(port, mockDataFile, timeScale, logFile);
   return 0;
 }

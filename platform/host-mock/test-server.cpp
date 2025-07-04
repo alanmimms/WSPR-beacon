@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <iomanip>
 #include <chrono>
+#include <mutex>
 #ifdef _WIN32
 #include <winsock2.h>
 #else
@@ -22,11 +23,108 @@
 using nlohmann::json;
 namespace fs = std::filesystem;
 
+// Comprehensive Logger for beacon operations
+class BeaconLogger {
+private:
+  std::ofstream logFile;
+  std::mutex logMutex;
+  bool fileLogging;
+  
+public:
+  BeaconLogger(const std::string& logFileName = "") {
+    fileLogging = !logFileName.empty();
+    if (fileLogging) {
+      logFile.open(logFileName, std::ios::out | std::ios::app);
+      if (!logFile.is_open()) {
+        std::cerr << "Error: Could not open log file: " << logFileName << std::endl;
+        fileLogging = false;
+      } else {
+        log("SYSTEM", "Logger initialized", "file=" + logFileName);
+      }
+    }
+  }
+  
+  ~BeaconLogger() {
+    if (fileLogging && logFile.is_open()) {
+      log("SYSTEM", "Logger shutdown", "");
+      logFile.close();
+    }
+  }
+  
+  void log(const std::string& subsystem, const std::string& event, const std::string& data = "") {
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    
+    std::tm utc_tm;
+    #ifdef _WIN32
+    gmtime_s(&utc_tm, &time_t_now);
+    #else
+    gmtime_r(&time_t_now, &utc_tm);
+    #endif
+    
+    std::ostringstream logEntry;
+    logEntry << std::put_time(&utc_tm, "%Y-%m-%d %H:%M:%S");
+    logEntry << "." << std::setfill('0') << std::setw(3) << ms.count();
+    logEntry << " UTC [" << subsystem << "] " << event;
+    if (!data.empty()) {
+      logEntry << " | " << data;
+    }
+    
+    std::lock_guard<std::mutex> lock(logMutex);
+    
+    if (fileLogging && logFile.is_open()) {
+      logFile << logEntry.str() << std::endl;
+      logFile.flush();  // Ensure immediate write
+    }
+    
+    // Also output to stderr for exceptional events
+    if (subsystem == "ERROR" || event.find("Error") != std::string::npos || event.find("Failed") != std::string::npos) {
+      std::cerr << logEntry.str() << std::endl;
+    }
+  }
+  
+  void logApiRequest(const std::string& method, const std::string& path, int statusCode, const std::string& responseSize = "") {
+    std::string data = "method=" + method + ", status=" + std::to_string(statusCode);
+    if (!responseSize.empty()) {
+      data += ", response_size=" + responseSize;
+    }
+    log("API", "Request: " + path, data);
+  }
+  
+  void logWifiScan(int networkCount, const std::string& details = "") {
+    std::string data = "networks_found=" + std::to_string(networkCount);
+    if (!details.empty()) {
+      data += ", " + details;
+    }
+    log("WIFI", "Scan completed", data);
+  }
+  
+  void logTransmissionEvent(const std::string& event, const std::string& band, int64_t nextTxIn = -1) {
+    std::string data = "band=" + band;
+    if (nextTxIn >= 0) {
+      data += ", next_tx_in=" + std::to_string(nextTxIn) + "s";
+    }
+    log("TX", event, data);
+  }
+  
+  void logTimeEvent(const std::string& event, double timeScale, int64_t mockTime) {
+    std::string data = "time_scale=" + std::to_string(timeScale) + ", mock_time=" + std::to_string(mockTime);
+    log("TIME", event, data);
+  }
+  
+  void logSettingsChange(const std::string& field, const std::string& oldValue, const std::string& newValue) {
+    std::string data = "field=" + field + ", old=" + oldValue + ", new=" + newValue;
+    log("SETTINGS", "Configuration changed", data);
+  }
+};
+
 static std::atomic<bool> running{true};
 static Time timeInterface;
 static double g_timeScale = 1.0;
 static std::chrono::steady_clock::time_point g_serverStartTime;
 static int64_t g_mockStartTime;
+static std::unique_ptr<BeaconLogger> g_logger;
 
 // Get current mock time based on time scale
 static int64_t getMockTime() {
@@ -127,9 +225,10 @@ static json status;
 
 static bool loadMockData(const std::string& mockDataFile) {
   try {
+    g_logger->log("INIT", "Attempting to load mock data", "file=" + mockDataFile);
     std::string mockDataContent = readFile(mockDataFile);
     if (mockDataContent.empty()) {
-      std::cerr << "[TestServer] Warning: Mock data file '" << mockDataFile << "' not found or empty, using defaults" << std::endl;
+      g_logger->log("ERROR", "Mock data file not found or empty", "file=" + mockDataFile);
       return false;
     }
     
@@ -139,23 +238,41 @@ static bool loadMockData(const std::string& mockDataFile) {
     status = mockData;
     
     // Also update settings with relevant fields from mock data
-    if (mockData.contains("call")) settings["call"] = mockData["call"];
-    if (mockData.contains("loc")) settings["loc"] = mockData["loc"];
-    if (mockData.contains("pwr")) settings["pwr"] = mockData["pwr"];
-    if (mockData.contains("txPct")) settings["txPct"] = mockData["txPct"];
-    if (mockData.contains("host")) settings["host"] = mockData["host"];
-    if (mockData.contains("wifiMode")) settings["wifiMode"] = mockData["wifiMode"];
-    if (mockData.contains("ssid")) settings["ssid"] = mockData["ssid"];
-    if (mockData.contains("ssidAp")) settings["ssidAp"] = mockData["ssidAp"];
-    if (mockData.contains("pwdAp")) settings["pwdAp"] = mockData["pwdAp"];
+    int settingsUpdated = 0;
+    std::vector<std::string> updatedFields;
+    
+    auto updateField = [&](const std::string& field) {
+      if (mockData.contains(field)) {
+        settings[field] = mockData[field];
+        updatedFields.push_back(field);
+        settingsUpdated++;
+      }
+    };
+    
+    updateField("call");
+    updateField("loc");
+    updateField("pwr");
+    updateField("txPct");
+    updateField("host");
+    updateField("wifiMode");
+    updateField("ssid");
+    updateField("ssidAp");
+    updateField("pwdAp");
+    
+    std::string fieldList = "";
+    for (size_t i = 0; i < updatedFields.size(); ++i) {
+      if (i > 0) fieldList += ", ";
+      fieldList += updatedFields[i];
+    }
+    g_logger->log("INIT", "Settings updated from mock data", "fields_updated=" + std::to_string(settingsUpdated) + ", fields=[" + fieldList + "]");
     
     // Always set resetTime to current startup time
     status["resetTime"] = formatTimeISO(timeInterface.getStartTime());
     
-    std::cout << "[TestServer] Loaded mock data from: " << mockDataFile << std::endl;
+    g_logger->log("INIT", "Mock data loaded successfully", "file=" + mockDataFile + ", size=" + std::to_string(mockDataContent.size()) + " bytes");
     return true;
   } catch (const std::exception& e) {
-    std::cerr << "[TestServer] Error loading mock data: " << e.what() << std::endl;
+    g_logger->log("ERROR", "Mock data parsing failed", "file=" + mockDataFile + ", error=" + std::string(e.what()));
     return false;
   }
 }
@@ -261,63 +378,84 @@ std::string findWebDirectoryForTestServer() {
   return "../../web";
 }
 
-void startTestServer(int port, const std::string& mockDataFile, double timeScale) {
+void startTestServer(int port, const std::string& mockDataFile, double timeScale, const std::string& logFile) {
+  // Initialize logger
+  g_logger = std::make_unique<BeaconLogger>(logFile);
+  
   // Initialize time scale
   g_timeScale = timeScale;
   g_serverStartTime = std::chrono::steady_clock::now();
   g_mockStartTime = timeInterface.getTime();
   
+  g_logger->logTimeEvent("Server startup", timeScale, g_mockStartTime);
+  
   // Initialize mock data
+  g_logger->log("INIT", "Loading mock data", "file=" + mockDataFile);
   if (!loadMockData(mockDataFile)) {
+    g_logger->log("INIT", "Mock data load failed, using defaults", "");
     initializeDefaultStatus();
+  } else {
+    g_logger->log("INIT", "Mock data loaded successfully", "");
   }
   
   httplib::Server svr;
 
-  svr.Get("/api/settings", [](const httplib::Request &, httplib::Response &res) {
-    res.set_content(settings.dump(), "application/json");
+  svr.Get("/api/settings", [](const httplib::Request &req, httplib::Response &res) {
+    std::string response = settings.dump();
+    res.set_content(response, "application/json");
+    g_logger->logApiRequest("GET", "/api/settings", 200, std::to_string(response.size()) + " bytes");
   });
 
   svr.Post("/api/settings", [](const httplib::Request &req, httplib::Response &res) {
     try {
-      std::cout << "[TestServer] POST /api/settings - Content-Type: " << req.get_header_value("Content-Type") << std::endl;
-      std::cout << "[TestServer] Body: " << req.body << std::endl;
+      auto contentType = req.get_header_value("Content-Type");
+      g_logger->log("API", "POST /api/settings received", "content_type=" + contentType + ", body_size=" + std::to_string(req.body.size()));
       
       // Parse as form if the Content-Type is application/x-www-form-urlencoded
-      auto contentType = req.get_header_value("Content-Type");
       if (contentType.find("application/x-www-form-urlencoded") != std::string::npos) {
         // Form-encoded: use params
+        g_logger->log("SETTINGS", "Processing form-encoded data", "param_count=" + std::to_string(req.params.size()));
         for (auto &item : req.params) {
+          auto oldValue = settings.contains(item.first) ? settings[item.first].dump() : "null";
           settings[item.first] = item.second;
+          g_logger->logSettingsChange(item.first, oldValue, item.second);
         }
       } else {
         // Otherwise, treat as JSON
         auto j = json::parse(req.body);
+        g_logger->log("SETTINGS", "Processing JSON data", "field_count=" + std::to_string(j.size()));
         for (auto it = j.begin(); it != j.end(); ++it) {
           // Skip null values to avoid overwriting existing settings with nulls
           if (!it.value().is_null()) {
+            auto oldValue = settings.contains(it.key()) ? settings[it.key()].dump() : "null";
             settings[it.key()] = it.value();
+            g_logger->logSettingsChange(it.key(), oldValue, it.value().dump());
           }
         }
       }
       updateStatusFromSettings();
-      std::cout << "[TestServer] Settings updated successfully" << std::endl;
+      g_logger->log("SETTINGS", "Settings update completed successfully", "");
       res.status = 204;
       res.set_content("", "application/json");
+      g_logger->logApiRequest("POST", "/api/settings", 204);
     } catch (const std::exception& e) {
-      std::cout << "[TestServer] Error parsing settings: " << e.what() << std::endl;
+      g_logger->log("ERROR", "Settings parsing failed", "error=" + std::string(e.what()));
       res.status = 400;
       res.set_content("{\"error\":\"Invalid settings format\"}", "application/json");
+      g_logger->logApiRequest("POST", "/api/settings", 400);
     } catch (...) {
-      std::cout << "[TestServer] Unknown error parsing settings" << std::endl;
+      g_logger->log("ERROR", "Unknown settings parsing error", "");
       res.status = 400;
       res.set_content("{\"error\":\"Invalid settings format\"}", "application/json");
+      g_logger->logApiRequest("POST", "/api/settings", 400);
     }
   });
 
-  svr.Get("/api/status.json", [](const httplib::Request &, httplib::Response &res) {
+  svr.Get("/api/status.json", [](const httplib::Request &req, httplib::Response &res) {
     // Calculate dynamic status based on accelerated time
     json dynamicStatus = status;
+    
+    g_logger->log("API", "GET /api/status.json processing", "time_scale=" + std::to_string(g_timeScale));
     
     // Calculate elapsed time in mock seconds
     auto now = std::chrono::steady_clock::now();
@@ -344,11 +482,18 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     }
     
     // Update transmission state
+    std::string prevTxState = dynamicStatus.value("txState", "UNKNOWN");
     if (shouldTransmit && secondsInCycle < WSPR_TX_DURATION) {
       dynamicStatus["txState"] = "TRANSMITTING";
       dynamicStatus["nextTx"] = 0;
+      if (prevTxState != "TRANSMITTING") {
+        g_logger->logTransmissionEvent("Transmission started", dynamicStatus.value("curBand", "unknown"), 0);
+      }
     } else {
       dynamicStatus["txState"] = "IDLE";
+      if (prevTxState == "TRANSMITTING") {
+        g_logger->logTransmissionEvent("Transmission ended", dynamicStatus.value("curBand", "unknown"));
+      }
       
       // Calculate next transmission
       if (txPercent > 0) {
@@ -356,6 +501,13 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
         int nextTxCycle = ((cycleNumber / cycleInterval) + 1) * cycleInterval;
         int secondsUntilNextCycle = (nextTxCycle - cycleNumber) * WSPR_CYCLE_SECONDS - secondsInCycle;
         dynamicStatus["nextTx"] = secondsUntilNextCycle;
+        
+        // Log next transmission timing if significant change
+        static int lastNextTx = -1;
+        if (abs(secondsUntilNextCycle - lastNextTx) > 10) {  // Log every 10 second changes
+          g_logger->logTransmissionEvent("Next transmission scheduled", dynamicStatus.value("curBand", "unknown"), secondsUntilNextCycle);
+          lastNextTx = secondsUntilNextCycle;
+        }
       } else {
         dynamicStatus["nextTx"] = 9999;  // Never
       }
@@ -408,11 +560,14 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       dynamicStatus.erase("clientCount");
     }
     
-    res.set_content(dynamicStatus.dump(), "application/json");
+    std::string response = dynamicStatus.dump();
+    res.set_content(response, "application/json");
+    g_logger->logApiRequest("GET", "/api/status.json", 200, std::to_string(response.size()) + " bytes");
   });
 
-  svr.Get("/api/time", [](const httplib::Request &, httplib::Response &res) {
+  svr.Get("/api/time", [](const httplib::Request &req, httplib::Response &res) {
     int64_t mockTime = getMockTime();
+    g_logger->logTimeEvent("Time request processed", g_timeScale, mockTime);
     
     // Simulate NTP sync status
     auto now = std::chrono::steady_clock::now();
@@ -431,13 +586,17 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       {"lastSyncTime", formatTimeISO(lastSyncTime)},
       {"timeScale", g_timeScale}
     };
-    res.set_content(timeResponse.dump(), "application/json");
+    std::string response = timeResponse.dump();
+    res.set_content(response, "application/json");
+    g_logger->logApiRequest("GET", "/api/time", 200, std::to_string(response.size()) + " bytes");
   });
 
-  svr.Get("/api/wifi/scan", [](const httplib::Request &, httplib::Response &res) {
+  svr.Get("/api/wifi/scan", [](const httplib::Request &req, httplib::Response &res) {
     // Mock WiFi scan results with time-varying signal strengths
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_serverStartTime).count();
+    
+    g_logger->log("WIFI", "Scan initiated", "elapsed_time=" + std::to_string(elapsed) + "s");
     
     // Simulate signal strength variations over time
     int timeOffset = elapsed / 5; // Changes every 5 seconds
@@ -481,15 +640,42 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       }
     });
     
-    std::cout << "[TestServer] WiFi scan requested - returning " << scanResults.size() << " networks" << std::endl;
-    res.set_content(scanResults.dump(), "application/json");
+    // Log detailed scan results
+    std::ostringstream scanDetails;
+    scanDetails << "networks=[";
+    for (size_t i = 0; i < scanResults.size(); ++i) {
+      if (i > 0) scanDetails << ", ";
+      auto network = scanResults[i];
+      scanDetails << network["ssid"].get<std::string>()
+                  << "(" << network["rssi"].get<int>() << "dBm,"
+                  << network["encryption"].get<std::string>() << ")";
+    }
+    scanDetails << "]";
+    
+    g_logger->logWifiScan(scanResults.size(), scanDetails.str());
+    
+    std::string response = scanResults.dump();
+    res.set_content(response, "application/json");
+    g_logger->logApiRequest("GET", "/api/wifi/scan", 200, std::to_string(response.size()) + " bytes");
   });
 
   // Serve static files - dynamically find web directory
   std::string webDir = findWebDirectoryForTestServer();
   svr.set_mount_point("/", webDir);
+  g_logger->log("SERVER", "Web directory configured", "path=" + webDir);
 
   std::cout << "Host testbench web server running at http://localhost:" << port << std::endl;
   std::cout << "Press Ctrl+C to stop." << std::endl;
+  
+  g_logger->log("SERVER", "HTTP server starting", "port=" + std::to_string(port) + ", address=0.0.0.0");
+  
+  // Add request logging for all endpoints
+  svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+    g_logger->log("HTTP", "Request received", "method=" + req.method + ", path=" + req.path + ", remote=" + req.get_header_value("Host"));
+    return httplib::Server::HandlerResponse::Unhandled;
+  });
+  
   svr.listen("0.0.0.0", port);
+  
+  g_logger->log("SERVER", "HTTP server stopped", "");
 }
