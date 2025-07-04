@@ -1,0 +1,30 @@
+{
+  "call": "VE0DIS",
+  "loc": "DO33dd",
+  "pwr": 13,
+  "txPct": 10,
+  "wifiMode": "sta",
+  "host": "wspr-disconnected",
+  "curBand": "30m",
+  "ssid": "",
+  "netState": "AP_MODE",
+  "txState": "IDLE", 
+  "nextTx": 180,
+  "freq": "10.140200 MHz",
+  "clientCount": 0,
+  "stats": {
+    "txCnt": 3,
+    "txMin": 6,
+    "bands": {
+      "160m": {"txCnt": 0, "txMin": 0},
+      "80m": {"txCnt": 0, "txMin": 0},
+      "40m": {"txCnt": 0, "txMin": 0},
+      "30m": {"txCnt": 3, "txMin": 6},
+      "20m": {"txCnt": 0, "txMin": 0},
+      "17m": {"txCnt": 0, "txMin": 0},
+      "15m": {"txCnt": 0, "txMin": 0},
+      "12m": {"txCnt": 0, "txMin": 0},
+      "10m": {"txCnt": 0, "txMin": 0}
+    }
+  }
+}

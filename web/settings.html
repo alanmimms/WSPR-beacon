@@ -36,16 +36,47 @@
           <legend><span class="collapse-icon">▼</span>WiFi &amp; Hostname</legend>
           <div class="fieldset-content">
             <div class="form-row">
-              <label for="wifi-ssid">WiFi SSID</label>
-              <input type="text" id="wifi-ssid" name="wifiSsid" maxlength="32" title="The name of your WiFi network that the beacon will connect to">
+              <label for="wifi-mode">WiFi Mode</label>
+              <select id="wifi-mode" name="wifiMode" title="Select WiFi operation mode">
+                <option value="sta">Station (Connect to existing WiFi)</option>
+                <option value="ap">Access Point (Create WiFi hotspot)</option>
+              </select>
             </div>
-            <div class="form-row">
-              <label for="wifi-password">WiFi Password</label>
-              <input type="password" id="wifi-password" name="wifiPassword" maxlength="64" title="Password for your WiFi network">
+            
+            <!-- Station Mode Settings -->
+            <div id="sta-mode-settings" class="wifi-mode-section">
+              <div class="form-row ssid-row">
+                <label for="wifi-ssid-sta" id="wifi-ssid-sta-label">Connect to SSID</label>
+                <div class="ssid-input-container">
+                  <select id="wifi-ssid-select" class="ssid-select" title="Select from scanned networks">
+                    <option value="">Select network or choose 'Custom' to type SSID</option>
+                    <option value="__custom__">Custom SSID (hidden network)</option>
+                  </select>
+                  <input type="text" id="wifi-ssid-sta" name="wifiSsid" maxlength="32" placeholder="Enter hidden network SSID" title="Type SSID name for hidden networks" style="display: none;">
+                  <button type="button" id="scan-networks-btn" class="scan-btn" title="Scan for available WiFi networks">Scan</button>
+                </div>
+              </div>
+              <div class="form-row">
+                <label for="wifi-password-sta" id="wifi-password-sta-label">Connection Password</label>
+                <input type="password" id="wifi-password-sta" name="wifiPassword" maxlength="64" title="Password for the WiFi network you want to connect to">
+              </div>
             </div>
+            
+            <!-- Access Point Mode Settings -->
+            <div id="ap-mode-settings" class="wifi-mode-section">
+              <div class="form-row">
+                <label for="wifi-ssid-ap" id="wifi-ssid-ap-label">WiFi SSID</label>
+                <input type="text" id="wifi-ssid-ap" name="wifiSsidAp" maxlength="32" title="The name of the WiFi hotspot that the beacon will create">
+              </div>
+              <div class="form-row">
+                <label for="wifi-password-ap" id="wifi-password-ap-label">WiFi Password</label>
+                <input type="password" id="wifi-password-ap" name="wifiPasswordAp" maxlength="64" title="Password for the WiFi hotspot (leave empty for open network)">
+              </div>
+            </div>
+            
             <div class="form-row">
               <label for="hostname">Beacon Hostname</label>
-              <input type="text" id="hostname" name="hostname" maxlength="32" title="The network name the beacon will identify itself as when it connects">
+              <input type="text" id="hostname" name="hostname" maxlength="32" title="The network name the beacon will identify itself as">
             </div>
           </div>
         </fieldset>
@@ -130,7 +161,7 @@
       <span id="footer-next-tx">2m 0s @ 14.097100 MHz</span>
     </div>
     <div class="footer-item">
-      <span class="footer-label">TX Count:</span>
+      <span class="footer-label">TX:</span>
       <span id="footer-tx-count">0</span>
     </div>
   </footer>

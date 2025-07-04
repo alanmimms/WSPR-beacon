@@ -1,29 +1,32 @@
 {
-  "callsign": "N0CALL",
-  "locator": "AA00aa", 
-  "powerDbm": 23,
-  "txPercent": 20,
-  "hostname": "wspr-beacon",
-  "currentBand": "20m",
-  "wifiSsid": "MyHomeWiFi",
-  "wifiRssi": -65,
-  "networkState": "READY",
-  "transmissionState": "TRANSMITTING",
-  "nextTransmissionIn": 45,
-  "frequency": "14.097100 MHz",
-  "statistics": {
-    "totalTransmissions": 5,
-    "totalMinutes": 60,
-    "byBand": {
-      "160m": {"transmissions": 0, "minutes": 0},
-      "80m": {"transmissions": 0, "minutes": 0},
-      "40m": {"transmissions": 0, "minutes": 0},
-      "30m": {"transmissions": 0, "minutes": 0},
-      "20m": {"transmissions": 5, "minutes": 60},
-      "17m": {"transmissions": 0, "minutes": 0},
-      "15m": {"transmissions": 0, "minutes": 0},
-      "12m": {"transmissions": 0, "minutes": 0},
-      "10m": {"transmissions": 0, "minutes": 0}
+  "call": "N0CALL",
+  "loc": "AA00aa", 
+  "pwr": 23,
+  "txPct": 20,
+  "wifiMode": "sta",
+  "host": "wspr-beacon",
+  "curBand": "20m",
+  "ssid": "MyHomeWiFi",
+  "ssidAp": "WSPR-Beacon",
+  "pwdAp": "wspr2024",
+  "rssi": -65,
+  "netState": "READY",
+  "txState": "TRANSMITTING",
+  "nextTx": 45,
+  "freq": "14.097100 MHz",
+  "stats": {
+    "txCnt": 5,
+    "txMin": 60,
+    "bands": {
+      "160m": {"txCnt": 0, "txMin": 0},
+      "80m": {"txCnt": 0, "txMin": 0},
+      "40m": {"txCnt": 0, "txMin": 0},
+      "30m": {"txCnt": 0, "txMin": 0},
+      "20m": {"txCnt": 5, "txMin": 60},
+      "17m": {"txCnt": 0, "txMin": 0},
+      "15m": {"txCnt": 0, "txMin": 0},
+      "12m": {"txCnt": 0, "txMin": 0},
+      "10m": {"txCnt": 0, "txMin": 0}
     }
   }
 }

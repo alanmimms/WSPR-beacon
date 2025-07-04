@@ -104,11 +104,12 @@ class HeaderManager {
   }
 
   // Format WiFi connection status
-  formatWifiStatus(networkState, ssid) {
-    if (networkState === 'AP_MODE') {
-      return '[AP mode]';
+  formatWifiStatus(networkState, ssid, wifiMode, clientCount) {
+    if (wifiMode === 'ap' || networkState === 'AP_MODE') {
+      const clients = clientCount !== undefined ? clientCount : 0;
+      return `AP: ${clients} client${clients === 1 ? '' : 's'}`;
     } else if (networkState === 'READY' && ssid) {
-      return ssid;
+      return `Connected: ${ssid}`;
     } else if (networkState === 'STA_CONNECTING') {
       return 'Connecting...';
     } else {
@@ -117,7 +118,12 @@ class HeaderManager {
   }
 
   // Format RSSI signal strength with quality indicator
-  formatRssi(rssi) {
+  formatRssi(rssi, wifiMode) {
+    // In AP mode, RSSI doesn't apply - show empty
+    if (wifiMode === 'ap') {
+      return { text: '-', cssClass: '' };
+    }
+    
     if (!rssi || rssi === 0) return { text: '-', cssClass: '' };
     
     // Determine signal quality and color class based on WiFi standards
@@ -148,24 +154,24 @@ class HeaderManager {
     this.lastStatus = status;
     
     // Update callsign
-    if (status.callsign && this.elements.callsign) {
-      this.elements.callsign.textContent = status.callsign;
+    if (status.call && this.elements.callsign) {
+      this.elements.callsign.textContent = status.call;
     }
 
     // Update locator (grid square)
-    if (status.locator && this.elements.locator) {
-      this.elements.locator.textContent = status.locator;
+    if (status.loc && this.elements.locator) {
+      this.elements.locator.textContent = status.loc;
     }
 
     // Update power (convert dBm to watts)
-    if (status.powerDbm !== undefined && this.elements.power) {
-      const watts = this.convertDbmToWatts(status.powerDbm);
-      this.elements.power.textContent = `${status.powerDbm}dBm (${watts})`;
+    if (status.pwr !== undefined && this.elements.power) {
+      const watts = this.convertDbmToWatts(status.pwr);
+      this.elements.power.textContent = `${status.pwr}dBm (${watts})`;
     }
 
     // Map and update state - provide defaults for host-mock
-    const networkState = status.networkState || 'READY';
-    const transmissionState = status.transmissionState || 'IDLE';
+    const networkState = status.netState || 'READY';
+    const transmissionState = status.txState || 'IDLE';
     const mappedState = this.mapBeaconState(networkState, transmissionState);
     
     if (this.elements.state) {
@@ -181,10 +187,10 @@ class HeaderManager {
 
     // Update frequency display (only show when transmitting)
     if (this.elements.frequency) {
-      if (mappedState === 'transmitting' && status.currentBand) {
+      if (mappedState === 'transmitting' && status.curBand) {
         // For host-mock, derive frequency from band if not provided
-        const frequency = status.frequency || this.getFrequencyForBand(status.currentBand);
-        this.elements.frequency.textContent = this.getFrequencyDisplay(status.currentBand, frequency);
+        const frequency = status.freq || this.getFrequencyForBand(status.curBand);
+        this.elements.frequency.textContent = this.getFrequencyDisplay(status.curBand, frequency);
         this.elements.frequency.style.display = 'inline';
       } else {
         this.elements.frequency.textContent = '';
@@ -202,27 +208,30 @@ class HeaderManager {
   // Update the persistent footer
   updateFooter(status) {
     // Update hostname/node name
-    if (status.hostname && this.footerElements.hostname) {
-      this.footerElements.hostname.textContent = status.hostname;
+    if (status.host && this.footerElements.hostname) {
+      this.footerElements.hostname.textContent = status.host;
     }
 
     // Update uptime
     if (this.footerElements.uptime) {
-      this.footerElements.uptime.textContent = this.calculateUptime(status.lastResetTime);
+      this.footerElements.uptime.textContent = this.calculateUptime(status.resetTime);
     }
 
     // Update WiFi status
     if (this.footerElements.wifi) {
-      const networkState = status.networkState || 'READY';
-      const ssid = status.wifiSsid || status.ssid || 'Unknown';
-      this.footerElements.wifi.textContent = this.formatWifiStatus(networkState, ssid);
+      const networkState = status.netState || 'READY';
+      const ssid = status.ssid || 'Unknown';
+      const wifiMode = status.wifiMode || 'sta';
+      const clientCount = status.clientCount;
+      this.footerElements.wifi.textContent = this.formatWifiStatus(networkState, ssid, wifiMode, clientCount);
     }
 
     // Update RSSI
     if (this.footerElements.rssi) {
+      const wifiMode = status.wifiMode || 'sta';
       // Mock values for host-mock, real values from ESP32
-      const rssi = status.wifiRssi || status.rssi || (status.networkState === 'READY' ? -65 : null);
-      const rssiInfo = this.formatRssi(rssi);
+      const rssi = status.rssi || (status.netState === 'READY' && wifiMode === 'sta' ? -65 : null);
+      const rssiInfo = this.formatRssi(rssi, wifiMode);
       this.footerElements.rssi.textContent = rssiInfo.text;
       
       // Remove old RSSI classes and apply new one
@@ -234,9 +243,9 @@ class HeaderManager {
 
     // Update next transmission info
     if (this.footerElements.nextTx) {
-      const nextTransmissionIn = status.nextTransmissionIn || 120;
-      const band = status.currentBand || '20m';
-      const frequency = status.frequency || this.getFrequencyForBand(band);
+      const nextTransmissionIn = status.nextTx || 120;
+      const band = status.curBand || '20m';
+      const frequency = status.freq || this.getFrequencyForBand(band);
       
       const minutes = Math.floor(nextTransmissionIn / 60);
       const seconds = nextTransmissionIn % 60;
@@ -249,10 +258,10 @@ class HeaderManager {
 
     // Update transmission count and minutes
     if (this.footerElements.txCount) {
-      const txCount = status.statistics?.totalTransmissions || 
-                     status.transmissionCount || 0;
-      const txMinutes = status.statistics?.totalMinutes || 
-                       status.transmissionMinutes || 0;
+      const txCount = status.stats?.txCnt || 
+                     status.txCnt || 0;
+      const txMinutes = status.stats?.txMin || 
+                       status.txMin || 0;
       this.footerElements.txCount.textContent = `TX: ${txCount} ${txMinutes}mins`;
     }
   }
@@ -380,7 +389,7 @@ class HeaderManager {
     // Uptime only updates every minute for efficiency
     setInterval(() => {
       if (this.footerElements.uptime && this.lastStatus) {
-        this.footerElements.uptime.textContent = this.calculateUptime(this.lastStatus.lastResetTime);
+        this.footerElements.uptime.textContent = this.calculateUptime(this.lastStatus.resetTime);
       }
     }, 60000); // Every minute
   }

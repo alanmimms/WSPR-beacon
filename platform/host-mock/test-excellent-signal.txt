@@ -1,29 +1,32 @@
 {
-  "callsign": "W1TEST",
-  "locator": "FN42aa",
-  "powerDbm": 30,
-  "txPercent": 100,
-  "hostname": "test-beacon-excellent",
-  "currentBand": "40m",
-  "wifiSsid": "ExcellentWiFi",
-  "wifiRssi": -45,
-  "networkState": "READY",
-  "transmissionState": "TRANSMITTING",
-  "nextTransmissionIn": 15,
-  "frequency": "7.040100 MHz",
-  "statistics": {
-    "totalTransmissions": 999,
-    "totalMinutes": 14400,
-    "byBand": {
-      "160m": {"transmissions": 50, "minutes": 1800},
-      "80m": {"transmissions": 120, "minutes": 4320},
-      "40m": {"transmissions": 200, "minutes": 7200},
-      "30m": {"transmissions": 89, "minutes": 3204},
-      "20m": {"transmissions": 300, "minutes": 10800},
-      "17m": {"transmissions": 75, "minutes": 2700},
-      "15m": {"transmissions": 165, "minutes": 5940},
-      "12m": {"transmissions": 0, "minutes": 0},
-      "10m": {"transmissions": 0, "minutes": 0}
+  "call": "W1TEST",
+  "loc": "FN42aa",
+  "pwr": 30,
+  "txPct": 100,
+  "wifiMode": "sta",
+  "host": "test-beacon-excellent",
+  "curBand": "40m",
+  "ssid": "ExcellentWiFi",
+  "ssidAp": "TEST-Beacon",
+  "pwdAp": "test123",
+  "rssi": -45,
+  "netState": "READY",
+  "txState": "TRANSMITTING",
+  "nextTx": 15,
+  "freq": "7.040100 MHz",
+  "stats": {
+    "txCnt": 999,
+    "txMin": 14400,
+    "bands": {
+      "160m": {"txCnt": 50, "txMin": 1800},
+      "80m": {"txCnt": 120, "txMin": 4320},
+      "40m": {"txCnt": 200, "txMin": 7200},
+      "30m": {"txCnt": 89, "txMin": 3204},
+      "20m": {"txCnt": 300, "txMin": 10800},
+      "17m": {"txCnt": 75, "txMin": 2700},
+      "15m": {"txCnt": 165, "txMin": 5940},
+      "12m": {"txCnt": 0, "txMin": 0},
+      "10m": {"txCnt": 0, "txMin": 0}
     }
   }
 }

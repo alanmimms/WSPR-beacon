@@ -1,0 +1,31 @@
+{
+  "call": "KB0AP",
+  "loc": "EM29cc",
+  "pwr": 20,
+  "txPct": 25,
+  "wifiMode": "ap",
+  "host": "wspr-ap-beacon",
+  "curBand": "20m",
+  "ssidAp": "WSPR-Field-Day",
+  "pwdAp": "hamradio2024",
+  "netState": "AP_MODE",
+  "txState": "TRANSMITTING",
+  "nextTx": 0,
+  "freq": "14.097100 MHz",
+  "clientCount": 2,
+  "stats": {
+    "txCnt": 8,
+    "txMin": 16,
+    "bands": {
+      "160m": {"txCnt": 0, "txMin": 0},
+      "80m": {"txCnt": 0, "txMin": 0},
+      "40m": {"txCnt": 1, "txMin": 2},
+      "30m": {"txCnt": 1, "txMin": 2},
+      "20m": {"txCnt": 5, "txMin": 10},
+      "17m": {"txCnt": 1, "txMin": 2},
+      "15m": {"txCnt": 0, "txMin": 0},
+      "12m": {"txCnt": 0, "txMin": 0},
+      "10m": {"txCnt": 0, "txMin": 0}
+    }
+  }
+}

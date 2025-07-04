@@ -1,0 +1,30 @@
+{
+  "call": "WB0STA",
+  "loc": "DN70bb",
+  "pwr": 27,
+  "txPct": 50,
+  "wifiMode": "sta",
+  "host": "wspr-sta-test",
+  "curBand": "40m",
+  "ssid": "TestNetwork_5G",
+  "rssi": -58,
+  "netState": "READY",
+  "txState": "IDLE",
+  "nextTx": 45,
+  "freq": "7.040100 MHz",
+  "stats": {
+    "txCnt": 12,
+    "txMin": 24,
+    "bands": {
+      "160m": {"txCnt": 0, "txMin": 0},
+      "80m": {"txCnt": 2, "txMin": 4},
+      "40m": {"txCnt": 6, "txMin": 12},
+      "30m": {"txCnt": 1, "txMin": 2},
+      "20m": {"txCnt": 3, "txMin": 6},
+      "17m": {"txCnt": 0, "txMin": 0},
+      "15m": {"txCnt": 0, "txMin": 0},
+      "12m": {"txCnt": 0, "txMin": 0},
+      "10m": {"txCnt": 0, "txMin": 0}
+    }
+  }
+}

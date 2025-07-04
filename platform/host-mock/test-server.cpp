@@ -64,58 +64,61 @@ static std::string formatTimeISO(int64_t unixTime) {
 }
 
 static json settings = {
-  {"callsign", "N0CALL"},
-  {"locator", "AA00aa"},
-  {"powerDbm", 23},
-  {"txPercent", 20},
-  {"wifiSsid", ""},
-  {"wifiPassword", ""},
-  {"hostname", "wspr-beacon"},
+  {"call", "N0CALL"},
+  {"loc", "AA00aa"},
+  {"pwr", 23},
+  {"txPct", 20},
+  {"wifiMode", "sta"},
+  {"ssid", ""},
+  {"pwd", ""},
+  {"ssidAp", "WSPR-Beacon"},
+  {"pwdAp", "wspr2024"},
+  {"host", "wspr-beacon"},
   {"bands", {
     {"160m", {
-      {"enabled", false},
-      {"frequency", 1838100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 1838100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"80m", {
-      {"enabled", false},
-      {"frequency", 3570100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 3570100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"40m", {
-      {"enabled", false},
-      {"frequency", 7040100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 7040100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"30m", {
-      {"enabled", false},
-      {"frequency", 10140200},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 10140200},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"20m", {
-      {"enabled", false},
-      {"frequency", 14097100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 14097100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"17m", {
-      {"enabled", false},
-      {"frequency", 18106100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 18106100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"15m", {
-      {"enabled", false},
-      {"frequency", 21096100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 21096100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"12m", {
-      {"enabled", false},
-      {"frequency", 24926100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 24926100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }},
     {"10m", {
-      {"enabled", false},
-      {"frequency", 28126100},
-      {"schedule", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
+      {"en", false},
+      {"freq", 28126100},
+      {"sched", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}}
     }}
   }}
 };
@@ -135,8 +138,19 @@ static bool loadMockData(const std::string& mockDataFile) {
     // Merge mock data into status, preserving dynamic fields
     status = mockData;
     
-    // Always set lastResetTime to current startup time
-    status["lastResetTime"] = formatTimeISO(timeInterface.getStartTime());
+    // Also update settings with relevant fields from mock data
+    if (mockData.contains("call")) settings["call"] = mockData["call"];
+    if (mockData.contains("loc")) settings["loc"] = mockData["loc"];
+    if (mockData.contains("pwr")) settings["pwr"] = mockData["pwr"];
+    if (mockData.contains("txPct")) settings["txPct"] = mockData["txPct"];
+    if (mockData.contains("host")) settings["host"] = mockData["host"];
+    if (mockData.contains("wifiMode")) settings["wifiMode"] = mockData["wifiMode"];
+    if (mockData.contains("ssid")) settings["ssid"] = mockData["ssid"];
+    if (mockData.contains("ssidAp")) settings["ssidAp"] = mockData["ssidAp"];
+    if (mockData.contains("pwdAp")) settings["pwdAp"] = mockData["pwdAp"];
+    
+    // Always set resetTime to current startup time
+    status["resetTime"] = formatTimeISO(timeInterface.getStartTime());
     
     std::cout << "[TestServer] Loaded mock data from: " << mockDataFile << std::endl;
     return true;
@@ -149,40 +163,68 @@ static bool loadMockData(const std::string& mockDataFile) {
 static void initializeDefaultStatus() {
   // Fallback default status if mock data loading fails
   status = {
-    {"callsign", "N0CALL"},
-    {"locator", "AA00aa"},
-    {"powerDbm", 23},
-    {"txPercent", 20},
-    {"hostname", "wspr-beacon"},
-    {"currentBand", "20m"},
-    {"lastResetTime", formatTimeISO(timeInterface.getStartTime())},
-    {"wifiSsid", "TestWiFi"},
-    {"wifiRssi", -70},
-    {"networkState", "READY"},
-    {"statistics", {
-      {"totalTransmissions", 0},
-      {"totalMinutes", 0},
-      {"byBand", {
-        {"160m", {"transmissions", 0, "minutes", 0}},
-        {"80m", {"transmissions", 0, "minutes", 0}},
-        {"40m", {"transmissions", 0, "minutes", 0}},
-        {"30m", {"transmissions", 0, "minutes", 0}},
-        {"20m", {"transmissions", 0, "minutes", 0}},
-        {"17m", {"transmissions", 0, "minutes", 0}},
-        {"15m", {"transmissions", 0, "minutes", 0}},
-        {"12m", {"transmissions", 0, "minutes", 0}},
-        {"10m", {"transmissions", 0, "minutes", 0}}
+    {"call", "N0CALL"},
+    {"loc", "AA00aa"},
+    {"pwr", 23},
+    {"txPct", 20},
+    {"host", "wspr-beacon"},
+    {"curBand", "20m"},
+    {"resetTime", formatTimeISO(timeInterface.getStartTime())},
+    {"ssid", "TestWiFi"},
+    {"rssi", -70},
+    {"netState", "READY"},
+    {"stats", {
+      {"txCnt", 0},
+      {"txMin", 0},
+      {"bands", {
+        {"160m", {"txCnt", 0, "txMin", 0}},
+        {"80m", {"txCnt", 0, "txMin", 0}},
+        {"40m", {"txCnt", 0, "txMin", 0}},
+        {"30m", {"txCnt", 0, "txMin", 0}},
+        {"20m", {"txCnt", 0, "txMin", 0}},
+        {"17m", {"txCnt", 0, "txMin", 0}},
+        {"15m", {"txCnt", 0, "txMin", 0}},
+        {"12m", {"txCnt", 0, "txMin", 0}},
+        {"10m", {"txCnt", 0, "txMin", 0}}
       }}
     }}
   };
 }
 
 static void updateStatusFromSettings() {
-  status["callsign"] = settings["callsign"];
-  status["locator"] = settings["locator"];
-  status["powerDbm"] = settings["powerDbm"];
-  status["txPercent"] = settings["txPercent"];
-  status["hostname"] = settings["hostname"];
+  status["call"] = settings["call"];
+  status["loc"] = settings["loc"];
+  status["pwr"] = settings["pwr"];
+  status["txPct"] = settings["txPct"];
+  status["host"] = settings["host"];
+  status["wifiMode"] = settings["wifiMode"];
+  
+  // Update WiFi status based on mode
+  std::string wifiMode = settings.value("wifiMode", "sta");
+  if (wifiMode == "ap") {
+    status["netState"] = "AP_MODE";
+    status["ssid"] = settings.value("ssidAp", "WSPR-Beacon");
+    // Simulate connected clients (varying over time)
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_serverStartTime).count();
+    int clientCount = (elapsed / 30) % 4; // 0-3 clients, changes every 30 seconds
+    status["clientCount"] = clientCount;
+    status.erase("rssi"); // No RSSI in AP mode
+  } else {
+    // STA mode - check if we have credentials
+    std::string ssid = settings.value("ssid", "");
+    if (!ssid.empty()) {
+      status["netState"] = "READY";
+      status["ssid"] = ssid;
+      status["rssi"] = -65; // Mock RSSI for connected STA
+    } else {
+      status["netState"] = "AP_MODE"; // Fall back to AP if no STA config
+      status["ssid"] = settings.value("ssidAp", "WSPR-Beacon");
+      status["clientCount"] = 0;
+      status.erase("rssi");
+    }
+    status.erase("clientCount"); // No client count in STA mode
+  }
 }
 
 std::string findWebDirectoryForTestServer() {
@@ -288,7 +330,7 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     const int WSPR_TX_DURATION = 111;  // Rounded up
     
     // Get TX percentage from settings
-    int txPercent = dynamicStatus.value("txPercent", 20);
+    int txPercent = dynamicStatus.value("txPct", 20);
     
     // Simple transmission scheduling: transmit every 100/txPercent cycles
     int cycleNumber = mockElapsedSeconds / WSPR_CYCLE_SECONDS;
@@ -303,19 +345,19 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     
     // Update transmission state
     if (shouldTransmit && secondsInCycle < WSPR_TX_DURATION) {
-      dynamicStatus["transmissionState"] = "TRANSMITTING";
-      dynamicStatus["nextTransmissionIn"] = 0;
+      dynamicStatus["txState"] = "TRANSMITTING";
+      dynamicStatus["nextTx"] = 0;
     } else {
-      dynamicStatus["transmissionState"] = "IDLE";
+      dynamicStatus["txState"] = "IDLE";
       
       // Calculate next transmission
       if (txPercent > 0) {
         int cycleInterval = 100 / txPercent;
         int nextTxCycle = ((cycleNumber / cycleInterval) + 1) * cycleInterval;
         int secondsUntilNextCycle = (nextTxCycle - cycleNumber) * WSPR_CYCLE_SECONDS - secondsInCycle;
-        dynamicStatus["nextTransmissionIn"] = secondsUntilNextCycle;
+        dynamicStatus["nextTx"] = secondsUntilNextCycle;
       } else {
-        dynamicStatus["nextTransmissionIn"] = 9999;  // Never
+        dynamicStatus["nextTx"] = 9999;  // Never
       }
     }
     
@@ -338,20 +380,109 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       }
     }
     
-    dynamicStatus["statistics"]["totalTransmissions"] = completedTransmissions;
-    dynamicStatus["statistics"]["totalMinutes"] = totalTransmissionMinutes;
+    dynamicStatus["stats"]["txCnt"] = completedTransmissions;
+    dynamicStatus["stats"]["txMin"] = totalTransmissionMinutes;
+    
+    // Update WiFi status based on current settings and time
+    std::string wifiMode = settings.value("wifiMode", "sta");
+    if (wifiMode == "ap") {
+      dynamicStatus["netState"] = "AP_MODE";
+      // Simulate varying client count
+      int clientCount = (mockElapsedSeconds / 30) % 4; // 0-3 clients
+      dynamicStatus["clientCount"] = clientCount;
+      dynamicStatus.erase("rssi");
+    } else {
+      std::string ssid = settings.value("ssid", "");
+      if (!ssid.empty()) {
+        dynamicStatus["netState"] = "READY";
+        dynamicStatus["ssid"] = ssid;
+        // Simulate RSSI variation
+        int rssiBase = -65;
+        int rssiVariation = (mockElapsedSeconds / 10) % 20 - 10; // ±10 dBm variation
+        dynamicStatus["rssi"] = rssiBase + rssiVariation;
+      } else {
+        dynamicStatus["netState"] = "AP_MODE";
+        dynamicStatus["clientCount"] = 0;
+        dynamicStatus.erase("rssi");
+      }
+      dynamicStatus.erase("clientCount");
+    }
     
     res.set_content(dynamicStatus.dump(), "application/json");
   });
 
   svr.Get("/api/time", [](const httplib::Request &, httplib::Response &res) {
     int64_t mockTime = getMockTime();
+    
+    // Simulate NTP sync status
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_serverStartTime).count();
+    
+    // Simulate last NTP sync time (every ~10 minutes in mock time)
+    int64_t lastSyncInterval = 600; // 10 minutes
+    int64_t scaledElapsed = static_cast<int64_t>(elapsed * g_timeScale);
+    int64_t timeSinceSync = scaledElapsed % (lastSyncInterval * 2);
+    int64_t lastSyncTime = mockTime - timeSinceSync;
+    
     json timeResponse = {
       {"unixTime", mockTime},
       {"isoTime", formatTimeISO(mockTime)},
-      {"synced", true}
+      {"synced", true},
+      {"lastSyncTime", formatTimeISO(lastSyncTime)},
+      {"timeScale", g_timeScale}
     };
     res.set_content(timeResponse.dump(), "application/json");
+  });
+
+  svr.Get("/api/wifi/scan", [](const httplib::Request &, httplib::Response &res) {
+    // Mock WiFi scan results with time-varying signal strengths
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_serverStartTime).count();
+    
+    // Simulate signal strength variations over time
+    int timeOffset = elapsed / 5; // Changes every 5 seconds
+    
+    json scanResults = json::array({
+      {
+        {"ssid", "MyHomeWiFi"},
+        {"rssi", -45 + (timeOffset % 10) - 5}, // -50 to -40
+        {"encryption", "WPA2"},
+        {"channel", 6}
+      },
+      {
+        {"ssid", "Neighbor_2.4G"},
+        {"rssi", -67 + (timeOffset % 8) - 4}, // -71 to -63
+        {"encryption", "WPA2"},
+        {"channel", 11}
+      },
+      {
+        {"ssid", "CoffeeShop_Guest"},
+        {"rssi", -72 + (timeOffset % 6) - 3}, // -75 to -69
+        {"encryption", "Open"},
+        {"channel", 1}
+      },
+      {
+        {"ssid", "TestNetwork_5G"},
+        {"rssi", -58 + (timeOffset % 12) - 6}, // -64 to -52
+        {"encryption", "WPA3"},
+        {"channel", 36}
+      },
+      {
+        {"ssid", "Enterprise_Corp"},
+        {"rssi", -81 + (timeOffset % 4) - 2}, // -83 to -79
+        {"encryption", "WPA2-Enterprise"},
+        {"channel", 44}
+      },
+      {
+        {"ssid", "WeakSignal_Test"},
+        {"rssi", -85 + (timeOffset % 6) - 3}, // -88 to -82
+        {"encryption", "WPA2"},
+        {"channel", 13}
+      }
+    });
+    
+    std::cout << "[TestServer] WiFi scan requested - returning " << scanResults.size() << " networks" << std::endl;
+    res.set_content(scanResults.dump(), "application/json");
   });
 
   // Serve static files - dynamically find web directory

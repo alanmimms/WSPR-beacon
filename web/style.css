@@ -390,6 +390,65 @@ h1 {
   color: #388e3c;
 }
 
+/* WiFi Mode Settings */
+.wifi-mode-section {
+  margin-top: 1em;
+  padding-left: 1em;
+  border-left: 3px solid #e0e0e0;
+}
+
+.ssid-input-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex: 1;
+}
+
+.ssid-input-container .ssid-select {
+  flex: 1;
+}
+
+.ssid-input-container input[type="text"] {
+  flex: 1;
+}
+
+.scan-btn {
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5em 1em;
+  font-size: 0.9em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.scan-btn:hover {
+  background: #1565c0;
+}
+
+.scan-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.form-row select {
+  flex: 1;
+  padding: 0.5em 0.7em;
+  font-size: 1em;
+  border: 1.5px solid #bcc7d1;
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  transition: border 0.15s;
+}
+
+.form-row select:focus {
+  border-color: #4092ff;
+  background: #eaf3ff;
+}
+
 /* Persistent Footer */
 .persistent-footer {
   display: flex;

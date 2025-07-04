@@ -117,6 +117,11 @@ Options:
 
 # Slow motion (0.1x) for debugging
 ./bin/host-testbench --time-scale 0.1 --port 8081
+
+# Test different WiFi modes
+./bin/host-testbench --mock-data ../../platform/host-mock/test-sta-mode.txt --time-scale 10
+./bin/host-testbench --mock-data ../../platform/host-mock/test-ap-mode.txt --time-scale 10
+./bin/host-testbench --mock-data ../../platform/host-mock/test-disconnected.txt
 ```
 
 Then open http://localhost:8080 in your browser.
@@ -138,10 +143,21 @@ Then open http://localhost:8080 in your browser.
 5. **Statistics updating**: TX count and total minutes increase in real-time
 6. **Next transmission** scheduled based on TX percentage setting
 
+**WiFi Mode Testing:**
+The mock server simulates both Station (STA) and Access Point (AP) WiFi modes:
+
+- **STA Mode**: Shows "Connected: [SSID]" in footer, displays RSSI signal strength
+- **AP Mode**: Shows "AP: N clients" in footer, RSSI field shows "-" (not applicable)
+- **WiFi Scan**: Returns realistic networks with varying signal strengths over time
+- **Dynamic Updates**: Client counts and RSSI values change during testing
+
 **Mock Data Files Provided:**
-- `mock-data.txt`: Default configuration (20% TX, -65dBm WiFi)
-- `test-excellent-signal.txt`: High activity beacon with excellent WiFi
+- `mock-data.txt`: Default configuration (20% TX, STA mode, -65dBm WiFi)
+- `test-excellent-signal.txt`: High activity beacon with excellent WiFi signal
 - `test-transmitting.txt`: Starts in transmitting state for testing
+- `test-sta-mode.txt`: Station mode connected to "TestNetwork_5G" 
+- `test-ap-mode.txt`: Access Point mode with 2 connected clients
+- `test-disconnected.txt`: STA mode without WiFi credentials (falls back to AP)
 
 #### Component Testing
 

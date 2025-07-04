@@ -163,8 +163,8 @@ void Beacon::startTransmission() {
         ctx->si5351->enableOutput(0, true);
         
         // Store current band in settings for status display
-        ctx->settings->setString("currentBand", currentBand);
-        ctx->settings->setInt("frequency", frequency);
+        ctx->settings->setString("curBand", currentBand);
+        ctx->settings->setInt("freq", frequency);
     }
     
     if (ctx->logger && ctx->settings) {
@@ -173,9 +173,9 @@ void Beacon::startTransmission() {
         uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
         
         snprintf(logMsg, sizeof(logMsg), "TX start: %s, %s, %ddBm on %s (%.6f MHz)",
-            ctx->settings->getString("callsign", "N0CALL"),
-            ctx->settings->getString("locator", "AA00aa"), 
-            ctx->settings->getInt("powerDbm", 10),
+            ctx->settings->getString("call", "N0CALL"),
+            ctx->settings->getString("loc", "AA00aa"), 
+            ctx->settings->getInt("pwr", 10),
             currentBand,
             frequency / 1000000.0
         );
@@ -224,6 +224,12 @@ void Beacon::periodicTimeSync() {
 bool Beacon::shouldConnectToWiFi() const {
     if (!ctx->settings) return false;
     
+    // Check WiFi mode - only connect to existing WiFi in STA mode
+    const char* wifiMode = ctx->settings->getString("wifiMode", "sta");
+    if (strcmp(wifiMode, "sta") != 0) {
+        return false; // AP mode - don't try to connect
+    }
+    
     const char* ssid = ctx->settings->getString("ssid", "");
     return ssid && ssid[0] != '\0';
 }
@@ -232,7 +238,7 @@ bool Beacon::connectToWiFi() {
     if (!ctx->net || !ctx->settings) return false;
     
     const char* ssid = ctx->settings->getString("ssid", "");
-    const char* password = ctx->settings->getString("password", "");
+    const char* password = ctx->settings->getString("pwd", "");
     
     if (ctx->logger) {
         char logMsg[128];
@@ -276,7 +282,7 @@ void Beacon::selectNextBand() {
     }
     
     // Get band selection mode from settings
-    const char* modeStr = ctx->settings->getString("bandSelectionMode", "sequential");
+    const char* modeStr = ctx->settings->getString("bandMode", "sequential");
     if (strcmp(modeStr, "roundRobin") == 0) {
         bandSelectionMode = BandSelectionMode::ROUND_ROBIN;
     } else if (strcmp(modeStr, "randomExhaustive") == 0) {
@@ -366,13 +372,13 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     
     // Build key for band enabled state
     char key[32];
-    snprintf(key, sizeof(key), "bands.%s.enabled", band);
+    snprintf(key, sizeof(key), "bands.%s.en", band);
     if (ctx->settings->getInt(key, 0) == 0) {  // 0 = false, 1 = true
         return false;
     }
     
     // Check if band is scheduled for current hour
-    snprintf(key, sizeof(key), "bands.%s.schedule", band);
+    snprintf(key, sizeof(key), "bands.%s.sched", band);
     
     // Get current UTC hour
     time_t now = time(nullptr);
@@ -400,6 +406,6 @@ int Beacon::getEnabledBandCount() {
 
 const char* Beacon::getBandFrequencyKey(const char* band) {
     static char key[64];
-    snprintf(key, sizeof(key), "bands.%s.frequency", band);
+    snprintf(key, sizeof(key), "bands.%s.freq", band);
     return key;
 }
