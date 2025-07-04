@@ -1,0 +1,29 @@
+{
+  "callsign": "N0CALL",
+  "locator": "AA00aa", 
+  "powerDbm": 23,
+  "txPercent": 20,
+  "hostname": "wspr-beacon",
+  "currentBand": "20m",
+  "wifiSsid": "MyHomeWiFi",
+  "wifiRssi": -65,
+  "networkState": "READY",
+  "transmissionState": "TRANSMITTING",
+  "nextTransmissionIn": 45,
+  "frequency": "14.097100 MHz",
+  "statistics": {
+    "totalTransmissions": 5,
+    "totalMinutes": 60,
+    "byBand": {
+      "160m": {"transmissions": 0, "minutes": 0},
+      "80m": {"transmissions": 0, "minutes": 0},
+      "40m": {"transmissions": 0, "minutes": 0},
+      "30m": {"transmissions": 0, "minutes": 0},
+      "20m": {"transmissions": 5, "minutes": 60},
+      "17m": {"transmissions": 0, "minutes": 0},
+      "15m": {"transmissions": 0, "minutes": 0},
+      "12m": {"transmissions": 0, "minutes": 0},
+      "10m": {"transmissions": 0, "minutes": 0}
+    }
+  }
+}

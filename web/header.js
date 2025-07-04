@@ -7,7 +7,8 @@ class HeaderManager {
       power: document.getElementById('header-power'),
       state: document.getElementById('header-state'),
       frequency: document.getElementById('header-frequency'),
-      time: document.getElementById('header-time')
+      time: document.getElementById('header-time'),
+      ntpSync: document.getElementById('header-ntp-sync')
     };
     
     this.footerElements = {
@@ -21,6 +22,7 @@ class HeaderManager {
     
     this.currentState = 'idle';
     this.lastStatus = null;
+    this.lastNtpSync = null;
   }
 
   // Map FSM states to UI requirements from README
@@ -245,11 +247,13 @@ class HeaderManager {
       this.footerElements.nextTx.textContent = `${timeStr} @ ${frequency}`;
     }
 
-    // Update transmission count
+    // Update transmission count and minutes
     if (this.footerElements.txCount) {
       const txCount = status.statistics?.totalTransmissions || 
                      status.transmissionCount || 0;
-      this.footerElements.txCount.textContent = txCount.toString();
+      const txMinutes = status.statistics?.totalMinutes || 
+                       status.transmissionMinutes || 0;
+      this.footerElements.txCount.textContent = `TX: ${txCount} ${txMinutes}mins`;
     }
   }
 
@@ -277,6 +281,31 @@ class HeaderManager {
     return `${dateStr} ${timeStr} UTC`;
   }
 
+  // Format NTP sync status
+  formatNtpSyncStatus(lastSyncTime) {
+    if (!lastSyncTime) {
+      return 'last NTP sync NEVER';
+    }
+    
+    const now = new Date();
+    const syncTime = new Date(lastSyncTime);
+    const minutesAgo = Math.floor((now - syncTime) / (1000 * 60));
+    
+    if (minutesAgo < 1) {
+      return 'last NTP sync <1 minute';
+    } else if (minutesAgo === 1) {
+      return 'last NTP sync 1 minute';
+    } else if (minutesAgo < 60) {
+      return `last NTP sync ${minutesAgo} minutes`;
+    } else if (minutesAgo < 1440) {
+      const hoursAgo = Math.floor(minutesAgo / 60);
+      return `last NTP sync ${hoursAgo} hour${hoursAgo === 1 ? '' : 's'}`;
+    } else {
+      const daysAgo = Math.floor(minutesAgo / 1440);
+      return `last NTP sync ${daysAgo} day${daysAgo === 1 ? '' : 's'}`;
+    }
+  }
+
   // Start periodic time updates
   startTimeSync() {
     // Update time every second
@@ -288,6 +317,15 @@ class HeaderManager {
           if (timeData.unixTime && this.elements.time) {
             this.elements.time.textContent = this.formatDateTime(timeData.unixTime);
           }
+          
+          // Update NTP sync status if available
+          if (timeData.lastSyncTime !== undefined) {
+            this.lastNtpSync = timeData.lastSyncTime;
+          }
+          
+          if (this.elements.ntpSync) {
+            this.elements.ntpSync.textContent = this.formatNtpSyncStatus(this.lastNtpSync);
+          }
         })
         .catch(error => {
           console.warn('Time sync failed:', error);
@@ -296,6 +334,9 @@ class HeaderManager {
           const timeStr = this.formatDateTime(Math.floor(now.getTime() / 1000));
           if (this.elements.time) {
             this.elements.time.textContent = timeStr;
+          }
+          if (this.elements.ntpSync) {
+            this.elements.ntpSync.textContent = 'last NTP sync UNKNOWN';
           }
         });
     }, 1000);

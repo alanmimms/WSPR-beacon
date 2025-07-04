@@ -40,9 +40,6 @@ async function loadStatus() {
     
     // Update statistics
     if (status.statistics) {
-      document.getElementById('total-transmissions').textContent = status.statistics.totalTransmissions || 0;
-      document.getElementById('total-minutes').textContent = status.statistics.totalMinutes || 0;
-      
       // Update band statistics
       updateBandStats(status.statistics.byBand || {}, bandConfigs);
     }

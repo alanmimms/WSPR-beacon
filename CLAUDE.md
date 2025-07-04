@@ -10,7 +10,14 @@ cd host-mock
 mkdir build && cd build
 cmake ..
 make -j4
-./bin/host-testbench  # Starts web server on http://localhost:8080
+
+# Run with various options:
+./bin/host-testbench  # Normal speed, default mock data
+./bin/host-testbench --time-scale 60  # 60x time acceleration for testing
+./bin/host-testbench --mock-data ../../platform/host-mock/test-transmitting.txt  # Custom mock data
+./bin/host-testbench --help  # See all options
+
+# Server runs on http://localhost:8080
 ```
 
 ### ESP32 Target Build (Production)
@@ -74,23 +81,42 @@ Precise timing implementation:
 ### Web UI Architecture
 
 #### Real-time Updates
-- Persistent header: callsign, locator, power, state, frequency, UTC time
-- Persistent footer: node name, reset time, next TX countdown, transmission count
+- **Persistent header**: callsign, locator, power, bold red "TRANSMITTING" state, frequency, UTC time with NTP sync status
+- **Persistent footer**: node name, uptime, WiFi status/RSSI, next TX countdown, "TX: N Mmins" format
+- **Time acceleration support**: Configurable time scaling for testing (1x to 1000x+)
+- **Dynamic transmission state**: Automatically cycles between IDLE and TRANSMITTING based on schedule
+- **Live countdown timer**: Shows exact seconds until next transmission
+- **Color-coded indicators**: Green/orange/red WiFi RSSI, pulsing red transmission state
 - 1-second polling for live status updates
 - Responsive design with mobile-friendly layout
 
 #### API Endpoints
 - `GET /api/settings` - Retrieve configuration
 - `POST /api/settings` - Update configuration  
-- `GET /api/status.json` - Current status and statistics
-- `GET /api/time` - Server time synchronization
+- `GET /api/status.json` - Current status and statistics with dynamic transmission state
+- `GET /api/time` - Server time synchronization with NTP sync status
 - `GET /api/live-status` - Real-time status (ESP32 only)
 
+#### Mock Server Features
+- **External mock data files**: JSON-based configuration for different test scenarios
+- **Time acceleration**: `--time-scale N` parameter for accelerated testing
+- **Dynamic transmission simulation**: Realistic WSPR cycle timing with 120s periods
+- **Accurate statistics**: Proper tracking of transmission count and actual transmission time
+- **Multiple test scenarios**: Default, excellent signal, transmitting state configurations
+
 #### JavaScript Architecture
-- `header.js` - HeaderManager class for persistent header/footer management
-- `home.js` - Status page with transmission statistics and live updates
+- `header.js` - HeaderManager class for persistent header/footer management with NTP sync tracking
+- `home.js` - Status page with simplified transmission statistics (removed totals, band-only display)
 - `settings.js` - Configuration management with form validation
 - `nav.js` - Navigation between pages
+
+#### UI Improvements (Recent)
+- **NTP sync status**: Shows "last NTP sync N minutes" below UTC time in header
+- **Larger time display**: 20% larger font for better readability
+- **Bold red transmission state**: Prominent "TRANSMITTING" indicator with pulsing animation
+- **Full-width footer**: Spans entire page width, no wrapping issues
+- **Simplified statistics**: Single-column band layout, removed redundant totals
+- **Improved footer format**: "TX: N Mmins" showing transmission count and actual transmission time
 
 ## Development Patterns
 

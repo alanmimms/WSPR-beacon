@@ -19,7 +19,10 @@
       <span class="header-frequency" id="header-frequency"></span>
     </div>
     <div class="header-right">
-      <span class="header-time" id="header-time">--:--:-- UTC</span>
+      <div class="header-time-container">
+        <span class="header-time" id="header-time">--:--:-- UTC</span>
+        <span class="header-ntp-sync" id="header-ntp-sync">NEVER</span>
+      </div>
     </div>
   </header>
   
@@ -32,24 +35,9 @@
       <fieldset class="settings-zone stats-zone collapsible-fieldset">
         <legend><span class="collapse-icon">▼</span>Transmission Statistics</legend>
         <div class="fieldset-content">
-          <div class="stats-summary">
-          <div class="stat-totals">
-            <h3>Total Since Reset</h3>
-            <div class="stat-value">
-              <span id="total-transmissions">0</span> Tx
-            </div>
-            <div class="stat-value">
-              <span id="total-minutes">0</span> mins
-            </div>
-          </div>
-        </div>
-        
-        <div class="stats-by-band">
-          <h3>By Band</h3>
           <div class="band-stats-grid" id="band-stats">
             <!-- Band statistics will be populated here -->
           </div>
-        </div>
         </div>
       </fieldset>
 

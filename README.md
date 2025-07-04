@@ -51,17 +51,6 @@ There is a persistent navigation bar on the left side of the display
 that shows a set of buttons to switch between the various pages the
 Beacon provides for configuration and status.
 
-## Mock for Testing
-The Beacon's code can be built to run on a host Linux machine with
-"mock" functions for the hardware components of the beacon like
-Si5351, the various target microcontroller functions like
-non-voltatile storage, etc. This allows a lot of testing and playing
-around with the UI without having to flash each time onto the
-microcontroller, and it provides a way to do much more automated
-testing of the software than running on the target would easily
-accomplish.
-
-
 # Structure of the Code
 The code is organized into a `target-esp32` subtree for the target
 microcontroller, a `host-mock` subtree for testing the components of
@@ -70,16 +59,20 @@ without a micrcontroller, and a `src` subtree for the application code
 that is common across these two targets. The name `target-esp32` was
 chosen to allow for future targeting to other platforms.
 
-## Build Options
+## Building
 
 ### 1. Host Mock Build (Testing)
 
-You can build it for testing on your (Linux) host computer using CMake.
-This **mock** build allows the web pages, beacon scheduler, and finite state 
-machine to be tested without microcontroller hardware. The mock implementations
-simulate hardware interfaces but don't actually transmit RF signals or control
-real GPIO pins. This is perfect for:
+The Beacon's code can be built to run on a host Linux machine with
+"mock" functions for the hardware components of the beacon like
+Si5351, the various target microcontroller functions like
+non-volatile storage, etc. This allows a lot of testing and playing
+around with the UI without having to flash each time onto the
+microcontroller, and it provides a way to do much more automated
+testing of the software than running on the target would easily
+accomplish.
 
+This **mock** build is perfect for:
 - Testing the web interface and settings management
 - Verifying beacon scheduling logic and state machine behavior
 - Developing and debugging without hardware
@@ -91,8 +84,90 @@ cd host-mock
 mkdir build && cd build
 cmake ..
 make
-./bin/host-testbench
 ```
+
+#### Running the Mock Server
+
+```bash
+./bin/host-testbench --help
+```
+
+**Command Line Options:**
+```
+Usage: ./bin/host-testbench [options]
+Options:
+  --mock-data <file>  Path to mock data JSON file (default: mock-data.txt)
+  --port <port>       Server port (default: 8080)
+  --time-scale <n>    Time acceleration factor (default: 1.0)
+                      > 1.0 = faster, < 1.0 = slower
+                      e.g., 60 = 1 minute real time = 1 hour mock time
+  --help, -h          Show this help message
+```
+
+**Example Usage:**
+```bash
+# Normal speed with default mock data
+./bin/host-testbench
+
+# Fast time (60x) to see transmissions quickly
+./bin/host-testbench --time-scale 60
+
+# Test with excellent signal strength
+./bin/host-testbench --mock-data ../../platform/host-mock/test-excellent-signal.txt
+
+# Slow motion (0.1x) for debugging
+./bin/host-testbench --time-scale 0.1 --port 8081
+```
+
+Then open http://localhost:8080 in your browser.
+
+**Features:**
+- **Real-time status updates** with configurable time acceleration
+- **Dynamic transmission state**: Automatically cycles between IDLE and TRANSMITTING
+- **Live countdown timer**: Shows exact seconds until next transmission
+- **Bold red "TRANSMITTING"**: Prominent header indicator during transmissions
+- **WSPR-compliant timing**: 120-second cycles, ~111-second transmissions
+- **WiFi RSSI indicators**: Color-coded signal strength (green/orange/red)
+- **Uptime tracking**: Updates every minute showing days/hours/minutes
+
+**What You'll See with Time Acceleration (--time-scale 60):**
+1. **UTC clock advancing** at 60x speed (1 real second = 1 mock minute)
+2. **Countdown timer** rapidly decreasing: 120s → 60s → 30s → Now
+3. **Bold red "TRANSMITTING"** appears in header with pulsing animation
+4. **Transmission duration**: ~111 seconds (less than 2 real seconds at 60x)
+5. **Statistics updating**: TX count and total minutes increase in real-time
+6. **Next transmission** scheduled based on TX percentage setting
+
+**Mock Data Files Provided:**
+- `mock-data.txt`: Default configuration (20% TX, -65dBm WiFi)
+- `test-excellent-signal.txt`: High activity beacon with excellent WiFi
+- `test-transmitting.txt`: Starts in transmitting state for testing
+
+#### Component Testing
+
+The project includes comprehensive test suites for validating WSPR beacon behavior:
+
+```bash
+cd tests
+mkdir build && cd build
+cmake ..
+make
+./test-runner
+```
+
+**Output Example:**
+```
+[2021-03-09 12:01:40 UTC] 🟢 TX START #1 on 20m (14.097100 MHz) at 23dBm
+[2021-03-09 15:06:40 UTC] 🔴 TX END   #1 on 20m (14.097100 MHz) after 110.6s
+[2021-03-09 00:01:40 UTC] 🟢 TX START #2 on 40m (7.040100 MHz) at 30dBm
+[2021-05-14 20:21:40 UTC] 🟢 TX START #3 on 80m (3.570100 MHz) at 30dBm
+```
+
+**Test Coverage:**
+- **Scheduler Tests**: WSPR scheduling, protocol compliance, multi-band operation
+- **FSM Tests**: State transitions, error handling, validation guards
+- **Integration Tests**: Complete beacon startup and operation sequences
+- **Time acceleration**: 100x-200x speed for rapid validation
 
 ### 2. ESP32 Target Build (Production)
 
@@ -103,7 +178,7 @@ embedded target I have aimed this beacon toward initially.
 
 **To build for ESP32:**
 ```bash
-cd target
+cd target-esp32
 idf.py build
 idf.py flash
 ```
@@ -134,86 +209,6 @@ almost any microcontroller with a reasonable OS (e.g., FreeRTOS,
 Zephyr, etc.) by defining some concrete implementations of the
 abstract interfaces and integrating with the target's build system.
 
-## Testing and Development
-
-This project includes comprehensive test suites for validating WSPR
-beacon behavior with accelerated time simulation.
-
-### Component Test Suite
-
-Tests the core Scheduler and FSM components with time acceleration for
-rapid validation:
-
-```bash
-cd tests
-mkdir build && cd build
-cmake ..
-make
-./test-runner
-```
-
-**Output Example:**
-```
-[2021-03-09 12:01:40 UTC] 🟢 TX START #1 on 20m (14.097100 MHz) at 23dBm
-[2021-03-09 15:06:40 UTC] 🔴 TX END   #1 on 20m (14.097100 MHz) after 110.6s
-[2021-03-09 00:01:40 UTC] 🟢 TX START #2 on 40m (7.040100 MHz) at 30dBm
-[2021-05-14 20:21:40 UTC] 🟢 TX START #3 on 80m (3.570100 MHz) at 30dBm
-```
-
-**Features:**
-- **Time acceleration**: 100x-200x speed (4-minute intervals → ~1.2 seconds)
-- **UTC timestamps**: Shows accelerated time progression 
-- **Band rotation**: Cycles through 20m, 40m, 80m, 160m with appropriate frequencies
-- **WSPR compliance**: Validates 110.6-second transmission duration
-- **FSM validation**: Tests all state transitions and error conditions
-
-### Real-Time Web UI Test
-
-Demonstrates the beacon with live browser interface and accelerated time:
-
-```bash
-cd tests
-mkdir webui-build && cd webui-build
-cp ../CMakeLists-webui.txt ./CMakeLists.txt
-cmake .
-make webui-test
-./webui-test
-```
-
-Then open http://localhost:8080 in your browser.
-
-**Features:**
-- **Real-time status updates** every 1 second
-- **Visual transmission indicators**: Red border and pulsing "[TRANSMITTING]" during TX
-- **Live countdown timer**: Shows time until next transmission 
-- **Simulated time display**: UTC clock advancing at 10x speed
-- **Dynamic configuration**: Change settings while beacon operates
-- **Band/frequency display**: Shows current transmission details
-
-**What You'll See:**
-1. **Time advancing** rapidly in the UTC clock display
-2. **Countdown timer**: 16h → 4m → 2:15 → 45s → Now
-3. **Transmission begins**: Thick red border around status box
-4. **Pulsing indicator**: "[TRANSMITTING]" with animation
-5. **Browser tab title** changes to "[TX] WSPR Beacon - Home"
-6. **Automatic scheduling**: Next transmission countdown starts immediately
-
-### Test Coverage
-
-**Scheduler Tests:**
-- Basic WSPR scheduling and timing
-- Protocol compliance (even-minute UTC start, 110.6s duration)
-- Multi-band operation with frequency rotation
-- Transmission cancellation and error recovery
-
-**FSM Tests:**
-- Network state transitions (BOOTING → AP_MODE → STA_CONNECTING → READY)
-- Transmission states (IDLE → TX_PENDING → TRANSMITTING → IDLE)
-- Error state handling and recovery
-- State validation and transition guards
-
-**Integration Tests:**
-- Complete beacon startup sequence
 - Multi-component coordination (Scheduler + FSM + Hardware abstraction)
 - Real-time configuration changes during operation
 - Time synchronization with accelerated clock

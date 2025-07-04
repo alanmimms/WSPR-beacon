@@ -10,6 +10,7 @@
 #include <atomic>
 #include <limits.h>
 #include <iomanip>
+#include <chrono>
 #ifdef _WIN32
 #include <winsock2.h>
 #else
@@ -23,6 +24,17 @@ namespace fs = std::filesystem;
 
 static std::atomic<bool> running{true};
 static Time timeInterface;
+static double g_timeScale = 1.0;
+static std::chrono::steady_clock::time_point g_serverStartTime;
+static int64_t g_mockStartTime;
+
+// Get current mock time based on time scale
+static int64_t getMockTime() {
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - g_serverStartTime).count();
+  int64_t scaledElapsed = static_cast<int64_t>(elapsed * g_timeScale);
+  return g_mockStartTime + (scaledElapsed / 1000);  // Convert to seconds
+}
 
 static std::string readFile(const std::string &path) {
   std::ifstream f(path, std::ios::in | std::ios::binary);
@@ -207,7 +219,12 @@ std::string findWebDirectoryForTestServer() {
   return "../../web";
 }
 
-void startTestServer(int port, const std::string& mockDataFile) {
+void startTestServer(int port, const std::string& mockDataFile, double timeScale) {
+  // Initialize time scale
+  g_timeScale = timeScale;
+  g_serverStartTime = std::chrono::steady_clock::now();
+  g_mockStartTime = timeInterface.getTime();
+  
   // Initialize mock data
   if (!loadMockData(mockDataFile)) {
     initializeDefaultStatus();
@@ -257,14 +274,82 @@ void startTestServer(int port, const std::string& mockDataFile) {
   });
 
   svr.Get("/api/status.json", [](const httplib::Request &, httplib::Response &res) {
-    res.set_content(status.dump(), "application/json");
+    // Calculate dynamic status based on accelerated time
+    json dynamicStatus = status;
+    
+    // Calculate elapsed time in mock seconds
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - g_serverStartTime).count();
+    int64_t mockElapsedSeconds = static_cast<int64_t>((elapsed * g_timeScale) / 1000);
+    
+    // WSPR transmission cycle: 120 seconds (2 minutes)
+    // Transmission duration: ~110.6 seconds
+    const int WSPR_CYCLE_SECONDS = 120;
+    const int WSPR_TX_DURATION = 111;  // Rounded up
+    
+    // Get TX percentage from settings
+    int txPercent = dynamicStatus.value("txPercent", 20);
+    
+    // Simple transmission scheduling: transmit every 100/txPercent cycles
+    int cycleNumber = mockElapsedSeconds / WSPR_CYCLE_SECONDS;
+    int secondsInCycle = mockElapsedSeconds % WSPR_CYCLE_SECONDS;
+    
+    // Determine if we should transmit this cycle (simple modulo approach)
+    bool shouldTransmit = false;
+    if (txPercent > 0) {
+      int cycleInterval = 100 / txPercent;
+      shouldTransmit = (cycleNumber % cycleInterval) == 0;
+    }
+    
+    // Update transmission state
+    if (shouldTransmit && secondsInCycle < WSPR_TX_DURATION) {
+      dynamicStatus["transmissionState"] = "TRANSMITTING";
+      dynamicStatus["nextTransmissionIn"] = 0;
+    } else {
+      dynamicStatus["transmissionState"] = "IDLE";
+      
+      // Calculate next transmission
+      if (txPercent > 0) {
+        int cycleInterval = 100 / txPercent;
+        int nextTxCycle = ((cycleNumber / cycleInterval) + 1) * cycleInterval;
+        int secondsUntilNextCycle = (nextTxCycle - cycleNumber) * WSPR_CYCLE_SECONDS - secondsInCycle;
+        dynamicStatus["nextTransmissionIn"] = secondsUntilNextCycle;
+      } else {
+        dynamicStatus["nextTransmissionIn"] = 9999;  // Never
+      }
+    }
+    
+    // Update statistics based on actual transmission time
+    // Calculate how many complete transmission cycles have occurred
+    int completedTransmissions = 0;
+    int totalTransmissionMinutes = 0;
+    
+    if (txPercent > 0) {
+      int cycleInterval = 100 / txPercent;
+      completedTransmissions = cycleNumber / cycleInterval;
+      
+      // Each transmission is ~111 seconds (1.85 minutes)
+      totalTransmissionMinutes = completedTransmissions * 2; // Rounded to 2 minutes per TX
+      
+      // If currently transmitting, add partial time
+      if (shouldTransmit && secondsInCycle < WSPR_TX_DURATION) {
+        int currentTxMinutes = secondsInCycle / 60;
+        totalTransmissionMinutes += currentTxMinutes;
+      }
+    }
+    
+    dynamicStatus["statistics"]["totalTransmissions"] = completedTransmissions;
+    dynamicStatus["statistics"]["totalMinutes"] = totalTransmissionMinutes;
+    
+    res.set_content(dynamicStatus.dump(), "application/json");
   });
 
   svr.Get("/api/time", [](const httplib::Request &, httplib::Response &res) {
+    int64_t mockTime = getMockTime();
     json timeResponse = {
-      {"unixTime", timeInterface.getTime()},
-      {"isoTime", formatTimeISO(timeInterface.getTime())},
-      {"synced", timeInterface.isTimeSynced()}
+      {"unixTime", mockTime},
+      {"isoTime", formatTimeISO(mockTime)},
+      {"synced", true}
     };
     res.set_content(timeResponse.dump(), "application/json");
   });
