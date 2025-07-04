@@ -1,0 +1,29 @@
+{
+  "callsign": "W1TEST",
+  "locator": "FN42aa",
+  "powerDbm": 30,
+  "txPercent": 100,
+  "hostname": "test-beacon-excellent",
+  "currentBand": "40m",
+  "wifiSsid": "ExcellentWiFi",
+  "wifiRssi": -45,
+  "networkState": "READY",
+  "transmissionState": "TRANSMITTING",
+  "nextTransmissionIn": 15,
+  "frequency": "7.040100 MHz",
+  "statistics": {
+    "totalTransmissions": 999,
+    "totalMinutes": 14400,
+    "byBand": {
+      "160m": {"transmissions": 50, "minutes": 1800},
+      "80m": {"transmissions": 120, "minutes": 4320},
+      "40m": {"transmissions": 200, "minutes": 7200},
+      "30m": {"transmissions": 89, "minutes": 3204},
+      "20m": {"transmissions": 300, "minutes": 10800},
+      "17m": {"transmissions": 75, "minutes": 2700},
+      "15m": {"transmissions": 165, "minutes": 5940},
+      "12m": {"transmissions": 0, "minutes": 0},
+      "10m": {"transmissions": 0, "minutes": 0}
+    }
+  }
+}

@@ -108,33 +108,62 @@ static json settings = {
   }}
 };
 
-static json status = {
-  {"callsign", "N0CALL"},
-  {"locator", "AA00aa"},
-  {"powerDbm", 23},
-  {"txPercent", 20},
-  {"hostname", "wspr-beacon"},
-  {"currentBand", "20m"},
-  {"lastResetTime", formatTimeISO(timeInterface.getStartTime())},
-  {"wifiSsid", "MyHomeWiFi"},
-  {"wifiRssi", -65},
-  {"networkState", "READY"},
-  {"statistics", {
-    {"totalTransmissions", 0},
-    {"totalMinutes", 0},
-    {"byBand", {
-      {"160m", {"transmissions", 0, "minutes", 0}},
-      {"80m", {"transmissions", 0, "minutes", 0}},
-      {"40m", {"transmissions", 0, "minutes", 0}},
-      {"30m", {"transmissions", 0, "minutes", 0}},
-      {"20m", {"transmissions", 0, "minutes", 0}},
-      {"17m", {"transmissions", 0, "minutes", 0}},
-      {"15m", {"transmissions", 0, "minutes", 0}},
-      {"12m", {"transmissions", 0, "minutes", 0}},
-      {"10m", {"transmissions", 0, "minutes", 0}}
+static json status;
+
+static bool loadMockData(const std::string& mockDataFile) {
+  try {
+    std::string mockDataContent = readFile(mockDataFile);
+    if (mockDataContent.empty()) {
+      std::cerr << "[TestServer] Warning: Mock data file '" << mockDataFile << "' not found or empty, using defaults" << std::endl;
+      return false;
+    }
+    
+    json mockData = json::parse(mockDataContent);
+    
+    // Merge mock data into status, preserving dynamic fields
+    status = mockData;
+    
+    // Always set lastResetTime to current startup time
+    status["lastResetTime"] = formatTimeISO(timeInterface.getStartTime());
+    
+    std::cout << "[TestServer] Loaded mock data from: " << mockDataFile << std::endl;
+    return true;
+  } catch (const std::exception& e) {
+    std::cerr << "[TestServer] Error loading mock data: " << e.what() << std::endl;
+    return false;
+  }
+}
+
+static void initializeDefaultStatus() {
+  // Fallback default status if mock data loading fails
+  status = {
+    {"callsign", "N0CALL"},
+    {"locator", "AA00aa"},
+    {"powerDbm", 23},
+    {"txPercent", 20},
+    {"hostname", "wspr-beacon"},
+    {"currentBand", "20m"},
+    {"lastResetTime", formatTimeISO(timeInterface.getStartTime())},
+    {"wifiSsid", "TestWiFi"},
+    {"wifiRssi", -70},
+    {"networkState", "READY"},
+    {"statistics", {
+      {"totalTransmissions", 0},
+      {"totalMinutes", 0},
+      {"byBand", {
+        {"160m", {"transmissions", 0, "minutes", 0}},
+        {"80m", {"transmissions", 0, "minutes", 0}},
+        {"40m", {"transmissions", 0, "minutes", 0}},
+        {"30m", {"transmissions", 0, "minutes", 0}},
+        {"20m", {"transmissions", 0, "minutes", 0}},
+        {"17m", {"transmissions", 0, "minutes", 0}},
+        {"15m", {"transmissions", 0, "minutes", 0}},
+        {"12m", {"transmissions", 0, "minutes", 0}},
+        {"10m", {"transmissions", 0, "minutes", 0}}
+      }}
     }}
-  }}
-};
+  };
+}
 
 static void updateStatusFromSettings() {
   status["callsign"] = settings["callsign"];
@@ -178,7 +207,12 @@ std::string findWebDirectoryForTestServer() {
   return "../../web";
 }
 
-void startTestServer(int port) {
+void startTestServer(int port, const std::string& mockDataFile) {
+  // Initialize mock data
+  if (!loadMockData(mockDataFile)) {
+    initializeDefaultStatus();
+  }
+  
   httplib::Server svr;
 
   svr.Get("/api/settings", [](const httplib::Request &, httplib::Response &res) {
