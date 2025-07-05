@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WSPR Encoder Test</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="header.js"></script>
+</head>
+<body data-page="wspr-test">
+  <!-- Persistent Header -->
+  <header class="persistent-header">
+    <div class="header-left">
+      <span class="header-callsign" id="header-callsign">N0CALL</span>
+      <span class="header-locator" id="header-locator">AA00aa</span>
+      <span class="header-power" id="header-power">10dBm (10mW)</span>
+    </div>
+    <div class="header-center">
+      <span class="header-state" id="header-state">idle</span>
+      <span class="header-frequency" id="header-frequency"></span>
+    </div>
+    <div class="header-right">
+      <div class="header-time-container">
+        <span class="header-time" id="header-time">--:--:-- UTC</span>
+        <span class="header-ntp-sync" id="header-ntp-sync">NEVER</span>
+      </div>
+    </div>
+  </header>
+  
+  <div class="layout-container">
+    <div id="nav-container"></div>
+    <main>
+      <h1>WSPR Encoder Test</h1>
+      
+      <fieldset class="settings-zone">
+        <legend>WSPR Message Parameters</legend>
+        <div class="form-row">
+          <label for="test-callsign">Callsign</label>
+          <input type="text" id="test-callsign" value="N0CALL" maxlength="12" placeholder="Your callsign">
+        </div>
+        
+        <div class="form-row">
+          <label for="test-locator">Maidenhead Grid</label>
+          <input type="text" id="test-locator" value="AA00aa" maxlength="8" placeholder="Grid locator">
+        </div>
+        
+        <div class="form-row">
+          <label for="test-power">Power (dBm)</label>
+          <input type="number" id="test-power" value="10" min="0" max="60" placeholder="Power in dBm">
+        </div>
+        
+        <div class="form-row">
+          <label for="test-frequency">Frequency (Hz)</label>
+          <input type="number" id="test-frequency" value="14097100" min="1000000" max="30000000" placeholder="Transmit frequency">
+        </div>
+        
+        <div class="form-row">
+          <button type="button" id="encode-btn" class="encode-btn">Encode WSPR Message</button>
+          <span id="encode-status"></span>
+        </div>
+      </fieldset>
+      
+      <fieldset class="settings-zone" id="results-section" style="display: none;">
+        <legend>Encoding Results</legend>
+        
+        <div class="form-row">
+          <label>Symbol Count:</label>
+          <span id="result-symbol-count">-</span>
+        </div>
+        
+        <div class="form-row">
+          <label>Tone Spacing:</label>
+          <span id="result-tone-spacing">-</span> Hz
+        </div>
+        
+        <div class="form-row">
+          <label>Symbol Period:</label>
+          <span id="result-symbol-period">-</span> ms
+        </div>
+        
+        <div class="form-row">
+          <label>Transmission Duration:</label>
+          <span id="result-duration">-</span> seconds
+        </div>
+        
+        <div class="form-row">
+          <label>WSPR Symbols:</label>
+        </div>
+        
+        <div class="symbols-container">
+          <div class="symbols-display" id="symbols-display">
+            <!-- Symbols will be displayed here -->
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <button type="button" id="copy-symbols-btn" class="copy-btn">Copy Symbols</button>
+          <button type="button" id="download-symbols-btn" class="download-btn">Download as JSON</button>
+        </div>
+      </fieldset>
+      
+      <fieldset class="settings-zone">
+        <legend>WSPR Protocol Information</legend>
+        <div class="wspr-info">
+          <p><strong>WSPR (Weak Signal Propagation Reporter)</strong> is a digital mode optimized for weak signal communication.</p>
+          <ul>
+            <li><strong>Symbol count:</strong> 162 symbols</li>
+            <li><strong>Tone spacing:</strong> 1.46 Hz (146 centi-Hz)</li>
+            <li><strong>Symbol period:</strong> 0.683 seconds</li>
+            <li><strong>Transmission duration:</strong> ~110.6 seconds</li>
+            <li><strong>Bandwidth:</strong> ~6 Hz</li>
+            <li><strong>Message types:</strong> Callsign, grid locator, and power level</li>
+          </ul>
+          <p>Each symbol represents a frequency offset (0, 1, 2, or 3) from the base frequency, corresponding to 0, 1.46, 2.92, or 4.39 Hz shifts.</p>
+        </div>
+      </fieldset>
+    </main>
+  </div>
+  
+  <!-- Persistent Footer -->
+  <footer class="persistent-footer">
+    <div class="footer-item">
+      <span class="footer-label">Node:</span>
+      <span id="footer-hostname">wspr-beacon</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">Uptime:</span>
+      <span id="footer-uptime">0d 0h 0m</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">Wi-Fi:</span>
+      <span id="footer-wifi">Connecting...</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">RSSI:</span>
+      <span id="footer-rssi">-</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">Next TX:</span>
+      <span id="footer-next-tx">2m 0s @ 14.097100 MHz</span>
+    </div>
+    <div class="footer-item">
+      <span class="footer-label">TX:</span>
+      <span id="footer-tx-count">0</span>
+    </div>
+  </footer>
+  
+  <script src="nav.js"></script>
+  <script src="wspr-test.js"></script>
+</body>
+</html>

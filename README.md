@@ -1,11 +1,49 @@
 This is an ESP32 based WSPR encoder with additional capabilities to do
 other JTEncoder modes some day.
 
-In the `src/jtencoder` directory I started with the GPL'ed JTEncoder
+In the `src/jtencode` directory I started with the GPL'ed JTEncoder
 source code and rewrote most of it by [vibe coding with Google Gemini
 2.5Pro](https://g.co/gemini/share/7c0f292dc869). I think the result is
 simpler and easier to use and understand. I enjoyed using AI to do
 this, although it was not without its frustrations.
+
+## JT Encoder Library
+
+The beacon includes a comprehensive WSPR/JT encoding library rewritten for embedded use:
+
+**Supported Modes:**
+- **WSPR**: 162 symbols, 1.46 Hz spacing, 683ms periods (~110.6s transmission)
+- **FT8**: 79 symbols, 6.25 Hz spacing, 160ms periods  
+- **JT65**: 126 symbols, 2.69 Hz spacing, 372ms periods
+- **JT9**: 85 symbols, 1.74 Hz spacing, 576ms periods
+- **JT4**: 206 symbols, 4.37 Hz spacing, 229ms periods
+
+**Library Structure:**
+```
+src/jtencode/
+├── include/
+│   ├── JTEncode.h          # Template-based encoder classes
+│   ├── generator.h         # Symbol generation utilities  
+│   └── nhash.h            # Hash functions for interleaving
+├── JTEncode.cpp           # Main encoder implementations
+├── RSEncode.cpp/.h        # Reed-Solomon encoding
+├── jtencode-util.cpp/.h   # Utility functions  
+├── nhash.c                # Interleaving hash implementation
+└── test/                  # Component and integration tests
+```
+
+**Key Features:**
+- **Template-based design** with compile-time parameters for each mode
+- **Complete encoding pipeline**: Message packing → FEC → Interleaving → Symbol generation
+- **Protocol compliance** with proper convolutional coding and hash-based interleaving
+- **Embedded optimization** with minimal memory footprint and no dynamic allocation
+- **Multiple message types** including WSPR Type 1, 2, and 3 messages
+
+**Integration:**
+The library is integrated into the host-mock build system and provides:
+- **REST API endpoint** (`/api/wspr/encode`) for testing and validation
+- **Web interface** (`/wspr-test.html`) for interactive encoding and symbol visualization
+- **Beacon integration** ready for actual RF transmission (requires Si5351 symbol modulation)
 
 I also tried Github Copilot. But it kept being limited (couldn't even
 look at my Github repo, which is public!) and got stupid after some
@@ -96,13 +134,20 @@ make
 ```
 Usage: ./bin/host-testbench [options]
 Options:
-  --mock-data <file>  Path to mock data JSON file (default: mock-data.txt)
-  --log-file <file>   Path to detailed operation log file (default: stderr only)
-  --port <port>       Server port (default: 8080)
-  --time-scale <n>    Time acceleration factor (default: 1.0)
-                      > 1.0 = faster, < 1.0 = slower
-                      e.g., 60 = 1 minute real time = 1 hour mock time
-  --help, -h          Show this help message
+  --mock-data <file>        Path to mock data JSON file (default: mock-data.txt)
+  --log-file <file>         Path to detailed operation log file (default: stderr only)
+  --log-verbosity <config>  Configure logging verbosity per subsystem
+                            Format: subsystem.level[,subsystem.level...]
+                            Subsystems: API, WIFI, TX, TIME, SETTINGS, SYSTEM, HTTP
+                            Levels: none, basic, v/verbose, vv/debug, vvv/trace
+                            Examples: --log-verbosity "*.v" (all verbose)
+                                      --log-verbosity "API.vv,WIFI.v,TX.basic"
+                                      --log-verbosity "TIME.none,*.basic"
+  --port <port>             Server port (default: 8080)
+  --time-scale <n>          Time acceleration factor (default: 1.0)
+                            > 1.0 = faster, < 1.0 = slower
+                            e.g., 60 = 1 minute real time = 1 hour mock time
+  --help, -h                Show this help message
 ```
 
 **Example Usage:**
@@ -127,9 +172,51 @@ Options:
 # Test with comprehensive operation logging
 ./bin/host-testbench --log-file beacon_ops.log --time-scale 60
 ./bin/host-testbench --mock-data ../../platform/host-mock/test-sta-mode.txt --log-file wifi_test.log --time-scale 10
+
+# Advanced logging examples
+./bin/host-testbench --log-verbosity "*.v"                    # All subsystems verbose
+./bin/host-testbench --log-verbosity "API.vv,WIFI.v"          # Debug API, verbose WiFi
+./bin/host-testbench --log-verbosity "TIME.none,*.basic"      # Silence time events
+./bin/host-testbench --log-verbosity "TX.vvv,SCHEDULER.vv"    # Trace TX, debug scheduler
 ```
 
 Then open http://localhost:8080 in your browser.
+
+#### WSPR Encoder Testing
+
+The host-mock testbench includes a complete WSPR encoder test interface accessible at http://localhost:8080/wspr-test.html
+
+**WSPR Encoder Features:**
+- **Complete JT/WSPR encoding library** rewritten for embedded use
+- **Real-time encoding testing** with visual symbol display  
+- **Protocol compliance verification** with proper timing and spacing
+- **Multiple JT mode support**: WSPR, FT8, JT65, JT9, JT4
+
+**Test Interface:**
+- **Interactive encoding form** with callsign, locator, power, and frequency inputs
+- **Real-time symbol generation** showing all 162 WSPR symbols  
+- **Color-coded symbol display** with frequency offset tooltips
+- **Export capabilities** for symbols (copy/download JSON)
+- **Protocol information** with technical specifications
+
+**API Endpoint:**
+```bash
+# Test WSPR encoding via REST API
+curl -X POST http://localhost:8080/api/wspr/encode \
+  -H "Content-Type: application/json" \
+  -d '{
+    "callsign": "N0CALL",
+    "locator": "AA00aa", 
+    "powerDbm": 10,
+    "frequency": 14097100
+  }'
+```
+
+**Response includes:**
+- Complete 162-symbol array for transmission
+- Timing parameters (symbol period, tone spacing)
+- Transmission duration calculations
+- Frequency offset information
 
 **Features:**
 - **Real-time status updates** with configurable time acceleration
@@ -156,21 +243,116 @@ The mock server simulates both Station (STA) and Access Point (AP) WiFi modes:
 - **WiFi Scan**: Returns realistic networks with varying signal strengths over time
 - **Dynamic Updates**: Client counts and RSSI values change during testing
 
-**Comprehensive Operation Logging:**
-The mock server provides detailed logging for complete verification of beacon operation:
+## Comprehensive Logging System
 
-- **Every API Request**: Method, path, status code, response size
-- **WiFi Operations**: Scan results with SSID, RSSI, encryption for each network
-- **Transmission Events**: Start/stop events, band selection, timing calculations
-- **Time-based Events**: Accelerated time changes, scheduling decisions
-- **Settings Changes**: Field-by-field tracking of configuration updates
-- **System Events**: Server startup, initialization, errors
+The WSPR beacon includes an advanced logging system with per-subsystem verbosity control for thorough operation verification and debugging.
 
-All log entries include UTC timestamps and subsystem identification:
+### Logging Levels
+
+The logging system supports five verbosity levels:
+
+- **`none`** - No logging for this subsystem
+- **`basic`** - Essential events only (default)
+- **`verbose`** (`.v`) - Detailed operational information  
+- **`debug`** (`.vv`) - Debug information with internal state
+- **`trace`** (`.vvv`, `.vvvv`) - Complete execution trace
+
+### Subsystems
+
+Available subsystems for logging control:
+
+| Subsystem | Description | Typical Events |
+|-----------|-------------|----------------|
+| **API** | HTTP REST API requests/responses | Endpoint calls, status codes, response sizes |
+| **WIFI** | WiFi operations and networking | Scans, connections, signal strength changes |
+| **TX** | Transmission events | Start/stop events, band selection, timing |
+| **TIME** | Time synchronization and scaling | NTP sync, accelerated time calculations |
+| **SETTINGS** | Configuration management | Field changes, validation, persistence |
+| **SYSTEM** | Core system operations | Startup, shutdown, memory, errors |
+| **HTTP** | Low-level HTTP server events | Raw requests, connection handling |
+| **FSM** | Finite State Machine transitions | State changes, validation guards |
+| **SCHEDULER** | Transmission scheduling | Band rotation, timing calculations |
+| **NETWORK** | Network interface operations | Connection states, protocol events |
+
+### Host Mock Configuration
+
+Use the `--log-verbosity` command line option with format `subsystem.level`:
+
+```bash
+# Examples
+./bin/host-testbench --log-verbosity "*.v"                    # All subsystems verbose
+./bin/host-testbench --log-verbosity "API.vv,WIFI.v"          # Debug API, verbose WiFi  
+./bin/host-testbench --log-verbosity "TIME.none,TX.vvv"       # Silence time, trace TX
+./bin/host-testbench --log-verbosity "SYSTEM.basic,*.v"       # Basic system, verbose others
 ```
-2025-07-04 19:12:57.633 UTC [WIFI] Scan completed | networks_found=6, networks=[MyHomeWiFi(-50dBm,WPA2), ...]
+
+**Wildcard Support:** Use `*` to configure all subsystems at once, then override specific ones:
+```bash
+--log-verbosity "*.vv,TIME.none,HTTP.basic"  # Debug all except time (none) and HTTP (basic)
+```
+
+### ESP32 Target Configuration
+
+For ESP32 builds, configure logging at compile time by defining these macros:
+
+```cpp
+// In your main ESP32 header or build system:
+#define ESP32_PLATFORM              // Enable ESP32 mode
+#define LOG_LEVEL_API LogLevel::VERBOSE
+#define LOG_LEVEL_WIFI LogLevel::DEBUG  
+#define LOG_LEVEL_TX LogLevel::TRACE
+#define LOG_LEVEL_TIME LogLevel::NONE
+#define LOG_LEVEL_SETTINGS LogLevel::BASIC
+#define LOG_LEVEL_SYSTEM LogLevel::VERBOSE
+#define LOG_LEVEL_HTTP LogLevel::NONE
+#define LOG_LEVEL_FSM LogLevel::BASIC
+#define LOG_LEVEL_SCHEDULER LogLevel::DEBUG
+#define LOG_LEVEL_NETWORK LogLevel::BASIC
+```
+
+**ESP32 Output:** All log messages go to `stderr` which appears on the serial console via USB.
+
+### Log Format
+
+All log entries use a structured format with UTC timestamps:
+
+```
+2025-07-04 19:12:57.633 UTC [WIFI:VERBOSE] Scan completed with details | networks_found=6, networks=[MyHomeWiFi(-50dBm,WPA2), GuestNet(-65dBm,Open)], scan_duration=1.2s
 2025-07-04 19:13:18.457 UTC [TX] Transmission ended | band=20m
 2025-07-04 19:13:18.457 UTC [API] Request: /api/status.json | method=GET, status=200, response_size=580 bytes
+2025-07-04 19:13:19.123 UTC [SCHEDULER:DEBUG] Next transmission calculated | current_cycle=1247, next_tx_in=45s, band_rotation=round_robin
+```
+
+**Format Components:**
+- **Timestamp**: UTC time with millisecond precision
+- **Subsystem**: Source of the log entry with optional level indicator
+- **Event**: Human-readable event description
+- **Data**: Structured key=value pairs with relevant details
+
+### Integration Examples
+
+**Basic Operation Verification:**
+```bash
+# Minimal logging for production-like testing
+./bin/host-testbench --log-verbosity "*.basic"
+```
+
+**Development and Debugging:**
+```bash
+# Full verbose logging for development
+./bin/host-testbench --log-file debug.log --log-verbosity "*.vv"
+```
+
+**Performance Testing:**
+```bash
+# High-speed testing with focused logging
+./bin/host-testbench --time-scale 100 --log-verbosity "TX.vvv,SCHEDULER.vv,TIME.none"
+```
+
+**WiFi Troubleshooting:**
+```bash
+# Focus on network operations
+./bin/host-testbench --log-verbosity "WIFI.vvv,NETWORK.vv,API.basic,*.none"
 ```
 
 **Mock Data Files Provided:**

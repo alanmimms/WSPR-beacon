@@ -12,6 +12,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Add the shared src directory as a library
 add_subdirectory(../src ${CMAKE_BINARY_DIR}/src)
 
+# Add the jtencode library
+add_subdirectory(../src/jtencode ${CMAKE_BINARY_DIR}/jtencode)
+
 # nlohmann/json
 add_subdirectory(external/json)
 
@@ -34,16 +37,18 @@ add_executable(host-testbench
   ../platform/host-mock/Task.cpp
   ../platform/host-mock/EventGroup.cpp
   ../platform/host-mock/Time.cpp
+  ../src/BeaconLogger.cpp
 )
 
 target_include_directories(host-testbench PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../include
   ${CMAKE_CURRENT_LIST_DIR}/../src
+  ${CMAKE_CURRENT_LIST_DIR}/../src/jtencode/include
   ${CMAKE_CURRENT_LIST_DIR}/../platform/host-mock
   ${CMAKE_CURRENT_LIST_DIR}/external/cpp-httplib
 )
 
-target_link_libraries(host-testbench PRIVATE beacon_core)
+target_link_libraries(host-testbench PRIVATE beacon_core jtencode)
 
 # Link nlohmann_json target
 target_link_libraries(host-testbench PRIVATE nlohmann_json::nlohmann_json)

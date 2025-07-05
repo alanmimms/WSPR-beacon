@@ -1066,6 +1066,129 @@ h1 {
   transition: color 0.5s ease, font-weight 0.5s ease;
 }
 
+/* WSPR Test Page Styles */
+.encode-btn {
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.65em 1.5em;
+  font-size: 1em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.encode-btn:hover:not(:disabled) {
+  background: #1976d2;
+}
+
+.encode-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.copy-btn, .download-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5em 1em;
+  font-size: 0.9em;
+  cursor: pointer;
+  margin-right: 0.5em;
+  transition: background 0.15s;
+}
+
+.copy-btn:hover, .download-btn:hover {
+  background: #388e3c;
+}
+
+.symbols-container {
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 1em;
+  margin: 0.5em 0;
+  font-family: 'Courier New', monospace;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.symbols-display {
+  line-height: 1.8;
+}
+
+.symbol-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5em;
+  gap: 0.3em;
+}
+
+.symbol-row-label {
+  font-weight: bold;
+  color: #666;
+  min-width: 4em;
+  font-size: 0.9em;
+}
+
+.symbol {
+  display: inline-block;
+  width: 2em;
+  height: 2em;
+  line-height: 2em;
+  text-align: center;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.9em;
+  margin: 0 1px;
+  cursor: help;
+}
+
+.symbol-0 {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.symbol-1 {
+  background: #e8f5e8;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.symbol-2 {
+  background: #fff3e0;
+  color: #f57c00;
+  border: 1px solid #ffcc02;
+}
+
+.symbol-3 {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
+.wspr-info {
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+
+.wspr-info ul {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.wspr-info li {
+  margin-bottom: 0.5em;
+}
+
+#encode-status {
+  margin-left: 1em;
+  font-weight: 500;
+}
+
 @media (max-width: 700px) {
   .band-header {
     flex-direction: column;

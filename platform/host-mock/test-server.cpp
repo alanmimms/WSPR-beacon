@@ -1,5 +1,7 @@
 #include "test-server.h"
 #include "Time.h"
+#include "../../include/BeaconLogger.h"
+#include "JTEncode.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
@@ -23,101 +25,7 @@
 using nlohmann::json;
 namespace fs = std::filesystem;
 
-// Comprehensive Logger for beacon operations
-class BeaconLogger {
-private:
-  std::ofstream logFile;
-  std::mutex logMutex;
-  bool fileLogging;
-  
-public:
-  BeaconLogger(const std::string& logFileName = "") {
-    fileLogging = !logFileName.empty();
-    if (fileLogging) {
-      logFile.open(logFileName, std::ios::out | std::ios::app);
-      if (!logFile.is_open()) {
-        std::cerr << "Error: Could not open log file: " << logFileName << std::endl;
-        fileLogging = false;
-      } else {
-        log("SYSTEM", "Logger initialized", "file=" + logFileName);
-      }
-    }
-  }
-  
-  ~BeaconLogger() {
-    if (fileLogging && logFile.is_open()) {
-      log("SYSTEM", "Logger shutdown", "");
-      logFile.close();
-    }
-  }
-  
-  void log(const std::string& subsystem, const std::string& event, const std::string& data = "") {
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-    
-    std::tm utc_tm;
-    #ifdef _WIN32
-    gmtime_s(&utc_tm, &time_t_now);
-    #else
-    gmtime_r(&time_t_now, &utc_tm);
-    #endif
-    
-    std::ostringstream logEntry;
-    logEntry << std::put_time(&utc_tm, "%Y-%m-%d %H:%M:%S");
-    logEntry << "." << std::setfill('0') << std::setw(3) << ms.count();
-    logEntry << " UTC [" << subsystem << "] " << event;
-    if (!data.empty()) {
-      logEntry << " | " << data;
-    }
-    
-    std::lock_guard<std::mutex> lock(logMutex);
-    
-    if (fileLogging && logFile.is_open()) {
-      logFile << logEntry.str() << std::endl;
-      logFile.flush();  // Ensure immediate write
-    }
-    
-    // Also output to stderr for exceptional events
-    if (subsystem == "ERROR" || event.find("Error") != std::string::npos || event.find("Failed") != std::string::npos) {
-      std::cerr << logEntry.str() << std::endl;
-    }
-  }
-  
-  void logApiRequest(const std::string& method, const std::string& path, int statusCode, const std::string& responseSize = "") {
-    std::string data = "method=" + method + ", status=" + std::to_string(statusCode);
-    if (!responseSize.empty()) {
-      data += ", response_size=" + responseSize;
-    }
-    log("API", "Request: " + path, data);
-  }
-  
-  void logWifiScan(int networkCount, const std::string& details = "") {
-    std::string data = "networks_found=" + std::to_string(networkCount);
-    if (!details.empty()) {
-      data += ", " + details;
-    }
-    log("WIFI", "Scan completed", data);
-  }
-  
-  void logTransmissionEvent(const std::string& event, const std::string& band, int64_t nextTxIn = -1) {
-    std::string data = "band=" + band;
-    if (nextTxIn >= 0) {
-      data += ", next_tx_in=" + std::to_string(nextTxIn) + "s";
-    }
-    log("TX", event, data);
-  }
-  
-  void logTimeEvent(const std::string& event, double timeScale, int64_t mockTime) {
-    std::string data = "time_scale=" + std::to_string(timeScale) + ", mock_time=" + std::to_string(mockTime);
-    log("TIME", event, data);
-  }
-  
-  void logSettingsChange(const std::string& field, const std::string& oldValue, const std::string& newValue) {
-    std::string data = "field=" + field + ", old=" + oldValue + ", new=" + newValue;
-    log("SETTINGS", "Configuration changed", data);
-  }
-};
+// Global variables
 
 static std::atomic<bool> running{true};
 static Time timeInterface;
@@ -225,10 +133,10 @@ static json status;
 
 static bool loadMockData(const std::string& mockDataFile) {
   try {
-    g_logger->log("INIT", "Attempting to load mock data", "file=" + mockDataFile);
+    g_logger->logSystemVerbose("Attempting to load mock data", "file=" + mockDataFile, "");
     std::string mockDataContent = readFile(mockDataFile);
     if (mockDataContent.empty()) {
-      g_logger->log("ERROR", "Mock data file not found or empty", "file=" + mockDataFile);
+      g_logger->logBasic("ERROR", "Mock data file not found or empty", "file=" + mockDataFile);
       return false;
     }
     
@@ -378,9 +286,16 @@ std::string findWebDirectoryForTestServer() {
   return "../../web";
 }
 
-void startTestServer(int port, const std::string& mockDataFile, double timeScale, const std::string& logFile) {
-  // Initialize logger
+void startTestServer(int port, const std::string& mockDataFile, double timeScale, const std::string& logFile, const std::string& logVerbosity) {
+  // Initialize logger with verbosity configuration
   g_logger = std::make_unique<BeaconLogger>(logFile);
+  
+  if (!logVerbosity.empty()) {
+    g_logger->parseVerbosityString(logVerbosity);
+  }
+  
+  // Log initial configuration
+  g_logger->logSystemEvent("Logger configuration", g_logger->getConfigurationSummary());
   
   // Initialize time scale
   g_timeScale = timeScale;
@@ -390,12 +305,12 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
   g_logger->logTimeEvent("Server startup", timeScale, g_mockStartTime);
   
   // Initialize mock data
-  g_logger->log("INIT", "Loading mock data", "file=" + mockDataFile);
+  g_logger->logSystemEvent("Loading mock data", "file=" + mockDataFile);
   if (!loadMockData(mockDataFile)) {
-    g_logger->log("INIT", "Mock data load failed, using defaults", "");
+    g_logger->logSystemEvent("Mock data load failed, using defaults", "");
     initializeDefaultStatus();
   } else {
-    g_logger->log("INIT", "Mock data loaded successfully", "");
+    g_logger->logSystemEvent("Mock data loaded successfully", "");
   }
   
   httplib::Server svr;
@@ -589,6 +504,71 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     std::string response = timeResponse.dump();
     res.set_content(response, "application/json");
     g_logger->logApiRequest("GET", "/api/time", 200, std::to_string(response.size()) + " bytes");
+  });
+
+  svr.Post("/api/wspr/encode", [](const httplib::Request &req, httplib::Response &res) {
+    try {
+      g_logger->logApiRequest("POST", "/api/wspr/encode", 200, std::to_string(req.body.size()) + " bytes");
+      
+      auto requestData = json::parse(req.body);
+      
+      // Extract parameters
+      std::string callsign = requestData.value("callsign", "N0CALL");
+      std::string locator = requestData.value("locator", "AA00aa");
+      int powerDbm = requestData.value("powerDbm", 10);
+      uint32_t frequency = requestData.value("frequency", 14097100UL);
+      
+      g_logger->logBasic("WSPR", "Encoding WSPR message", 
+                        "call=" + callsign + ", loc=" + locator + ", pwr=" + std::to_string(powerDbm) + "dBm, freq=" + std::to_string(frequency));
+      
+      // Create WSPR encoder
+      WSPREncoder encoder(frequency);
+      
+      // Encode the message
+      encoder.encode(callsign.c_str(), locator.c_str(), static_cast<int8_t>(powerDbm));
+      
+      // Build response with symbols
+      json response;
+      response["success"] = true;
+      response["callsign"] = callsign;
+      response["locator"] = locator;
+      response["powerDbm"] = powerDbm;
+      response["frequency"] = frequency;
+      response["symbolCount"] = WSPREncoder::TxBufferSize;
+      response["toneSpacing"] = WSPREncoder::ToneSpacing;
+      response["symbolPeriod"] = WSPREncoder::SymbolPeriod;
+      
+      // Add symbols array
+      json symbolsArray = json::array();
+      for (int i = 0; i < WSPREncoder::TxBufferSize; i++) {
+        symbolsArray.push_back(encoder.symbols[i]);
+      }
+      response["symbols"] = symbolsArray;
+      
+      // Calculate transmission duration
+      uint32_t transmissionDurationMs = WSPREncoder::TxBufferSize * WSPREncoder::SymbolPeriod;
+      response["transmissionDurationMs"] = transmissionDurationMs;
+      response["transmissionDurationSeconds"] = transmissionDurationMs / 1000.0;
+      
+      g_logger->logVerbose("WSPR", "WSPR encoding completed", 
+                          "symbols=" + std::to_string(WSPREncoder::TxBufferSize) + 
+                          ", duration=" + std::to_string(transmissionDurationMs) + "ms");
+      
+      std::string responseStr = response.dump();
+      res.set_content(responseStr, "application/json");
+      g_logger->logApiRequest("POST", "/api/wspr/encode", 200, std::to_string(responseStr.size()) + " bytes");
+      
+    } catch (const std::exception& e) {
+      g_logger->logBasic("ERROR", "WSPR encoding failed", "error=" + std::string(e.what()));
+      
+      json errorResponse;
+      errorResponse["success"] = false;
+      errorResponse["error"] = e.what();
+      
+      res.status = 400;
+      res.set_content(errorResponse.dump(), "application/json");
+      g_logger->logApiRequest("POST", "/api/wspr/encode", 400, "error");
+    }
   });
 
   svr.Get("/api/wifi/scan", [](const httplib::Request &req, httplib::Response &res) {
