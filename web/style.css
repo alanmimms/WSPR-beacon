@@ -51,7 +51,7 @@ body {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 600px;
+  max-width: 720px;
 }
 
 .settings-status {
@@ -232,9 +232,9 @@ body {
   flex-direction: column;
   padding-top: 0;
   padding-bottom: 0;
-  height: calc(100vh - 48px);
+  height: calc(100vh - 85px);
   position: fixed;
-  top: 48px;
+  top: 85px;
   left: 0;
   z-index: 200;
 }
@@ -266,7 +266,7 @@ body {
 
 main {
   flex: 1 1 auto;
-  max-width: 600px;
+  max-width: 720px;
   margin: 2rem auto;
   margin-left: 220px;
   background: #fff;
@@ -1268,3 +1268,46 @@ h1 {
     min-width: 45%;
   }
 }
+
+/* Password visibility toggle */
+.password-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.password-input-container input[type="password"],
+.password-input-container input[type="text"] {
+  flex: 1;
+  padding-right: 3em; /* Make room for the eye icon */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.75em;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1em;
+  color: #666;
+  padding: 0.25em;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  user-select: none;
+  z-index: 10;
+}
+
+.password-toggle:hover {
+  color: #333;
+  background: rgba(0,0,0,0.05);
+}
+
+.password-toggle:focus {
+  outline: 2px solid #4092ff;
+  outline-offset: 1px;
+}
+
+

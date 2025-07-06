@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html>
-<head><title>Security</title></head>
+<head>
+  <title>Security</title>
+  <link rel="stylesheet" href="style.css">
+</head>
 <body>
   <main>
     <h2>Security Settings</h2>
@@ -8,16 +11,29 @@
       <label for="username">Username:</label><br>
       <input type="text" id="username" name="username"><br>
       <label for="password">Password:</label><br>
-      <input type="password" id="password" name="password">
-      <label><input type="checkbox" id="show-password"> Show password</label><br><br>
+      <div class="password-input-container">
+        <input type="password" id="password" name="password">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('password')" title="Show password">🙈</button>
+      </div><br>
       <button type="submit">Save Credentials</button>
     </form>
     <p id="security-message"></p>
     <script>
-      document.getElementById('show-password').addEventListener('change', () => {
-        const pwd = document.getElementById('password');
-        pwd.type = pwd.type === 'password' ? 'text' : 'password';
-      });
+      // Password visibility toggle functionality
+      function togglePasswordVisibility(inputId) {
+        const input = document.getElementById(inputId);
+        const button = input.nextElementSibling;
+        
+        if (input.type === 'password') {
+          input.type = 'text';
+          button.textContent = '👁️'; // open eye (password visible)
+          button.title = 'Hide password';
+        } else {
+          input.type = 'password';
+          button.textContent = '🙈'; // closed eye (password hidden)
+          button.title = 'Show password';
+        }
+      }
 
       document.getElementById('security-form').addEventListener('submit', async (e) => {
         e.preventDefault();

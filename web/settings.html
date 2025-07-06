@@ -72,7 +72,10 @@
               </div>
               <div class="form-row">
                 <label for="wifi-password-sta" id="wifi-password-sta-label">Connection Password</label>
-                <input type="password" id="wifi-password-sta" name="wifiPassword" maxlength="64" title="Password for the WiFi network you want to connect to">
+                <div class="password-input-container">
+                  <input type="password" id="wifi-password-sta" name="wifiPassword" maxlength="64" title="Password for the WiFi network you want to connect to">
+                  <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifi-password-sta')" title="Show password">🙈</button>
+                </div>
               </div>
             </div>
             
@@ -84,7 +87,10 @@
               </div>
               <div class="form-row">
                 <label for="wifi-password-ap" id="wifi-password-ap-label">WiFi Password</label>
-                <input type="password" id="wifi-password-ap" name="wifiPasswordAp" maxlength="64" title="Password for the WiFi hotspot (leave empty for open network)">
+                <div class="password-input-container">
+                  <input type="password" id="wifi-password-ap" name="wifiPasswordAp" maxlength="64" title="Password for the WiFi hotspot (leave empty for open network)">
+                  <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifi-password-ap')" title="Show password">🙈</button>
+                </div>
               </div>
             </div>
             

@@ -1,5 +1,21 @@
 // Settings page logic for auto-updating power mW <-> dBm and loading/saving settings
 
+// Password visibility toggle functionality
+function togglePasswordVisibility(inputId) {
+  const input = document.getElementById(inputId);
+  const button = input.nextElementSibling;
+  
+  if (input.type === 'password') {
+    input.type = 'text';
+    button.textContent = '👁️'; // open eye (password visible)
+    button.title = 'Hide password';
+  } else {
+    input.type = 'password';
+    button.textContent = '🙈'; // closed eye (password hidden)
+    button.title = 'Show password';
+  }
+}
+
 // Settings tracking for secondary header
 let originalSettings = {};
 let currentSettings = {};
