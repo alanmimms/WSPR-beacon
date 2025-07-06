@@ -172,15 +172,15 @@ static bool loadMockData(const std::string& mockDataFile) {
       if (i > 0) fieldList += ", ";
       fieldList += updatedFields[i];
     }
-    g_logger->log("INIT", "Settings updated from mock data", "fields_updated=" + std::to_string(settingsUpdated) + ", fields=[" + fieldList + "]");
+    g_logger->logSystemEvent("Settings updated from mock data", "fields_updated=" + std::to_string(settingsUpdated) + ", fields=[" + fieldList + "]");
     
     // Always set resetTime to current startup time
     status["resetTime"] = formatTimeISO(timeInterface.getStartTime());
     
-    g_logger->log("INIT", "Mock data loaded successfully", "file=" + mockDataFile + ", size=" + std::to_string(mockDataContent.size()) + " bytes");
+    g_logger->logSystemEvent("Mock data loaded successfully", "file=" + mockDataFile + ", size=" + std::to_string(mockDataContent.size()) + " bytes");
     return true;
   } catch (const std::exception& e) {
-    g_logger->log("ERROR", "Mock data parsing failed", "file=" + mockDataFile + ", error=" + std::string(e.what()));
+    g_logger->logBasic("ERROR", "Mock data parsing failed", "file=" + mockDataFile + ", error=" + std::string(e.what()));
     return false;
   }
 }
@@ -324,12 +324,12 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
   svr.Post("/api/settings", [](const httplib::Request &req, httplib::Response &res) {
     try {
       auto contentType = req.get_header_value("Content-Type");
-      g_logger->log("API", "POST /api/settings received", "content_type=" + contentType + ", body_size=" + std::to_string(req.body.size()));
+      g_logger->logVerbose("API", "POST /api/settings received", "content_type=" + contentType + ", body_size=" + std::to_string(req.body.size()));
       
       // Parse as form if the Content-Type is application/x-www-form-urlencoded
       if (contentType.find("application/x-www-form-urlencoded") != std::string::npos) {
         // Form-encoded: use params
-        g_logger->log("SETTINGS", "Processing form-encoded data", "param_count=" + std::to_string(req.params.size()));
+        g_logger->logVerbose("SETTINGS", "Processing form-encoded data", "param_count=" + std::to_string(req.params.size()));
         for (auto &item : req.params) {
           auto oldValue = settings.contains(item.first) ? settings[item.first].dump() : "null";
           settings[item.first] = item.second;
@@ -338,7 +338,7 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       } else {
         // Otherwise, treat as JSON
         auto j = json::parse(req.body);
-        g_logger->log("SETTINGS", "Processing JSON data", "field_count=" + std::to_string(j.size()));
+        g_logger->logVerbose("SETTINGS", "Processing JSON data", "field_count=" + std::to_string(j.size()));
         for (auto it = j.begin(); it != j.end(); ++it) {
           // Skip null values to avoid overwriting existing settings with nulls
           if (!it.value().is_null()) {
@@ -349,17 +349,17 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
         }
       }
       updateStatusFromSettings();
-      g_logger->log("SETTINGS", "Settings update completed successfully", "");
+      g_logger->logBasic("SETTINGS", "Settings update completed successfully", "");
       res.status = 204;
       res.set_content("", "application/json");
       g_logger->logApiRequest("POST", "/api/settings", 204);
     } catch (const std::exception& e) {
-      g_logger->log("ERROR", "Settings parsing failed", "error=" + std::string(e.what()));
+      g_logger->logBasic("ERROR", "Settings parsing failed", "error=" + std::string(e.what()));
       res.status = 400;
       res.set_content("{\"error\":\"Invalid settings format\"}", "application/json");
       g_logger->logApiRequest("POST", "/api/settings", 400);
     } catch (...) {
-      g_logger->log("ERROR", "Unknown settings parsing error", "");
+      g_logger->logBasic("ERROR", "Unknown settings parsing error", "");
       res.status = 400;
       res.set_content("{\"error\":\"Invalid settings format\"}", "application/json");
       g_logger->logApiRequest("POST", "/api/settings", 400);
@@ -370,7 +370,7 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     // Calculate dynamic status based on accelerated time
     json dynamicStatus = status;
     
-    g_logger->log("API", "GET /api/status.json processing", "time_scale=" + std::to_string(g_timeScale));
+    g_logger->logVerbose("API", "GET /api/status.json processing", "time_scale=" + std::to_string(g_timeScale));
     
     // Calculate elapsed time in mock seconds
     auto now = std::chrono::steady_clock::now();
@@ -576,7 +576,7 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_serverStartTime).count();
     
-    g_logger->log("WIFI", "Scan initiated", "elapsed_time=" + std::to_string(elapsed) + "s");
+    g_logger->logVerbose("WIFI", "Scan initiated", "elapsed_time=" + std::to_string(elapsed) + "s");
     
     // Simulate signal strength variations over time
     int timeOffset = elapsed / 5; // Changes every 5 seconds
@@ -642,20 +642,20 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
   // Serve static files - dynamically find web directory
   std::string webDir = findWebDirectoryForTestServer();
   svr.set_mount_point("/", webDir);
-  g_logger->log("SERVER", "Web directory configured", "path=" + webDir);
+  g_logger->logSystemEvent("Web directory configured", "path=" + webDir);
 
   std::cout << "Host testbench web server running at http://localhost:" << port << std::endl;
   std::cout << "Press Ctrl+C to stop." << std::endl;
   
-  g_logger->log("SERVER", "HTTP server starting", "port=" + std::to_string(port) + ", address=0.0.0.0");
+  g_logger->logSystemEvent("HTTP server starting", "port=" + std::to_string(port) + ", address=0.0.0.0");
   
   // Add request logging for all endpoints
   svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
-    g_logger->log("HTTP", "Request received", "method=" + req.method + ", path=" + req.path + ", remote=" + req.get_header_value("Host"));
+    g_logger->logVerbose("HTTP", "Request received", "method=" + req.method + ", path=" + req.path + ", remote=" + req.get_header_value("Host"));
     return httplib::Server::HandlerResponse::Unhandled;
   });
   
   svr.listen("0.0.0.0", port);
   
-  g_logger->log("SERVER", "HTTP server stopped", "");
+  g_logger->logSystemEvent("HTTP server stopped", "");
 }

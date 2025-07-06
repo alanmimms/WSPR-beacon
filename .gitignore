@@ -36,3 +36,4 @@ tests/webui-test/
 # OS files
 .DS_Store
 Thumbs.db
+ARTICLE*.html

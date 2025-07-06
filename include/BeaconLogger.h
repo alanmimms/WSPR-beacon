@@ -87,8 +87,8 @@ std::string logLevelToString(LogLevel level);
 class BeaconLogger {
 private:
   std::unordered_map<std::string, LogLevel> subsystemLevels;
-  std::ofstream logFile;
-  std::mutex logMutex;
+  mutable std::ofstream logFile;
+  mutable std::mutex logMutex;
   bool fileLogging;
   LogLevel defaultLevel;
   
