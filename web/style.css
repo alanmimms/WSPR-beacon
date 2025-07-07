@@ -9,8 +9,6 @@ body {
   background: #f6f7fb;
   color: #222;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Persistent Header */
@@ -23,8 +21,10 @@ body {
   justify-content: space-between;
   font-size: 14px;
   font-weight: 500;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 300;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -38,11 +38,12 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  position: sticky;
+  position: fixed;
   top: 58px;
+  left: 0;
+  right: 0;
   z-index: 250;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  width: 100%;
   box-sizing: border-box;
 }
 
@@ -216,11 +217,9 @@ body {
 }
 
 .layout-container {
-  flex: 1 0 auto;
   display: flex;
-  min-height: 0;
-  min-width: 0;
-  overflow: auto;
+  min-height: calc(100vh - 85px);
+  margin-top: 85px;
 }
 
 /* Left nav panel */
@@ -265,17 +264,14 @@ body {
 }
 
 main {
-  flex: 1 1 auto;
-  max-width: 720px;
+  width: 720px;
   margin: 2rem auto;
   margin-left: 220px;
   background: #fff;
   padding: 2rem;
   border-radius: 14px;
   box-shadow: 0 4px 24px 0 rgba(30, 50, 80, 0.08);
-  min-width: 0;
-  min-height: min-content;
-  overflow: visible;
+  min-height: calc(100vh - 150px);
 }
 
 fieldset {
@@ -750,6 +746,57 @@ h1 {
   font-weight: 500;
   margin-bottom: 0.5em;
   display: block;
+}
+
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8em;
+}
+
+.schedule-header label {
+  margin-bottom: 0;
+}
+
+.schedule-controls {
+  display: flex;
+  gap: 0.5em;
+}
+
+.schedule-btn {
+  padding: 0.3em 0.8em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  color: #333;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 70px;
+}
+
+.schedule-btn:hover {
+  border-color: #2196f3;
+  background: #f3f9ff;
+  color: #1976d2;
+}
+
+.schedule-btn:active {
+  background: #e3f2fd;
+  transform: translateY(1px);
+}
+
+.select-all-btn:hover {
+  border-color: #4caf50;
+  background: #f1f8e9;
+  color: #2e7d32;
+}
+
+.select-none-btn:hover {
+  border-color: #f44336;
+  background: #fff3f3;
+  color: #c62828;
 }
 
 .schedule-hours {

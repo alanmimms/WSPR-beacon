@@ -91,6 +91,11 @@ function settingsChanged() {
   }
 }
 
+// Convenience function for marking settings as changed
+function markSettingsChanged() {
+  settingsChanged();
+}
+
 function attachSettingsChangeListeners() {
   // Use event delegation for comprehensive coverage of all form elements
   document.addEventListener('input', (event) => {
@@ -701,10 +706,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
     
     bandOrder.forEach(bandName => {
-      const bandConfig = bands[bandName] || {
+      const rawBandConfig = bands[bandName] || {
         en: false,
         freq: getDefaultFrequency(bandName),
         sched: 0
+      };
+      
+      // Convert schedule from array format to bitmap format if needed
+      let schedule = rawBandConfig.sched;
+      if (Array.isArray(schedule)) {
+        // Convert array [0,1,2,3...] to bitmap
+        let bitmap = 0;
+        schedule.forEach(hour => {
+          if (hour >= 0 && hour <= 23) {
+            bitmap |= (1 << hour);
+          }
+        });
+        schedule = bitmap;
+      }
+      
+      const bandConfig = {
+        en: rawBandConfig.en,
+        freq: rawBandConfig.freq,
+        sched: schedule
       };
       
       const bandDiv = document.createElement('div');
@@ -723,7 +747,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="band-details">
           <div class="band-schedule">
-            <label>Active Hours (UTC):</label>
+            <div class="schedule-header">
+              <label>Active Hours (UTC):</label>
+              <div class="schedule-controls">
+                <button type="button" class="schedule-btn select-all-btn" data-band="${bandName}" title="Select all 24 hours for ${bandName}">Select All</button>
+                <button type="button" class="schedule-btn select-none-btn" data-band="${bandName}" title="Clear all hours for ${bandName}">Select None</button>
+              </div>
+            </div>
             <div class="schedule-hours" id="schedule-${bandName}">
               <div class="hour-group">
                 ${Array.from({length: 12}, (_, hour) => `
@@ -758,8 +788,37 @@ document.addEventListener('DOMContentLoaded', () => {
       hourBoxes.forEach(box => {
         box.addEventListener('click', function() {
           this.classList.toggle('selected');
+          markSettingsChanged();
         });
       });
+      
+      // Add Select All button functionality
+      const selectAllBtn = bandDiv.querySelector('.select-all-btn');
+      if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const scheduleDiv = bandDiv.querySelector(`#schedule-${bandName}`);
+          const allHourBoxes = scheduleDiv.querySelectorAll('.hour-box');
+          allHourBoxes.forEach(box => {
+            box.classList.add('selected');
+          });
+          markSettingsChanged();
+        });
+      }
+      
+      // Add Select None button functionality
+      const selectNoneBtn = bandDiv.querySelector('.select-none-btn');
+      if (selectNoneBtn) {
+        selectNoneBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const scheduleDiv = bandDiv.querySelector(`#schedule-${bandName}`);
+          const allHourBoxes = scheduleDiv.querySelectorAll('.hour-box');
+          allHourBoxes.forEach(box => {
+            box.classList.remove('selected');
+          });
+          markSettingsChanged();
+        });
+      }
       
       // Add collapse toggle functionality
       const collapseToggle = bandDiv.querySelector('.band-collapse-toggle');
