@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Coding Requirements
+
+If CLAUDE or other AI or a human adds some code to do some debug
+output, always mark that code as "XXX FOR DEBUG" in a comment so it
+can be cleaned up later when debugging is complete.
+
+
 ## Build Commands
 
 ### Host Mock Build (Development/Testing)
