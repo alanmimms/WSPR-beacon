@@ -28,7 +28,7 @@ std::string logLevelToString(LogLevel level) {
 }
 
 BeaconLogger::BeaconLogger(const std::string& logFileName, LogLevel defaultLogLevel) 
-  : defaultLevel(defaultLogLevel), fileLogging(false) {
+  : fileLogging(false), defaultLevel(defaultLogLevel) {
   
 #ifdef ESP32_PLATFORM
   // ESP32: Use compile-time configuration

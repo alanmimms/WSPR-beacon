@@ -3,8 +3,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <cstdint>
 #include <vector>
 #include <algorithm>
+
+// Include secrets.h if it exists - it contains WiFi credentials for testing
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
 
 Beacon::Beacon(AppContext* ctx)
     : ctx(ctx),
@@ -46,6 +52,16 @@ void Beacon::initialize() {
         ctx->logger->logInfo("Beacon initializing...");
     }
     
+    // Log current settings from NVS
+    if (ctx->settings && ctx->logger) {
+        char* settingsJson = ctx->settings->toJsonString();
+        if (settingsJson) {
+            ctx->logger->logInfo("Current settings from NVS:");
+            ctx->logger->logInfo(settingsJson);
+            free(settingsJson);
+        }
+    }
+    
     // Initialize random number generator for band selection
     srand(time(nullptr));
     
@@ -76,9 +92,39 @@ void Beacon::initializeHardware() {
 }
 
 void Beacon::initializeWebServer() {
+    if (ctx->logger) {
+        ctx->logger->logInfo("Beacon::initializeWebServer() called");
+    }
+    
     if (ctx->webServer) {
+        if (ctx->logger) {
+            ctx->logger->logInfo("WebServer instance found, starting initialization");
+        }
+        
+        // Mount SPIFFS filesystem first
+        if (ctx->fileSystem && !ctx->fileSystem->mount()) {
+            if (ctx->logger) {
+                ctx->logger->logError("Failed to mount SPIFFS filesystem");
+            }
+        } else {
+            if (ctx->logger) {
+                ctx->logger->logInfo("SPIFFS filesystem mounted successfully");
+            }
+        }
+        
         ctx->webServer->setSettingsChangedCallback([this]() { this->onSettingsChanged(); });
+        
+        if (ctx->logger) {
+            ctx->logger->logInfo("About to call ctx->webServer->start()");
+        }
         ctx->webServer->start();
+        if (ctx->logger) {
+            ctx->logger->logInfo("ctx->webServer->start() completed");
+        }
+    } else {
+        if (ctx->logger) {
+            ctx->logger->logError("WebServer instance is NULL!");
+        }
     }
 }
 
@@ -222,6 +268,18 @@ void Beacon::periodicTimeSync() {
 }
 
 bool Beacon::shouldConnectToWiFi() const {
+    // Always try to connect if hardcoded credentials are available
+    #ifdef WIFI_SSID
+    if (ctx->logger) {
+        ctx->logger->logInfo("Using hardcoded WiFi credentials, forcing STA mode");
+    }
+    return true;
+    #else
+    if (ctx->logger) {
+        ctx->logger->logInfo("No hardcoded WiFi credentials, checking settings");
+    }
+    #endif
+    
     if (!ctx->settings) return false;
     
     // Check WiFi mode - only connect to existing WiFi in STA mode
@@ -235,10 +293,28 @@ bool Beacon::shouldConnectToWiFi() const {
 }
 
 bool Beacon::connectToWiFi() {
-    if (!ctx->net || !ctx->settings) return false;
+    if (!ctx->net) return false;
     
-    const char* ssid = ctx->settings->getString("ssid", "");
-    const char* password = ctx->settings->getString("pwd", "");
+    const char* ssid = "";
+    const char* password = "";
+    
+    if (ctx->settings) {
+        ssid = ctx->settings->getString("ssid", "");
+        password = ctx->settings->getString("pwd", "");
+    }
+    
+    // If no settings or empty SSID, try hardcoded credentials for testing
+    if (!ssid || ssid[0] == '\0') {
+        #ifdef WIFI_SSID
+        ssid = WIFI_SSID;
+        password = WIFI_PASSWORD;
+        if (ctx->logger) {
+            ctx->logger->logInfo("Using hardcoded WiFi credentials for testing");
+        }
+        #else
+        return false;
+        #endif
+    }
     
     if (ctx->logger) {
         char logMsg[128];
@@ -262,6 +338,12 @@ void Beacon::startAccessPoint() {
     }
     
     if (ctx->net) {
+        if (!ctx->net->init()) {
+            if (ctx->logger) {
+                ctx->logger->logError("Failed to initialize WiFi");
+            }
+            return;
+        }
         ctx->net->startServer(80);
     }
 }
@@ -385,9 +467,11 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     struct tm* utc = gmtime(&now);
     int hour = utc->tm_hour;
     
-    // TODO: Parse schedule array from JSON settings
-    // For now, assume all enabled bands are active all hours
-    return true;
+    // Get schedule bitmap (32-bit integer with bits set for active hours)
+    uint32_t scheduleBitmap = (uint32_t)ctx->settings->getInt(key, 0xFFFFFF); // Default: all 24 hours enabled
+    
+    // Check if the current hour bit is set
+    return (scheduleBitmap & (1 << hour)) != 0;
 }
 
 void Beacon::resetBandTracking() {

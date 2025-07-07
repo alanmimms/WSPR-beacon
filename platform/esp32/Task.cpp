@@ -3,6 +3,10 @@
 
 static const char* TAG = "Task";
 
+struct TaskWrapper {
+  std::function<void()> func;
+};
+
 Task::Task() {}
 
 Task::~Task() {

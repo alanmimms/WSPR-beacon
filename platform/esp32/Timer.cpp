@@ -7,7 +7,7 @@ static const char* TAG = "Timer";
 Timer::Timer() {}
 
 Timer::~Timer() {
-  std::lock_guard<std::mutex> lock(mutex_);
+  // Simple cleanup without complex locking
   for (auto& pair : timers_) {
     if (pair.second->handle_ != nullptr) {
       xTimerStop(pair.second->handle_, 0);
@@ -18,13 +18,10 @@ Timer::~Timer() {
 }
 
 void Timer::timerCallback(TimerHandle_t xTimer) {
-  Timer* timer = static_cast<Timer*>(pvTimerGetTimerID(xTimer));
-  if (timer) {
-    std::lock_guard<std::mutex> lock(timer->mutex_);
-    auto it = timer->handleToTimer_.find(xTimer);
-    if (it != timer->handleToTimer_.end()) {
-      it->second->callback_();
-    }
+  // Simplified callback - get the TimerImpl directly from timer ID
+  TimerImpl* impl = static_cast<TimerImpl*>(pvTimerGetTimerID(xTimer));
+  if (impl && impl->callback_) {
+    impl->callback_();
   }
 }
 
@@ -35,14 +32,13 @@ TimerIntf::Timer *Timer::createOneShot(const std::function<void()> &callback) {
     "Timer",
     1, // Initial period (will be set when started)
     pdFALSE, // One-shot timer
-    this, // Timer ID
+    impl, // Timer ID - pass TimerImpl directly
     timerCallback
   );
   
   if (impl->handle_ != nullptr) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    // Simplified tracking without mutex - just keep reference for cleanup
     timers_[impl] = impl;
-    handleToTimer_[impl->handle_] = impl;
     return impl;
   } else {
     delete impl;
@@ -51,40 +47,30 @@ TimerIntf::Timer *Timer::createOneShot(const std::function<void()> &callback) {
 }
 
 void Timer::start(TimerIntf::Timer *timer, unsigned int timeoutMs) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = timers_.find(timer);
-  if (it != timers_.end()) {
-    auto* impl = it->second;
-    if (impl->handle_ != nullptr) {
-      xTimerChangePeriod(impl->handle_, pdMS_TO_TICKS(timeoutMs), 0);
-      xTimerStart(impl->handle_, 0);
-    }
+  auto* impl = static_cast<TimerImpl*>(timer);
+  if (impl && impl->handle_ != nullptr) {
+    xTimerChangePeriod(impl->handle_, pdMS_TO_TICKS(timeoutMs), 0);
+    xTimerStart(impl->handle_, 0);
   }
 }
 
 void Timer::stop(TimerIntf::Timer *timer) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = timers_.find(timer);
-  if (it != timers_.end()) {
-    auto* impl = it->second;
-    if (impl->handle_ != nullptr) {
-      xTimerStop(impl->handle_, 0);
-    }
+  auto* impl = static_cast<TimerImpl*>(timer);
+  if (impl && impl->handle_ != nullptr) {
+    xTimerStop(impl->handle_, 0);
   }
 }
 
 void Timer::destroy(TimerIntf::Timer *timer) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = timers_.find(timer);
-  if (it != timers_.end()) {
-    auto* impl = it->second;
+  auto* impl = static_cast<TimerImpl*>(timer);
+  if (impl) {
     if (impl->handle_ != nullptr) {
       xTimerStop(impl->handle_, 0);
       xTimerDelete(impl->handle_, 0);
-      handleToTimer_.erase(impl->handle_);
     }
+    // Remove from tracking map
+    timers_.erase(timer);
     delete impl;
-    timers_.erase(it);
   }
 }
 
@@ -96,5 +82,9 @@ void Timer::syncTime() {
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
   sntp_setservername(0, "pool.ntp.org");
   sntp_init();
-  ESP_LOGI(TAG, "SNTP time sync initiated");
+  // Avoid logging in timer context - ESP_LOGI(TAG, "SNTP time sync initiated");
+}
+
+time_t Timer::getCurrentTime() {
+  return time(nullptr);
 }

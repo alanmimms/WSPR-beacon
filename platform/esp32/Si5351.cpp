@@ -1,4 +1,4 @@
-#include "si5351.h"
+#include "Si5351.h"
 
 // Include ESP-IDF or hardware-specific headers as needed
 

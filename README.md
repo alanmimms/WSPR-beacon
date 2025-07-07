@@ -76,7 +76,7 @@ This lists:
   
 There is a persistent footer at the bottom of each web page that shows
 
-* The node name of the beacon on the Wi-Fi network.
+* The node name of the beacon on the WiFi network.
 
 * The time/date of the last beacon reset in UTC.
 
@@ -88,6 +88,41 @@ There is a persistent footer at the bottom of each web page that shows
 There is a persistent navigation bar on the left side of the display
 that shows a set of buttons to switch between the various pages the
 Beacon provides for configuration and status.
+
+## WiFi AP and Station Mode
+The beacon goes into AP (access point) mode when it has no
+configuration for WiFi such as when you start out fresh on a new
+ESP32. This presents a WiFi access point called `WSPR-Beacon` to
+which you can connect with password `wspr1234`. This mode acts as a
+"captive portal" immediately launching your browser just like when you
+connect to a hotel or airport's WiFi, but this captive portal isn't
+about selling you travel services, it's the way to configure and
+monitor the beacon.
+
+You can continue to use the beacon in this mode if you wish. The
+access point's main page is at http://192.168.4.1 if you need to
+browse to it manually. There is a feature on the beacon's home page to
+share your device's (presumably accurate) time of day with the beacon
+manually occasionally when in this mode. This isn't present if you're
+running the beacon in STA mode (see below).
+
+However, you can also configure the beacon's WiFi to connect to your
+existing WiFi infrastructure ("STA mode" or station mode), so you can
+access it from other devices on your network like your phone and your
+PC. You do this with the Settings page, choosing a WiFI access point
+whose SSID shows up when the beacon scans (2.4GHz only with ESP32C3),
+or with a manually entered SSID if you have your SSID hidden. You can
+specify a connection password, and you can give the beacon a hostname
+(letters, digits, and "-" only) that will show up on your network as,
+e.g., `wspr-beacon.local` to use the default host name `wspr-beacon`.
+You can open a browser window on your PC and go to
+http://wspr-beacon.local to connect when this is configured.
+
+If the beacon finds it cannot connect to your WiFi after 60 seconds of
+trying, it will revert to the default AP mode so you can reconfigure
+it. This might be useful if you change your WiFi credentials, move the
+beacon to a new location with different environmental WiFi, etc.
+
 
 # Structure of the Code
 The code is organized into a `target-esp32` subtree for the target
@@ -397,11 +432,61 @@ You can build it for ESP32 using the
 embedded target I have aimed this beacon toward initially.
 
 **To build for ESP32:**
+
+First, configure your WiFi credentials for testing/deployment:
+
+```bash
+# Copy the secrets template and edit with your network details
+cp src/secrets.h.example src/secrets.h
+# Edit src/secrets.h with your WiFi SSID and password
+```
+
+The `secrets.h` file allows you to hardcode WiFi credentials for initial testing and is excluded from git to protect your network credentials. This is especially useful for deployment scenarios where you want the beacon to automatically connect to your network on first boot.
+
 ```bash
 cd target-esp32
 idf.py build
 idf.py flash
+idf.py monitor
 ```
+
+## Web Interface Features
+
+The WSPR beacon includes a comprehensive web interface with advanced configuration and monitoring capabilities:
+
+### WiFi Configuration
+- **Network scanning** with real-time RSSI display and signal quality indicators (Excellent/Good/Fair/Poor)
+- **Encryption indicators** (🔒/🔓) showing secured vs. open networks
+- **Hidden SSID support** via custom SSID input mode
+- **Signal strength sorting** with automatic network list updates
+- **Seamless mode switching** between network selection and manual entry
+
+### Settings Management
+- **Real-time change tracking** with visual indicators showing modified settings
+- **Per-band configuration** with 24-hour UTC scheduling grids
+- **Collapsible settings sections** for organized display
+- **Band selection modes**: Sequential, Round Robin, and Random Exhaustive
+- **Custom frequencies** per band with WSPR protocol defaults
+- **Power conversion** between milliwatts and dBm with automatic synchronization
+
+### Security Features
+- **Authentication system** with username/password configuration via `/security.html`
+- **Password visibility toggles** with security-conscious design
+- **Credential persistence** in secure storage
+
+### Real-Time Status Display
+- **Dynamic transmission state** with bold red "TRANSMITTING" indicator and pulsing animation
+- **Live countdown timer** showing exact seconds until next transmission
+- **NTP sync tracking** with "last sync N minutes ago" display
+- **WiFi signal monitoring** with color-coded RSSI indicators (green/orange/red)
+- **Transmission statistics** showing count and total transmission time per band
+
+### API Endpoints
+Beyond the documented REST APIs, the beacon provides:
+- **`/api/wifi/scan`** - Real-time WiFi network scanning with detailed signal information
+- **`/api/security`** - Security credential management
+- **`/api/wspr/encode`** - Complete WSPR symbol encoding service for testing
+- **`/api/live-status`** - Real-time status updates (ESP32 only)
 
 ### Time Synchronization
 

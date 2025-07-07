@@ -1,36 +1,37 @@
-# CMakeLists.txt for jtencode library (host build)
-# This file provides a host-compatible build for the WSPR/JT encoder library
+# jtencode library - WSPR/JT encoder library
+# Works with both ESP-IDF and regular CMake builds
 
-cmake_minimum_required(VERSION 3.16)
-
-# Define the jtencode library
-add_library(jtencode STATIC
-    JTEncode.cpp
-    RSEncode.cpp
-    jtencode-util.cpp
-    nhash.c
-)
-
-# Set C++ standard
-set_property(TARGET jtencode PROPERTY CXX_STANDARD 17)
-set_property(TARGET jtencode PROPERTY CXX_STANDARD_REQUIRED ON)
-
-# Set include directories
-target_include_directories(jtencode PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-# Export include directory for parent projects
-set(JTENCODE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include PARENT_SCOPE)
-
-# Build tests if this is the main project or tests are explicitly requested
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR BUILD_TESTING)
-    # Add test subdirectory
-    add_subdirectory(test)
+if(DEFINED ESP_PLATFORM)
+    # ESP-IDF Component build
+    idf_component_register(
+        SRCS 
+            "JTEncode.cpp"
+            "RSEncode.cpp" 
+            "jtencode-util.cpp"
+            "nhash.c"
+        INCLUDE_DIRS 
+            "include"
+        REQUIRES
+            # No special ESP-IDF components required
+    )
+    
+    # Set C++ standard for this component
+    target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
+else()
+    # Regular CMake build (host-mock)
+    cmake_minimum_required(VERSION 3.16)
+    
+    # Create the library
+    add_library(jtencode
+        JTEncode.cpp
+        RSEncode.cpp
+        jtencode-util.cpp
+        nhash.c
+    )
+    
+    # Set include directories
+    target_include_directories(jtencode PUBLIC include)
+    
+    # Set C++ standard
+    target_compile_features(jtencode PUBLIC cxx_std_17)
 endif()
-
-# Provide configuration summary
-message(STATUS "JTEncode library configured:")
-message(STATUS "  - Include directory: ${CMAKE_CURRENT_SOURCE_DIR}/include")
-message(STATUS "  - Source files: JTEncode.cpp, RSEncode.cpp, jtencode-util.cpp, nhash.c")
-message(STATUS "  - Tests: ${CMAKE_CURRENT_SOURCE_DIR}/test")

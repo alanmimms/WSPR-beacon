@@ -8,14 +8,14 @@
 
 #define SETTINGS_NAMESPACE "settings"
 #define SETTINGS_KEY "json"
-#define JSON_MAX_SIZE 1024
+#define JSON_MAX_SIZE 4096
 
 static const char *TAG = "Settings";
 static const char *defaultSettingsJson =
   "{"
-    "\"callsign\":\"N0CALL\","
-    "\"locator\":\"AA00aa\","
-    "\"powerDbm\":10,"
+    "\"call\":\"N0CALL\","
+    "\"loc\":\"AA00aa\","
+    "\"pwr\":10,"
     "\"txIntervalMinutes\":4"
   "}";
 
@@ -198,16 +198,38 @@ char *Settings::toJsonString() const {
 
 bool Settings::fromJsonString(const char *jsonString) {
   if (!user) return false;
+  
+  ESP_LOGI(TAG, "fromJsonString: Parsing JSON: %s", jsonString);
+  
   cJSON *parsed = cJSON_Parse(jsonString);
-  if (!parsed) return false;
+  if (!parsed) {
+    ESP_LOGE(TAG, "fromJsonString: Failed to parse JSON");
+    return false;
+  }
+  
+  // Clear existing user settings to start fresh
+  cJSON_Delete((cJSON *)user);
+  user = cJSON_CreateObject();
+  
   cJSON *it = nullptr;
   cJSON_ArrayForEach(it, parsed) {
-    if (cJSON_HasObjectItem((cJSON *)defaults, it->string) ||
-        cJSON_HasObjectItem((cJSON *)user, it->string)) {
-      if (cJSON_IsString(it)) setString(it->string, it->valuestring);
-      else if (cJSON_IsNumber(it)) setFloat(it->string, (float)it->valuedouble);
+    const char *key = it->string;
+    ESP_LOGI(TAG, "fromJsonString: Processing key: %s", key);
+    
+    if (cJSON_IsString(it)) {
+      ESP_LOGI(TAG, "  Setting string: %s = %s", key, it->valuestring);
+      setString(key, it->valuestring);
+    } else if (cJSON_IsNumber(it)) {
+      ESP_LOGI(TAG, "  Setting number: %s = %f", key, it->valuedouble);
+      setFloat(key, (float)it->valuedouble);
+    } else if (cJSON_IsObject(it)) {
+      // Handle nested objects (like bands)
+      ESP_LOGI(TAG, "  Setting object: %s", key);
+      cJSON_AddItemToObject((cJSON *)user, key, cJSON_Duplicate(it, 1));
     }
   }
+  
   cJSON_Delete(parsed);
+  ESP_LOGI(TAG, "fromJsonString: Completed successfully");
   return true;
 }

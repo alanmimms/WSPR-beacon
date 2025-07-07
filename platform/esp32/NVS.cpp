@@ -19,7 +19,10 @@ bool NVS::init() {
 }
 
 bool NVS::readU32(const char *key, unsigned int *value) {
-  return opened && nvs_get_u32(handle, key, value) == ESP_OK;
+  uint32_t temp;
+  bool result = opened && nvs_get_u32(handle, key, &temp) == ESP_OK;
+  if (result) *value = temp;
+  return result;
 }
 
 bool NVS::writeU32(const char *key, unsigned int value) {
@@ -27,7 +30,10 @@ bool NVS::writeU32(const char *key, unsigned int value) {
 }
 
 bool NVS::readI32(const char *key, int *value) {
-  return opened && nvs_get_i32(handle, key, value) == ESP_OK;
+  int32_t temp;
+  bool result = opened && nvs_get_i32(handle, key, &temp) == ESP_OK;
+  if (result) *value = temp;
+  return result;
 }
 
 bool NVS::writeI32(const char *key, int value) {

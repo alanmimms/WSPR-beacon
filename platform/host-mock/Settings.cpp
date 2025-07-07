@@ -4,9 +4,9 @@
 
 Settings::Settings() {
   userJson = {
-    {"callsign", "N0CALL"},
-    {"locator", "AA00aa"},
-    {"powerDbm", 10},
+    {"call", "N0CALL"},
+    {"loc", "AA00aa"},
+    {"pwr", 10},
     {"txIntervalMinutes", 4}
   };
 }

@@ -1,4 +1,5 @@
 // Settings page logic for auto-updating power mW <-> dBm and loading/saving settings
+console.log('SETTINGS.JS LOADED');
 
 // Password visibility toggle functionality
 function togglePasswordVisibility(inputId) {
@@ -163,6 +164,11 @@ function initializeWifiModeHandling() {
         ssidInput.style.display = 'none';
         ssidSelect.value = '';
       }
+      
+      // Trigger automatic WiFi scan when switching to STA mode
+      setTimeout(() => {
+        triggerWifiScan();
+      }, 500);
     } else {
       staSettings.style.display = 'none';
       apSettings.style.display = 'block';
@@ -177,6 +183,14 @@ function initializeWifiModeHandling() {
       settingsChanged();
     }
   });
+  
+  // Function to trigger WiFi scan
+  function triggerWifiScan() {
+    if (scanBtn && !scanBtn.disabled) {
+      console.log('Triggering automatic WiFi scan');
+      scanBtn.click();
+    }
+  }
   
   // Handle scan button
   scanBtn.addEventListener('click', async () => {
@@ -350,6 +364,8 @@ function getEncryptionIcon(encryption) {
 
 // Auto-link power fields
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOMContentLoaded - initializing');
+  
   // Initialize collapsible fieldsets
   initializeCollapsibleFieldsets();
   
@@ -456,8 +472,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('wifi-mode').dispatchEvent(modeChangeEvent);
       
       document.getElementById('hostname').value = s.host || '';
-      document.getElementById('callsign').value = s.call || '';
-      document.getElementById('locator').value = s.loc || '';
+      document.getElementById('callsign').value = (s.call || '').toUpperCase();
+      document.getElementById('locator').value = (s.loc || '').toUpperCase();
 
       // Update footer elements (fix CSS selectors)
       const callsignSpan = document.getElementById('callsign-span');
@@ -494,6 +510,14 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         originalSettings = captureCurrentSettings();
         settingsChanged(); // Update secondary header state
+        
+        // Auto-scan WiFi networks if in STA mode
+        if (wifiMode === 'sta') {
+          console.log('Auto-scanning WiFi networks on page load');
+          setTimeout(() => {
+            triggerWifiScan();
+          }, 500);
+        }
       }, 100);
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -504,26 +528,79 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize settings change tracking
   attachSettingsChangeListeners();
   
+  // Add input validation for callsign, locator, and hostname
+  const callsignInput = document.getElementById('callsign');
+  const locatorInput = document.getElementById('locator');
+  const hostnameInput = document.getElementById('hostname');
+  
+  // Callsign validation - uppercase letters and numbers only
+  if (callsignInput) {
+    callsignInput.addEventListener('input', (e) => {
+      // Convert to uppercase and remove invalid characters
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+  }
+  
+  // Grid locator validation - uppercase letters and numbers only
+  if (locatorInput) {
+    locatorInput.addEventListener('input', (e) => {
+      // Convert to uppercase and remove invalid characters
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      
+      // Optionally enforce 6-character limit for standard grid squares
+      if (e.target.value.length > 6) {
+        e.target.value = e.target.value.slice(0, 6);
+      }
+    });
+  }
+  
+  // Hostname validation - alphanumeric and hyphens only
+  if (hostnameInput) {
+    hostnameInput.addEventListener('input', (e) => {
+      // Remove invalid characters (keep letters, numbers, hyphens)
+      e.target.value = e.target.value.replace(/[^a-zA-Z0-9-]/g, '');
+    });
+  }
+  
   // Save settings function
   async function saveSettings() {
+    console.log('saveSettings() called');
     const statusMessage = document.getElementById('status-message');
     const saveBtn = document.getElementById('save-settings-btn');
     
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
 
-    const wifiMode = document.getElementById('wifi-mode').value;
-    const powerDbmInput = document.getElementById('power-dbm');
-    const data = {
-      wifiMode: wifiMode,
-      host: document.getElementById('hostname').value,
-      call: document.getElementById('callsign').value,
-      loc: document.getElementById('locator').value,
-      pwr: parseInt(powerDbmInput.value, 10) || 0,
-      txPct: parseInt(document.getElementById('tx-percent').value, 10) || 0,
-      bandMode: document.getElementById('band-selection-mode').value,
-      bands: collectBandConfiguration()
-    };
+    let data;
+    let wifiMode;
+    
+    try {
+      wifiMode = document.getElementById('wifi-mode').value;
+      const powerDbmInput = document.getElementById('power-dbm');
+      
+      console.log('Collecting band configuration...');
+      const bands = collectBandConfiguration();
+      console.log('Band configuration collected:', bands);
+      
+      data = {
+        wifiMode: wifiMode,
+        host: document.getElementById('hostname').value,
+        call: document.getElementById('callsign').value.toUpperCase(),
+        loc: document.getElementById('locator').value.toUpperCase(),
+        pwr: parseInt(powerDbmInput.value, 10) || 0,
+        txPct: parseInt(document.getElementById('tx-percent').value, 10) || 0,
+        bandMode: document.getElementById('band-selection-mode').value,
+        bands: bands
+      };
+      
+      console.log('Data object created:', data);
+    } catch (error) {
+      console.error('ERROR preparing save data:', error);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Settings';
+      if (statusMessage) statusMessage.textContent = 'Error preparing settings data';
+      return;
+    }
     
     // Add WiFi settings based on mode
     if (wifiMode === 'sta') {
@@ -550,24 +627,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     try {
+      console.log('Sending POST to /api/settings with data:', JSON.stringify(data, null, 2));
+      
       const resp = await fetch('/api/settings', {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' }
       });
+      
+      console.log('Response status:', resp.status);
+      
       if (resp.ok) {
+        console.log('Save successful!');
         if (statusMessage) statusMessage.textContent = 'Settings saved!';
         setTimeout(() => { if (statusMessage) statusMessage.textContent = ''; }, 3200);
         
         // Update original settings and reset status
         originalSettings = captureCurrentSettings();
         settingsChanged();
+        
+        // Restore button immediately on success
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Settings';
       } else {
+        const errorText = await resp.text();
+        console.error('Save failed:', resp.status, errorText);
         if (statusMessage) statusMessage.textContent = 'Failed to save settings.';
+        
+        // Restore button on error
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Settings';
       }
-    } catch {
-      if (statusMessage) statusMessage.textContent = 'Error saving settings.';
-    } finally {
+    } catch (error) {
+      console.error('Network error:', error);
+      if (statusMessage) statusMessage.textContent = 'Network error saving settings.';
+      
+      // Always restore button on error
       saveBtn.disabled = false;
       saveBtn.textContent = 'Save Settings';
     }
@@ -576,9 +671,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Handle save button in secondary header
   const saveSettingsBtn = document.getElementById('save-settings-btn');
   if (saveSettingsBtn) {
-    saveSettingsBtn.addEventListener('click', async () => {
-      await saveSettings();
+    console.log('Save button found, adding listener');
+    saveSettingsBtn.addEventListener('click', async (event) => {
+      console.log('Save button clicked!');
+      try {
+        await saveSettings();
+      } catch (error) {
+        console.error('Button click error:', error);
+      }
     });
+  } else {
+    console.error('ERROR: Save button NOT found!');
   }
 
   // Intercept form submit to use the new save function
@@ -601,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const bandConfig = bands[bandName] || {
         en: false,
         freq: getDefaultFrequency(bandName),
-        sched: []
+        sched: 0
       };
       
       const bandDiv = document.createElement('div');
@@ -624,7 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="schedule-hours" id="schedule-${bandName}">
               <div class="hour-group">
                 ${Array.from({length: 12}, (_, hour) => `
-                  <div class="hour-box ${bandConfig.sched.includes(hour) ? 'selected' : ''}" 
+                  <div class="hour-box ${(bandConfig.sched & (1 << hour)) ? 'selected' : ''}" 
                        data-hour="${hour}" 
                        title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
                     ${hour.toString().padStart(2, '0')}
@@ -635,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${Array.from({length: 12}, (_, i) => {
                   const hour = i + 12;
                   return `
-                    <div class="hour-box ${bandConfig.sched.includes(hour) ? 'selected' : ''}" 
+                    <div class="hour-box ${(bandConfig.sched & (1 << hour)) ? 'selected' : ''}" 
                          data-hour="${hour}" 
                          title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
                       ${hour.toString().padStart(2, '0')}
@@ -674,19 +777,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const bands = {};
     const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
     
+    let missingCount = 0;
+    
     bandOrder.forEach(bandName => {
-      const enabled = document.getElementById(`band-${bandName}-enabled`).checked;
-      const frequency = parseInt(document.getElementById(`band-${bandName}-freq`).value) || getDefaultFrequency(bandName);
-      
-      const selectedHours = document.querySelectorAll(`#schedule-${bandName} .hour-box.selected`);
-      const schedule = Array.from(selectedHours).map(box => parseInt(box.dataset.hour));
-      
-      bands[bandName] = {
-        en: enabled,
-        freq: frequency,
-        sched: schedule
-      };
+      try {
+        const enabledEl = document.getElementById(`band-${bandName}-enabled`);
+        const freqEl = document.getElementById(`band-${bandName}-freq`);
+        
+        if (!enabledEl || !freqEl) {
+          missingCount++;
+          // Use defaults for missing bands
+          bands[bandName] = {
+            en: false,
+            freq: getDefaultFrequency(bandName),
+            sched: 0
+          };
+          return;
+        }
+        
+        const enabled = enabledEl.checked;
+        const frequency = parseInt(freqEl.value) || getDefaultFrequency(bandName);
+        
+        const selectedHours = document.querySelectorAll(`#schedule-${bandName} .hour-box.selected`);
+        let schedule = 0;
+        selectedHours.forEach(box => {
+          const hour = parseInt(box.dataset.hour);
+          if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+            schedule |= (1 << hour);
+          }
+        });
+        
+        bands[bandName] = {
+          en: enabled,
+          freq: frequency,
+          sched: schedule
+        };
+      } catch (error) {
+        console.error('Band config error:', bandName, error);
+        // Provide safe defaults
+        bands[bandName] = {
+          en: false,
+          freq: getDefaultFrequency(bandName),
+          sched: 0
+        };
+      }
     });
+    
+    if (missingCount > 0) {
+      console.warn('Missing band elements:', missingCount);
+    }
     
     return bands;
   }

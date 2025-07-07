@@ -81,7 +81,7 @@ bool Time::isTimeSynced() {
   return timeSynced.load();
 }
 
-int64_t Time::getStartTime() const {
+int64_t Time::getStartTime() {
   // If we have a first sync time, use that as the effective boot time
   int64_t firstSync = firstSyncTime.load();
   if (firstSync > 0) {

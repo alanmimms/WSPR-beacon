@@ -8,11 +8,14 @@ public:
   FileSystem();
   ~FileSystem() override;
 
-  bool mount(const char *path) override;
-  bool unmount(const char *path) override;
-  FILE *open(const char *path, const char *mode) override;
-  size_t read(void *ptr, size_t size, size_t nmemb, FILE *stream) override;
-  size_t write(const void *ptr, size_t size, size_t nmemb, FILE *stream) override;
-  int close(FILE *stream) override;
-  int remove(const char *path) override;
+  bool mount() override;
+  void unmount() override;
+  void *open(const char *path, const char *mode) override;
+  void close(void *file) override;
+  int read(void *file, void *buffer, size_t len) override;
+  int write(void *file, const void *buffer, size_t len) override;
+  bool seek(void *file, int64_t offset, int whence) override;
+  bool size(const char *path, uint64_t &result) override;
+  bool stat(const char *path) override;
+  bool remove(const char *path) override;
 };

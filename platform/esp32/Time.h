@@ -29,7 +29,7 @@ public:
   bool isTimeSynced() override;
 
   // Returns the time when this Time object was created (boot time)
-  int64_t getStartTime() const;
+  int64_t getStartTime();
 
 private:
   static void sntpTimeSyncNotificationCallback(struct timeval *tv);

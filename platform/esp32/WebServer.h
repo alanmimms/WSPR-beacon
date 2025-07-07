@@ -24,6 +24,9 @@ private:
   static esp_err_t apiSettingsPostHandler(httpd_req_t *req);
   static esp_err_t apiStatusGetHandler(httpd_req_t *req);
   static esp_err_t apiTimeGetHandler(httpd_req_t *req);
+  static esp_err_t apiLiveStatusHandler(httpd_req_t *req);
+  static esp_err_t apiWifiScanHandler(httpd_req_t *req);
+  static esp_err_t captivePortalHandler(httpd_req_t *req);
   static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename);
 
   httpd_handle_t server;

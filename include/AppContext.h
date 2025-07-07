@@ -10,6 +10,7 @@
 #include "SettingsIntf.h"
 #include "TaskIntf.h"
 #include "TimerIntf.h"
+#include "TimeIntf.h"
 #include "WebServerIntf.h"
 
 struct AppContext {
@@ -22,6 +23,7 @@ struct AppContext {
   SettingsIntf *settings;
   WebServerIntf *webServer;
   TimerIntf *timer;
+  TimeIntf *time;
   TaskIntf *task;
   EventGroupIntf *eventGroup;
 

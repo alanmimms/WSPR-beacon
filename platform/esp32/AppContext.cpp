@@ -8,6 +8,7 @@
 #include "Settings.h"
 #include "WebServer.h"
 #include "Timer.h"
+#include "Time.h"
 #include "Task.h"
 #include "EventGroup.h"
 #include "esp_event.h"
@@ -23,7 +24,8 @@ AppContext::AppContext() {
   si5351 = new Si5351();
   fileSystem = new FileSystem();
   settings = new Settings();
-  webServer = new WebServer(settings);
+  time = new Time();
+  webServer = new WebServer(settings, time);
   timer = new Timer();
   task = new Task();
   eventGroup = new EventGroup();
@@ -34,6 +36,7 @@ AppContext::~AppContext() {
   delete task;
   delete timer;
   delete webServer;
+  delete time;
   delete settings;
   delete fileSystem;
   delete si5351;

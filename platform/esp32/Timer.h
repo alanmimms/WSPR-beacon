@@ -36,11 +36,13 @@ public:
 
   // Optional: sync time (e.g., SNTP)
   void syncTime() override;
+  
+  // Get current time (for testing/mocking)
+  time_t getCurrentTime() override;
 
 private:
   static void timerCallback(TimerHandle_t xTimer);
   
-  std::mutex mutex_;
-  std::map<TimerHandle_t, TimerImpl*> handleToTimer_;
+  // Simple tracking for cleanup only - no complex synchronization needed
   std::map<TimerIntf::Timer*, TimerImpl*> timers_;
 };

@@ -11,7 +11,7 @@ function wattsToDbm(mw) {
 }
 
 function updateFooter(data) {
-  if (data.callsign) document.getElementById('footer-callsign').textContent = `Callsign: ${data.callsign}`;
+  if (data.call) document.getElementById('footer-callsign').textContent = `Callsign: ${data.call}`;
   if (data.hostname) document.getElementById('footer-hostname').textContent = `Hostname: ${data.hostname}`;
 }
 

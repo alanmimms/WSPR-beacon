@@ -62,7 +62,7 @@ async function loadSettings() {
     // Update footer
     const callsignSpan = document.getElementById('callsign-span');
     const hostnameSpan = document.getElementById('hostname-span');
-    if (callsignSpan) callsignSpan.textContent = settings.callsign || '?';
+    if (callsignSpan) callsignSpan.textContent = settings.call || '?';
     if (hostnameSpan) hostnameSpan.textContent = settings.hostname || '?';
     
     // Store band configs for use in updateBandStats
