@@ -74,6 +74,7 @@ static json settings = {
   {"loc", "AA00aa"},
   {"pwr", 23},
   {"txPct", 20},
+  {"bandMode", "sequential"},
   {"wifiMode", "sta"},
   {"ssid", ""},
   {"pwd", ""},
@@ -166,6 +167,7 @@ static bool loadMockData(const std::string& mockDataFile) {
     updateField("ssid");
     updateField("ssidAp");
     updateField("pwdAp");
+    updateField("bandMode");
     
     std::string fieldList = "";
     for (size_t i = 0; i < updatedFields.size(); ++i) {

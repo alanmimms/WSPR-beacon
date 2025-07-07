@@ -18,8 +18,7 @@ function togglePasswordVisibility(inputId) {
 }
 
 // Settings tracking for secondary header
-let originalSettings = {};
-let currentSettings = {};
+let settingsModified = false;
 
 // Conversion helpers
 function mwToDbm(mw) {
@@ -68,10 +67,7 @@ function captureCurrentSettings() {
 }
 
 function settingsChanged() {
-  currentSettings = captureCurrentSettings();
-  
-  // Compare with original settings
-  const changed = JSON.stringify(originalSettings) !== JSON.stringify(currentSettings);
+  settingsModified = true;
   
   // Update secondary header
   const statusText = document.getElementById('settings-status-text');
@@ -79,15 +75,9 @@ function settingsChanged() {
   const saveBtn = document.getElementById('save-settings-btn');
   
   if (statusText && statusContainer && saveBtn) {
-    if (changed) {
-      statusText.textContent = 'Settings modified';
-      statusContainer.classList.add('modified');
-      saveBtn.disabled = false;
-    } else {
-      statusText.textContent = 'Settings unchanged';
-      statusContainer.classList.remove('modified');
-      saveBtn.disabled = true;
-    }
+    statusText.textContent = 'Settings modified';
+    statusContainer.classList.add('modified');
+    saveBtn.disabled = false;
   }
 }
 
@@ -144,6 +134,15 @@ function initializeCollapsibleFieldsets() {
   });
 }
 
+// Function to trigger WiFi scan (moved outside for global access)
+function triggerWifiScan() {
+  const scanBtn = document.getElementById('scan-networks-btn');
+  if (scanBtn && !scanBtn.disabled) {
+    console.log('Triggering automatic WiFi scan');
+    scanBtn.click();
+  }
+}
+
 // WiFi mode management
 function initializeWifiModeHandling() {
   const wifiModeSelect = document.getElementById('wifi-mode');
@@ -188,14 +187,6 @@ function initializeWifiModeHandling() {
       settingsChanged();
     }
   });
-  
-  // Function to trigger WiFi scan
-  function triggerWifiScan() {
-    if (scanBtn && !scanBtn.disabled) {
-      console.log('Triggering automatic WiFi scan');
-      scanBtn.click();
-    }
-  }
   
   // Handle scan button
   scanBtn.addEventListener('click', async () => {
@@ -511,10 +502,18 @@ document.addEventListener('DOMContentLoaded', () => {
         loadBandConfiguration(s.bands);
       }
       
-      // Capture original settings after loading (with a small delay to ensure everything is ready)
+      // Reset settings status after loading (with a small delay to ensure everything is ready)
       setTimeout(() => {
-        originalSettings = captureCurrentSettings();
-        settingsChanged(); // Update secondary header state
+        // Make sure UI shows settings as unchanged after initial load
+        settingsModified = false;
+        const statusText = document.getElementById('settings-status-text');
+        const statusContainer = document.querySelector('.settings-status');
+        const saveBtn = document.getElementById('save-settings-btn');
+        if (statusText && statusContainer && saveBtn) {
+          statusText.textContent = 'Settings unchanged';
+          statusContainer.classList.remove('modified');
+          saveBtn.disabled = true;
+        }
         
         // Auto-scan WiFi networks if in STA mode
         if (wifiMode === 'sta') {
@@ -647,9 +646,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusMessage) statusMessage.textContent = 'Settings saved!';
         setTimeout(() => { if (statusMessage) statusMessage.textContent = ''; }, 3200);
         
-        // Update original settings and reset status
-        originalSettings = captureCurrentSettings();
-        settingsChanged();
+        // Reset modified flag and update UI
+        settingsModified = false;
+        const statusText = document.getElementById('settings-status-text');
+        const statusContainer = document.querySelector('.settings-status');
+        if (statusText && statusContainer) {
+          statusText.textContent = 'Settings unchanged';
+          statusContainer.classList.remove('modified');
+        }
         
         // Restore button immediately on success
         saveBtn.disabled = false;
@@ -701,6 +705,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Band configuration functions
   function loadBandConfiguration(bands) {
     const container = document.getElementById('band-config');
+    if (!container) {
+      console.error('ERROR: band-config container not found!');
+      return;
+    }
     container.innerHTML = '';
     
     const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];

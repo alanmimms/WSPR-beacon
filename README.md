@@ -132,6 +132,10 @@ without a micrcontroller, and a `src` subtree for the application code
 that is common across these two targets. The name `target-esp32` was
 chosen to allow for future targeting to other platforms.
 
+If CLAUDE or other AI or a human adds some code to do some debug
+output, always mark that code as "XXX FOR DEBUG" in a comment so it
+can be cleaned up later when debugging is complete.
+
 ## Building
 
 ### 1. Host Mock Build (Testing)
