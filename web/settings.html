@@ -100,6 +100,23 @@
             </div>
           </div>
         </fieldset>
+        
+        <!-- Time Synchronization Zone -->
+        <fieldset class="settings-zone time-zone collapsible-fieldset">
+          <legend><span class="collapse-icon">▼</span>Time Synchronization</legend>
+          <div class="fieldset-content">
+            <div class="form-row">
+              <label>UTC Time Source</label>
+              <div class="time-sync-info">
+                <p>When connected to WiFi, time is synchronized via NTP. In AP mode, you can manually sync from your browser's UTC time.</p>
+                <button type="button" id="sync-time-btn" class="sync-time-btn">
+                  Sync Time from Browser
+                </button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+        
         <!-- Callsign/Locator/Power Zone -->
         <fieldset class="settings-zone beacon-zone collapsible-fieldset">
           <legend><span class="collapse-icon">▼</span>Beacon Identification</legend>
@@ -176,7 +193,7 @@
       <span id="footer-rssi">-</span>
     </div>
     <div class="footer-item">
-      <span class="footer-label">Next TX:</span>
+      <span class="footer-label">Next TX Opp:</span>
       <span id="footer-next-tx">2m 0s @ 14.097100 MHz</span>
     </div>
     <div class="footer-item">

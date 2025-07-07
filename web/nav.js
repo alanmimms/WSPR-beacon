@@ -2,8 +2,7 @@
 function createNavigation(currentPage = '') {
   const navItems = [
     { id: 'home', href: '/index.html', text: 'Home' },
-    { id: 'settings', href: '/settings.html', text: 'Settings' },
-    { id: 'wspr-test', href: '/wspr-test.html', text: 'WSPR Test' }
+    { id: 'settings', href: '/settings.html', text: 'Settings' }
   ];
 
   return `

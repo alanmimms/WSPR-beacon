@@ -46,7 +46,7 @@ std::string findWebDirectory() {
 }
 
 WebServer::WebServer(SettingsIntf *settings)
-  : settings(settings), running(false) {}
+  : settings(settings), scheduler(nullptr), running(false) {}
 
 WebServer::~WebServer() {
   stop();
@@ -54,6 +54,10 @@ WebServer::~WebServer() {
 
 void WebServer::setSettingsChangedCallback(const std::function<void()> &cb) {
   settingsChangedCallback = cb;
+}
+
+void WebServer::setScheduler(Scheduler* sched) {
+  scheduler = sched;
 }
 
 void WebServer::start() {

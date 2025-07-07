@@ -8,15 +8,23 @@ If CLAUDE or other AI or a human adds some code to do some debug
 output, always mark that code as "XXX FOR DEBUG" in a comment so it
 can be cleaned up later when debugging is complete.
 
+Always use the platform abstraction APIs instead of things like
+printf(), timer and time of day functions, network functions that are
+abstracted. See, e.g., `LoggerIntf.h` and the others in the top level
+`include` directory.
+
+Whenever it looks like one of the abstractions is lacking, ask me if
+we should work around the issue or fix the abstraction.
+
+Always make sure both ESP32 and host-mock targets can build and run
+after any significant change to the platform abstraction interfaces or
+to the common code that runs atop the abstraction.
+
 
 ## Build Commands
 
 ### Host Mock Build (Development/Testing)
-```bash
-cd host-mock
-mkdir build && cd build
-cmake ..
-make -j4
+```bash cd host-mock mkdir build && cd build cmake .. make -j4
 
 # Run with various options:
 ./bin/host-testbench  # Normal speed, default mock data
@@ -56,7 +64,8 @@ make webui-test
 ## Architecture Overview
 
 ### Platform Abstraction
-The codebase uses a clean platform abstraction layer to support both ESP32 hardware and host-mock testing:
+The codebase uses a clean platform abstraction layer to support both
+ESP32 hardware and host-mock testing:
 
 - **Core Logic** (`src/core/`): Platform-independent beacon logic (Beacon, FSM, Scheduler)
 - **Platform Implementations** (`platform/`): Platform-specific implementations of interfaces

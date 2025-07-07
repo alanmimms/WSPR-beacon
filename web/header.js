@@ -88,7 +88,18 @@ class HeaderManager {
     }
   }
 
-  // Calculate uptime from reset time
+  // Format uptime from seconds
+  formatUptime(uptimeSeconds) {
+    if (!uptimeSeconds || uptimeSeconds < 0) return '0d 0h 0m';
+    
+    const days = Math.floor(uptimeSeconds / (60 * 60 * 24));
+    const hours = Math.floor((uptimeSeconds % (60 * 60 * 24)) / (60 * 60));
+    const minutes = Math.floor((uptimeSeconds % (60 * 60)) / 60);
+    
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  // Calculate uptime from reset time (fallback)
   calculateUptime(lastResetTime) {
     if (!lastResetTime) return '0d 0h 0m';
     
@@ -124,7 +135,9 @@ class HeaderManager {
       return { text: '-', cssClass: '' };
     }
     
-    if (!rssi || rssi === 0) return { text: '-', cssClass: '' };
+    if (rssi === undefined || rssi === null || rssi === 0) {
+      return { text: '-', cssClass: '' };
+    }
     
     // Determine signal quality and color class based on WiFi standards
     let quality, cssClass;
@@ -214,7 +227,13 @@ class HeaderManager {
 
     // Update uptime
     if (this.footerElements.uptime) {
-      this.footerElements.uptime.textContent = this.calculateUptime(status.resetTime);
+      if (status.uptime !== undefined) {
+        // Use uptime seconds directly from API
+        this.footerElements.uptime.textContent = this.formatUptime(status.uptime);
+      } else {
+        // Fallback to resetTime calculation if available
+        this.footerElements.uptime.textContent = this.calculateUptime(status.resetTime);
+      }
     }
 
     // Update WiFi status
@@ -229,31 +248,50 @@ class HeaderManager {
     // Update RSSI
     if (this.footerElements.rssi) {
       const wifiMode = status.wifiMode || 'sta';
-      // Mock values for host-mock, real values from ESP32
-      const rssi = status.rssi || (status.netState === 'READY' && wifiMode === 'sta' ? -65 : null);
-      const rssiInfo = this.formatRssi(rssi, wifiMode);
-      this.footerElements.rssi.textContent = rssiInfo.text;
       
-      // Remove old RSSI classes and apply new one
-      this.footerElements.rssi.className = '';
-      if (rssiInfo.cssClass) {
-        this.footerElements.rssi.classList.add(rssiInfo.cssClass);
+      if (wifiMode === 'ap' || status.netState === 'AP_MODE') {
+        // In AP mode, show client count instead of RSSI
+        const clientCount = status.clientCount !== undefined ? status.clientCount : 0;
+        this.footerElements.rssi.textContent = `${clientCount} client${clientCount === 1 ? '' : 's'}`;
+        this.footerElements.rssi.className = '';
+      } else {
+        // In STA mode, show RSSI if available
+        const rssi = status.rssi !== undefined ? status.rssi : null;
+        const rssiInfo = this.formatRssi(rssi, wifiMode);
+        this.footerElements.rssi.textContent = rssiInfo.text;
+        
+        // Remove old RSSI classes and apply new one
+        this.footerElements.rssi.className = '';
+        if (rssiInfo.cssClass) {
+          this.footerElements.rssi.classList.add(rssiInfo.cssClass);
+        }
       }
     }
 
     // Update next transmission info
     if (this.footerElements.nextTx) {
-      const nextTransmissionIn = status.nextTx || 120;
       const band = status.curBand || '20m';
       const frequency = status.freq || this.getFrequencyForBand(band);
+      const freqMHz = typeof frequency === 'number' ? (frequency / 1000000).toFixed(6) + ' MHz' : frequency;
       
-      const minutes = Math.floor(nextTransmissionIn / 60);
-      const seconds = nextTransmissionIn % 60;
-      const timeStr = nextTransmissionIn <= 0 ? 'Now' : 
-                     nextTransmissionIn < 60 ? `${seconds}s` :
-                     `${minutes}m ${seconds}s`;
-      
-      this.footerElements.nextTx.textContent = `${timeStr} @ ${frequency}`;
+      // Check if currently transmitting
+      if (status.txState === 'TRANSMITTING') {
+        this.footerElements.nextTx.textContent = `TRANSMITTING @ ${freqMHz}`;
+      } else if (status.txState === 'TX_PENDING') {
+        this.footerElements.nextTx.textContent = `TX PENDING @ ${freqMHz}`;
+      } else {
+        // Use the nextTx value provided by the ESP32 scheduler
+        const nextTransmissionIn = status.nextTx || 0;
+        
+        if (nextTransmissionIn <= 0) {
+          this.footerElements.nextTx.textContent = `Ready @ ${freqMHz}`;
+        } else {
+          const minutes = Math.floor(nextTransmissionIn / 60);
+          const seconds = Math.floor(nextTransmissionIn % 60);
+          const timeStr = nextTransmissionIn < 60 ? `${seconds}s` : `${minutes}m ${seconds}s`;
+          this.footerElements.nextTx.textContent = `${timeStr} @ ${freqMHz}`;
+        }
+      }
     }
 
     // Update transmission count and minutes
@@ -262,7 +300,7 @@ class HeaderManager {
                      status.txCnt || 0;
       const txMinutes = status.stats?.txMin || 
                        status.txMin || 0;
-      this.footerElements.txCount.textContent = `TX: ${txCount} ${txMinutes}mins`;
+      this.footerElements.txCount.textContent = `${txCount} ${txMinutes}mins`;
     }
   }
 
@@ -371,7 +409,7 @@ class HeaderManager {
 
   // Start live status updates
   startLiveUpdates() {
-    // Status updates every 5 seconds
+    // Status updates every 1 second for real-time transmission state
     setInterval(async () => {
       try {
         // Try live-status first, fallback to status.json for host-mock
@@ -384,14 +422,9 @@ class HeaderManager {
       } catch (error) {
         console.warn('Live status update failed:', error);
       }
-    }, 5000);
+    }, 1000);
     
-    // Uptime only updates every minute for efficiency
-    setInterval(() => {
-      if (this.footerElements.uptime && this.lastStatus) {
-        this.footerElements.uptime.textContent = this.calculateUptime(this.lastStatus.resetTime);
-      }
-    }, 60000); // Every minute
+    // Uptime is now updated every second via live status polling
   }
 }
 

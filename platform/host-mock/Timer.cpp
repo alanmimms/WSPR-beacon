@@ -19,7 +19,14 @@ Timer::~Timer() {
 }
 
 TimerIntf::Timer *Timer::createOneShot(const std::function<void()> &callback) {
-  auto* impl = new TimerImpl(callback);
+  auto* impl = new TimerImpl(callback, false); // One-shot
+  std::lock_guard<std::mutex> lock(mutex_);
+  timers_[impl] = impl;
+  return impl;
+}
+
+TimerIntf::Timer *Timer::createPeriodic(const std::function<void()> &callback) {
+  auto* impl = new TimerImpl(callback, true); // Periodic
   std::lock_guard<std::mutex> lock(mutex_);
   timers_[impl] = impl;
   return impl;
@@ -42,10 +49,21 @@ void Timer::start(TimerIntf::Timer *timer, unsigned int timeoutMs) {
     // Start new timer thread
     impl->running_ = true;
     impl->thread_ = std::thread([impl, timeoutMs]() {
-      std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
-      if (impl->running_) {
-        impl->callback_();
-        impl->running_ = false;
+      if (impl->isPeriodic_) {
+        // Periodic timer - keep firing until stopped
+        while (impl->running_) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
+          if (impl->running_) {
+            impl->callback_();
+          }
+        }
+      } else {
+        // One-shot timer - fire once
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
+        if (impl->running_) {
+          impl->callback_();
+          impl->running_ = false;
+        }
       }
     });
   }

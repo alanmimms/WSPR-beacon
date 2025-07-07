@@ -511,6 +511,118 @@ The web interface clearly indicates all times are in UTC, which is
 essential for proper WSPR operation and coordination with other
 stations worldwide.
 
+## Configuration Reference
+
+The WSPR beacon uses a hierarchical JSON configuration system with comprehensive settings for all aspects of operation. Settings are automatically persisted and synchronized between the web interface and device storage.
+
+### Default Configuration Structure
+
+```json
+{
+  "call": "N0CALL",
+  "loc": "AA00aa", 
+  "pwr": 10,
+  "txPct": 0,
+  "txIntervalMinutes": 4,
+  "bandMode": "sequential",
+  "wifiMode": "sta",
+  "ssid": "",
+  "pwd": "",
+  "bands": {
+    "160m": {"en": 0, "freq": 1838100, "sched": 16777215},
+    "80m": {"en": 0, "freq": 3570100, "sched": 16777215},
+    "40m": {"en": 0, "freq": 7040100, "sched": 16777215},
+    "30m": {"en": 0, "freq": 10140200, "sched": 16777215},
+    "20m": {"en": 1, "freq": 14097100, "sched": 16777215},
+    "17m": {"en": 0, "freq": 18106100, "sched": 16777215},
+    "15m": {"en": 0, "freq": 21096100, "sched": 16777215},
+    "12m": {"en": 0, "freq": 24926100, "sched": 16777215},
+    "10m": {"en": 0, "freq": 28126100, "sched": 16777215}
+  }
+}
+```
+
+### Core Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `call` | string | `"N0CALL"` | Ham radio callsign (1-6 characters, uppercase) |
+| `loc` | string | `"AA00aa"` | Maidenhead grid locator (6 characters: AA00aa format) |
+| `pwr` | integer | `10` | Transmit power in dBm (0-43 dBm range for ESP32) |
+| `pwrMw` | integer | calculated | Transmit power in milliwatts (auto-calculated from dBm) |
+| `txPct` | integer | `0` | Transmission percentage (0-100%, 0=disabled) |
+| `txIntervalMinutes` | integer | `4` | Transmission interval in minutes (2 or 4 minutes per WSPR protocol) |
+| `bandMode` | string | `"sequential"` | Band selection: `"sequential"`, `"roundRobin"`, or `"randomExhaustive"` |
+
+### WiFi Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `wifiMode` | string | `"sta"` | WiFi mode: `"sta"` (station), `"ap"` (access point), or `"apsta"` |
+| `ssid` | string | `""` | WiFi SSID for station mode connection |
+| `pwd` | string | `""` | WiFi password for station mode |
+| `ssidAp` | string | `"WSPR-Beacon"` | Access point SSID when in AP mode |
+| `pwdAp` | string | `"wspr1234"` | Access point password |
+| `host` | string | `"wspr-beacon"` | Hostname for network identification |
+
+### Band Configuration
+
+Each band in the `bands` object contains:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `en` | integer | Enable flag: `1` = enabled, `0` = disabled |
+| `freq` | integer | Frequency in Hz (within WSPR band plan) |
+| `sched` | integer | 24-hour schedule bitmap (bit N = hour N UTC, `16777215` = all hours) |
+
+**Default Band Frequencies:**
+- **160m**: 1,838,100 Hz (1.8381 MHz)
+- **80m**: 3,570,100 Hz (3.5701 MHz) 
+- **40m**: 7,040,100 Hz (7.0401 MHz)
+- **30m**: 10,140,200 Hz (10.1402 MHz)
+- **20m**: 14,097,100 Hz (14.0971 MHz) - *enabled by default*
+- **17m**: 18,106,100 Hz (18.1061 MHz)
+- **15m**: 21,096,100 Hz (21.0961 MHz)
+- **12m**: 24,926,100 Hz (24.9261 MHz)
+- **10m**: 28,126,100 Hz (28.1261 MHz)
+
+### Schedule Bitmap Format
+
+The `sched` field uses a 24-bit integer where each bit represents one hour (0-23) in UTC:
+- **Bit 0**: 00:00-01:00 UTC
+- **Bit 1**: 01:00-02:00 UTC  
+- **Bit 23**: 23:00-00:00 UTC
+- **16777215** (0xFFFFFF): All hours enabled
+- **0**: All hours disabled
+- **65535** (0x00FFFF): Hours 0-15 enabled, 16-23 disabled
+
+### Runtime Status Keys
+
+These keys are set automatically by the system during operation:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `curBand` | string | Currently active band (e.g., `"20m"`) |
+| `freq` | integer | Current transmission frequency in Hz |
+
+### Configuration Persistence
+
+**ESP32 Target:**
+- Settings stored in NVS (Non-Volatile Storage) as JSON
+- Automatic backup and validation on startup
+- Web interface changes saved immediately
+
+**Host Mock:**
+- Settings stored in `settings.json` file
+- File-based persistence for testing scenarios
+- Hot-reload support for development
+
+### Band Mode Descriptions
+
+- **Sequential**: Cycles through enabled bands in order (160m → 80m → 40m → ...)
+- **Round Robin**: Ensures equal time on each enabled band before repeating
+- **Random Exhaustive**: Random selection ensuring all bands used before repeating
+
 ### Portability
 
 Given the abstractions I built into the code, you can port this to

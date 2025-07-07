@@ -134,11 +134,11 @@ function initializeCollapsibleFieldsets() {
   });
 }
 
-// Function to trigger WiFi scan (moved outside for global access)
+// Function to trigger WiFi scan manually (for button click simulation only)
 function triggerWifiScan() {
   const scanBtn = document.getElementById('scan-networks-btn');
   if (scanBtn && !scanBtn.disabled) {
-    console.log('Triggering automatic WiFi scan');
+    console.log('Triggering manual WiFi scan');
     scanBtn.click();
   }
 }
@@ -169,10 +169,7 @@ function initializeWifiModeHandling() {
         ssidSelect.value = '';
       }
       
-      // Trigger automatic WiFi scan when switching to STA mode
-      setTimeout(() => {
-        triggerWifiScan();
-      }, 500);
+      // WiFi scan is now manual only - user must click Scan button
     } else {
       staSettings.style.display = 'none';
       apSettings.style.display = 'block';
@@ -358,6 +355,50 @@ function getEncryptionIcon(encryption) {
   return '🔒'; // Secured network
 }
 
+// Time synchronization functionality
+function initializeTimeSyncButton() {
+  const syncTimeBtn = document.getElementById('sync-time-btn');
+  if (!syncTimeBtn) return;
+  
+  syncTimeBtn.addEventListener('click', async () => {
+    const originalText = syncTimeBtn.textContent;
+    syncTimeBtn.disabled = true;
+    syncTimeBtn.textContent = 'Syncing...';
+    
+    try {
+      // Get current UTC time from browser
+      const browserTime = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+      
+      const response = await fetch('/api/time/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          time: browserTime
+        })
+      });
+      
+      if (response.ok) {
+        syncTimeBtn.textContent = 'Time Synced!';
+        setTimeout(() => {
+          syncTimeBtn.textContent = originalText;
+          syncTimeBtn.disabled = false;
+        }, 2000);
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Time sync failed:', error);
+      syncTimeBtn.textContent = 'Sync Failed';
+      setTimeout(() => {
+        syncTimeBtn.textContent = originalText;
+        syncTimeBtn.disabled = false;
+      }, 2000);
+    }
+  });
+}
+
 // Auto-link power fields
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOMContentLoaded - initializing');
@@ -367,6 +408,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize WiFi mode handling
   initializeWifiModeHandling();
+  
+  // Initialize time sync button
+  initializeTimeSyncButton();
   
   const powerMwInput = document.getElementById('power-mw');
   const powerDbmInput = document.getElementById('power-dbm');
@@ -515,13 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
           saveBtn.disabled = true;
         }
         
-        // Auto-scan WiFi networks if in STA mode
-        if (wifiMode === 'sta') {
-          console.log('Auto-scanning WiFi networks on page load');
-          setTimeout(() => {
-            triggerWifiScan();
-          }, 500);
-        }
+        // WiFi scan is now manual only - removed auto-scan on page load
       }, 100);
     } catch (error) {
       console.error('Error loading settings:', error);

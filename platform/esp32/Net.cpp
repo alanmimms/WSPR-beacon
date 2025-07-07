@@ -161,15 +161,18 @@ bool Net::connect(const char *ssid, const char *password) {
       ESP_LOGI(TAG, "WiFi connected successfully to %s", ssid);
       wifi_initialized = true;
       
-      // Get and log the IP address
+      // Check if we have an IP address assigned
       esp_netif_ip_info_t ip_info;
       esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-      if (sta_netif && esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK) {
+      if (sta_netif && esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
         ESP_LOGI(TAG, "WiFi connected - IP address: " IPSTR, IP2STR(&ip_info.ip));
         ESP_LOGI(TAG, "Access web interface at: http://" IPSTR, IP2STR(&ip_info.ip));
+        return true;
+      } else {
+        // WiFi connected but no IP yet, wait a bit more for DHCP
+        ESP_LOGI(TAG, "WiFi connected to %s, waiting for IP address...", ssid);
+        continue;
       }
-      
-      return true;
     }
   }
   

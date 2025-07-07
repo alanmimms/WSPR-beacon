@@ -21,6 +21,9 @@ public:
 
   // Create a one-shot timer (fires after timeout, once)
   TimerIntf::Timer *createOneShot(const std::function<void()> &callback) override;
+  
+  // Create a periodic timer (fires repeatedly at interval)
+  TimerIntf::Timer *createPeriodic(const std::function<void()> &callback) override;
 
   // Start the timer; timeoutMs is in milliseconds
   void start(TimerIntf::Timer *timer, unsigned int timeoutMs) override;

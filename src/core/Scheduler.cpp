@@ -1,13 +1,17 @@
 #include "Scheduler.h"
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 
-Scheduler::Scheduler(TimerIntf* timer, SettingsIntf* settings)
+Scheduler::Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger)
     : timer(timer),
       settings(settings),
-      transmissionStartTimer(nullptr),
+      logger(logger),
+      schedulerTimer(nullptr),
       transmissionEndTimer(nullptr),
       transmissionInProgress(false),
-      schedulerActive(false)
+      schedulerActive(false),
+      waitingForNextOpportunity(false)
 {}
 
 Scheduler::~Scheduler() {
@@ -27,17 +31,32 @@ void Scheduler::start() {
     
     schedulerActive = true;
     transmissionInProgress = false;
-    scheduleNextTransmission();
+    waitingForNextOpportunity = false;
+    
+    // Start a simple 1-second periodic timer
+    if (!schedulerTimer) {
+        schedulerTimer = timer->createPeriodic([this]() { 
+            checkTransmissionOpportunity(); 
+        });
+        if (!schedulerTimer) {
+            if (logger) {
+                logger->logError("SCHEDULER", "Failed to create periodic timer");
+            }
+            return;
+        }
+    }
+    
+    timer->start(schedulerTimer, 1000); // Check every second
 }
 
 void Scheduler::stop() {
     schedulerActive = false;
     
     if (timer) {
-        if (transmissionStartTimer) {
-            timer->stop(transmissionStartTimer);
-            timer->destroy(transmissionStartTimer);
-            transmissionStartTimer = nullptr;
+        if (schedulerTimer) {
+            timer->stop(schedulerTimer);
+            timer->destroy(schedulerTimer);
+            schedulerTimer = nullptr;
         }
         if (transmissionEndTimer) {
             timer->stop(transmissionEndTimer);
@@ -47,16 +66,15 @@ void Scheduler::stop() {
     }
     
     transmissionInProgress = false;
+    waitingForNextOpportunity = false;
 }
 
 void Scheduler::cancelCurrentTransmission() {
     if (!transmissionInProgress) return;
     
-    if (timer && transmissionEndTimer) {
-        timer->stop(transmissionEndTimer);
-    }
-    
-    onTransmissionEnd();
+    // Just mark transmission as not in progress
+    // The task will handle calling the end callback
+    transmissionInProgress = false;
 }
 
 bool Scheduler::isTransmissionInProgress() const {
@@ -64,61 +82,104 @@ bool Scheduler::isTransmissionInProgress() const {
 }
 
 bool Scheduler::isValidTransmissionTime() const {
+    // No longer needed with task-based approach
+    return false;
+}
+
+time_t Scheduler::getNextTransmissionTime() const {
+    // Return next even minute boundary
     time_t now = timer ? timer->getCurrentTime() : time(nullptr);
     struct tm tmNow;
     gmtime_r(&now, &tmNow);
     
-    int intervalMinutes = settings ? settings->getInt("txIntervalMinutes", 4) : 4;
+    int minutesToNext = (tmNow.tm_min % 2 == 0) ? 2 : 1;
+    if (tmNow.tm_min % 2 == 0 && tmNow.tm_sec == 0) {
+        minutesToNext = 0;  // We're exactly at an even minute
+    }
     
-    return isEvenMinuteBoundary(now, intervalMinutes) && 
-           tmNow.tm_sec >= WSPR_START_OFFSET_SEC && 
-           tmNow.tm_sec < (WSPR_START_OFFSET_SEC + 5);
-}
-
-time_t Scheduler::getNextTransmissionTime() const {
-    time_t now = timer ? timer->getCurrentTime() : time(nullptr);
-    int intervalMinutes = settings ? settings->getInt("txIntervalMinutes", 4) : 4;
-    return calculateNextEvenMinute(now, intervalMinutes);
+    time_t nextTime = now + (minutesToNext * 60) - tmNow.tm_sec;
+    return nextTime;
 }
 
 int Scheduler::getSecondsUntilNextTransmission() const {
+    // Return seconds until next even minute (transmission opportunity)
     time_t now = timer ? timer->getCurrentTime() : time(nullptr);
-    time_t nextTx = getNextTransmissionTime();
-    return static_cast<int>(nextTx - now) + WSPR_START_OFFSET_SEC;
-}
-
-void Scheduler::scheduleNextTransmission() {
-    if (!schedulerActive || !timer) return;
+    struct tm tmNow;
+    gmtime_r(&now, &tmNow);
     
-    int secondsUntilNext = getSecondsUntilNextTransmission();
-    
-    if (secondsUntilNext < 5) {
-        int intervalMinutes = settings ? settings->getInt("txIntervalMinutes", 4) : 4;
-        secondsUntilNext += intervalMinutes * 60;
+    int secondsToWait;
+    if (tmNow.tm_min % 2 == 0) {
+        // Already on even minute
+        if (tmNow.tm_sec < 2) {
+            secondsToWait = 0;  // Within first 2 seconds of even minute
+        } else {
+            secondsToWait = 120 - tmNow.tm_sec;  // Wait for next even minute
+        }
+    } else {
+        // On odd minute, wait until next even minute
+        secondsToWait = 60 - tmNow.tm_sec;
     }
     
-    if (!transmissionStartTimer) {
-        transmissionStartTimer = timer->createOneShot([this]() { this->onTransmissionStart(); });
-    }
-    
-    timer->start(transmissionStartTimer, secondsUntilNext * 1000);
+    return secondsToWait;
 }
 
-void Scheduler::onTransmissionStart() {
-    if (!schedulerActive) return;
+void Scheduler::checkTransmissionOpportunity() {
+    if (!schedulerActive) {
+        return;
+    }
+    
+    time_t now = timer ? timer->getCurrentTime() : time(nullptr);
+    struct tm tmNow;
+    gmtime_r(&now, &tmNow);
+    
+    // Check if we're at an even minute boundary (within first 2 seconds)
+    bool isTransmissionOpportunity = (tmNow.tm_min % 2 == 0) && (tmNow.tm_sec < 2);
+    
+    if (isTransmissionOpportunity && !transmissionInProgress && !waitingForNextOpportunity) {
+        // This is a transmission opportunity - roll dice
+        waitingForNextOpportunity = true; // Prevent multiple checks in same window
+        
+        int txPercent = settings ? settings->getInt("txPct", 0) : 0;
+        int diceRoll = rand() % 100;
+        bool shouldTransmit = (txPercent > 0) && (diceRoll < txPercent);
+        
+        if (logger) {
+            logger->logInfo("SCHEDULER", "TX opportunity at %02d:%02d:%02d - txPercent=%d%%, diceRoll=%d - %s",
+                           tmNow.tm_hour, tmNow.tm_min, tmNow.tm_sec,
+                           txPercent, diceRoll, shouldTransmit ? "WILL TRANSMIT" : "SKIP");
+        }
+        
+        if (shouldTransmit) {
+            startTransmission();
+        }
+    }
+    
+    // Reset opportunity flag when we're past the window
+    if (waitingForNextOpportunity && tmNow.tm_sec >= 5) {
+        waitingForNextOpportunity = false;
+    }
+}
+
+void Scheduler::startTransmission() {
+    if (!schedulerActive || transmissionInProgress) return;
     
     transmissionInProgress = true;
     
+    // Call start callback
     if (onTransmissionStartCallback) {
         onTransmissionStartCallback();
     }
     
-    if (timer) {
-        if (!transmissionEndTimer) {
-            transmissionEndTimer = timer->createOneShot([this]() { this->onTransmissionEnd(); });
-        }
-        timer->start(transmissionEndTimer, static_cast<int>(WSPR_TRANSMISSION_DURATION_SEC * 1000));
+    // Schedule end of transmission
+    if (!transmissionEndTimer) {
+        transmissionEndTimer = timer->createOneShot([this]() { this->onTransmissionEnd(); });
     }
+    
+    if (logger) {
+        logger->logInfo("SCHEDULER", "Transmitting for %.1f seconds", WSPR_TRANSMISSION_DURATION_SEC);
+    }
+    
+    timer->start(transmissionEndTimer, static_cast<int>(WSPR_TRANSMISSION_DURATION_SEC * 1000));
 }
 
 void Scheduler::onTransmissionEnd() {
@@ -128,33 +189,12 @@ void Scheduler::onTransmissionEnd() {
         onTransmissionEndCallback();
     }
     
-    if (schedulerActive) {
-        scheduleNextTransmission();
-    }
+    // The periodic timer will automatically handle the next opportunity check
 }
 
-time_t Scheduler::calculateNextEvenMinute(time_t currentTime, int intervalMinutes) const {
-    struct tm tmCurrent;
-    gmtime_r(&currentTime, &tmCurrent);
-    
-    int currentMinute = tmCurrent.tm_min;
-    int minutesPastInterval = currentMinute % intervalMinutes;
-    int minutesToNext = intervalMinutes - minutesPastInterval;
-    
-    if (minutesPastInterval == 0 && tmCurrent.tm_sec < WSPR_START_OFFSET_SEC) {
-        minutesToNext = 0;
-    }
-    
-    // Calculate next time directly with seconds arithmetic to avoid mktime() UTC issues
-    time_t nextTime = currentTime;
-    nextTime += minutesToNext * 60;           // Add minutes
-    nextTime -= (tmCurrent.tm_sec);           // Remove current seconds to align to minute boundary
-    
-    return nextTime;
-}
-
-bool Scheduler::isEvenMinuteBoundary(time_t time, int intervalMinutes) const {
-    struct tm tmTime;
-    gmtime_r(&time, &tmTime);
-    return (tmTime.tm_min % intervalMinutes) == 0;
+// Simple helper to check if band/hour is enabled
+bool Scheduler::isBandEnabledForCurrentHour() const {
+    // TODO: This should check band enables and hourly schedule
+    // For now, always return true
+    return true;
 }

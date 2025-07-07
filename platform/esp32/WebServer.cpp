@@ -3,6 +3,10 @@
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
 #include "esp_wifi.h"
+#include "esp_netif.h"
+#include "cJSON.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
@@ -10,15 +14,39 @@
 #include <iomanip>
 #include <sstream>
 
+// Include secrets.h if it exists - it contains WiFi credentials for testing
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
+
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (8192)
 static const char *TAG = "WebServer";
+
+// Global beacon state for status API
+static struct {
+  const char* networkState = "BOOTING";
+  const char* transmissionState = "IDLE";
+  const char* currentBand = "20m";
+  int currentFrequency = 14097100;
+  bool isTransmitting = false;
+} g_beaconState;
 static const char *SPIFFS_BASE_PATH = "/spiffs";
 
 WebServer *WebServer::instanceForApi = nullptr;
 
+// Function to update beacon state from outside
+void updateBeaconState(const char* netState, const char* txState, const char* band, int frequency) {
+  g_beaconState.networkState = netState;
+  g_beaconState.transmissionState = txState;
+  g_beaconState.currentBand = band;
+  g_beaconState.currentFrequency = frequency;
+  g_beaconState.isTransmitting = (strcmp(txState, "TRANSMITTING") == 0);
+}
+
+
 WebServer::WebServer(SettingsIntf *settings, TimeIntf *time)
-  : server(nullptr), settings(settings), time(time) {
+  : server(nullptr), settings(settings), time(time), scheduler(nullptr) {
   instanceForApi = this;
 }
 
@@ -28,6 +56,10 @@ WebServer::~WebServer() {
 
 void WebServer::setSettingsChangedCallback(const std::function<void()> &cb) {
   settingsChangedCallback = cb;
+}
+
+void WebServer::setScheduler(Scheduler* sched) {
+  scheduler = sched;
 }
 
 esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {
@@ -178,15 +210,136 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
-  char *jsonStr = self->settings->toJsonString();
-  if (!jsonStr) {
+  
+  // Get base settings JSON
+  char *settingsStr = self->settings->toJsonString();
+  if (!settingsStr) {
     ESP_LOGE(TAG, "Failed to allocate memory for JSON buffer");
     httpd_resp_send_500(req);
     return ESP_FAIL;
   }
+  
+  // Parse settings JSON to add live status
+  cJSON *status = cJSON_Parse(settingsStr);
+  free(settingsStr);
+  
+  if (!status) {
+    ESP_LOGE(TAG, "Failed to parse settings JSON");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  
+  // Add WiFi status information
+  wifi_mode_t wifi_mode;
+  esp_err_t err = esp_wifi_get_mode(&wifi_mode);
+  
+  if (err == ESP_OK) {
+    // Add WiFi mode to JSON response
+    if (wifi_mode == WIFI_MODE_AP) {
+      cJSON_AddStringToObject(status, "wifiMode", "ap");
+    } else if (wifi_mode == WIFI_MODE_STA) {
+      cJSON_AddStringToObject(status, "wifiMode", "sta");
+    } else if (wifi_mode == WIFI_MODE_APSTA) {
+      cJSON_AddStringToObject(status, "wifiMode", "apsta");
+    }
+    
+    if (wifi_mode == WIFI_MODE_AP || wifi_mode == WIFI_MODE_APSTA) {
+      cJSON_AddStringToObject(status, "netState", "AP_MODE");
+      
+      // Get connected client count for AP mode
+      wifi_sta_list_t sta_list;
+      esp_err_t sta_err = esp_wifi_ap_get_sta_list(&sta_list);
+      if (sta_err == ESP_OK) {
+        cJSON_AddNumberToObject(status, "clientCount", sta_list.num);
+      } else {
+        cJSON_AddNumberToObject(status, "clientCount", 0);
+      }
+    }
+    
+    if (wifi_mode == WIFI_MODE_STA || wifi_mode == WIFI_MODE_APSTA) {
+      // Check if STA is connected - retry up to 3 times if it fails
+      wifi_ap_record_t ap_info;
+      err = esp_wifi_sta_get_ap_info(&ap_info);
+      
+      // Retry if failed (common after mode switches)
+      for (int retry = 0; retry < 2 && err != ESP_OK; retry++) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        err = esp_wifi_sta_get_ap_info(&ap_info);
+      }
+      
+      if (err == ESP_OK) {
+        cJSON_AddStringToObject(status, "netState", "READY");
+        cJSON_AddStringToObject(status, "ssid", (char*)ap_info.ssid);
+        cJSON_AddNumberToObject(status, "rssi", ap_info.rssi);
+      } else {
+        ESP_LOGW(TAG, "esp_wifi_sta_get_ap_info failed after retries: %s", esp_err_to_name(err));
+        
+        // Fallback: check if we're connected but can't get AP info
+        esp_netif_ip_info_t ip_info;
+        esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (sta_netif && esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+          // We have an IP, so we're connected, but can't get AP details
+          cJSON_AddStringToObject(status, "netState", "READY");
+          
+          // Try to get SSID from settings first
+          const char* configured_ssid = self->settings ? self->settings->getString("ssid", "") : "";
+          if (configured_ssid && configured_ssid[0] != '\0') {
+            cJSON_AddStringToObject(status, "ssid", configured_ssid);
+          } else {
+            // If no SSID in settings, check for hardcoded credentials
+            #ifdef WIFI_SSID
+            cJSON_AddStringToObject(status, "ssid", WIFI_SSID);
+            #else
+            cJSON_AddStringToObject(status, "ssid", "Unknown");
+            #endif
+          }
+          // Don't set RSSI if we can't get it - let UI handle missing value
+        } else {
+          cJSON_AddStringToObject(status, "netState", "STA_CONNECTING");
+        }
+      }
+    }
+  }
+  
+  // Add current time and other live status
+  if (self->time) {
+    int64_t currentTime = self->time->getTime();
+    bool synced = self->time->isTimeSynced();
+    cJSON_AddNumberToObject(status, "time", currentTime);
+    cJSON_AddBoolToObject(status, "synced", synced);
+    
+    // Add uptime in seconds since boot using FreeRTOS ticks
+    TickType_t uptimeTicks = xTaskGetTickCount();
+    int64_t uptimeSeconds = uptimeTicks / configTICK_RATE_HZ;
+    cJSON_AddNumberToObject(status, "uptime", uptimeSeconds);
+  }
+  
+  // Add beacon transmission state
+  cJSON_AddStringToObject(status, "txState", g_beaconState.transmissionState);
+  cJSON_AddStringToObject(status, "curBand", g_beaconState.currentBand);
+  cJSON_AddNumberToObject(status, "freq", g_beaconState.currentFrequency);
+  
+  // Get next transmission countdown directly from Scheduler (single source of truth)
+  if (self->scheduler) {
+    int nextTxSeconds = self->scheduler->getSecondsUntilNextTransmission();
+    cJSON_AddNumberToObject(status, "nextTx", nextTxSeconds);
+  } else {
+    cJSON_AddNumberToObject(status, "nextTx", 120); // Fallback if scheduler not available
+  }
+  
+  // Convert back to JSON string
+  char *responseStr = cJSON_PrintUnformatted(status);
+  cJSON_Delete(status);
+  
+  if (!responseStr) {
+    ESP_LOGE(TAG, "Failed to generate response JSON");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  
   httpd_resp_set_type(req, "application/json");
-  httpd_resp_send(req, jsonStr, strlen(jsonStr));
-  free(jsonStr);
+  httpd_resp_send(req, responseStr, strlen(responseStr));
+  free(responseStr);
   return ESP_OK;
 }
 
@@ -226,6 +379,60 @@ esp_err_t WebServer::apiTimeGetHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+esp_err_t WebServer::apiTimeSyncHandler(httpd_req_t *req) {
+  WebServer *self = static_cast<WebServer *>(req->user_ctx);
+  if (!self) {
+    ESP_LOGE(TAG, "apiTimeSyncHandler: self is null");
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+  
+  char content[256];
+  int ret = httpd_req_recv(req, content, sizeof(content) - 1);
+  if (ret <= 0) {
+    ESP_LOGE(TAG, "Failed to receive time sync request");
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request body");
+    return ESP_FAIL;
+  }
+  content[ret] = '\0';
+  
+  // Parse JSON to get time
+  cJSON *json = cJSON_Parse(content);
+  if (!json) {
+    ESP_LOGE(TAG, "Failed to parse time sync JSON");
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON format");
+    return ESP_FAIL;
+  }
+  
+  cJSON *timeItem = cJSON_GetObjectItem(json, "time");
+  if (!timeItem || !cJSON_IsNumber(timeItem)) {
+    ESP_LOGE(TAG, "Invalid time value in sync request");
+    cJSON_Delete(json);
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid time field");
+    return ESP_FAIL;
+  }
+  
+  int64_t browserTime = (int64_t)cJSON_GetNumberValue(timeItem);
+  cJSON_Delete(json);
+  
+  // Set system time
+  if (self->time) {
+    if (self->time->setTime(browserTime)) {
+      ESP_LOGI(TAG, "Time synchronized from browser: %lld", (long long)browserTime);
+      httpd_resp_set_status(req, "200 OK");
+      httpd_resp_send(req, NULL, 0);
+    } else {
+      ESP_LOGE(TAG, "Failed to set system time");
+      httpd_resp_send_500(req);
+    }
+  } else {
+    ESP_LOGW(TAG, "Time interface not available");
+    httpd_resp_send_err(req, HTTPD_501_METHOD_NOT_IMPLEMENTED, "Time interface not available");
+  }
+  
+  return ESP_OK;
+}
+
 esp_err_t WebServer::apiLiveStatusHandler(httpd_req_t *req) {
   WebServer *self = static_cast<WebServer *>(req->user_ctx);
   if (!self) {
@@ -234,28 +441,29 @@ esp_err_t WebServer::apiLiveStatusHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
   
-  // Build live status JSON with basic system info
-  char jsonResponse[512];
-  int64_t currentTime = self->time ? self->time->getTime() : 0;
-  bool synced = self->time ? self->time->isTimeSynced() : false;
-  
-  snprintf(jsonResponse, sizeof(jsonResponse),
-           "{\"time\":%lld,\"synced\":%s,\"state\":\"IDLE\",\"uptime\":%d}",
-           (long long)currentTime, synced ? "true" : "false", (int)(currentTime % 86400));
-  
-  httpd_resp_set_type(req, "application/json");
-  httpd_resp_send(req, jsonResponse, strlen(jsonResponse));
-  return ESP_OK;
+  // Use the same logic as apiStatusGetHandler but optimized for live updates
+  // This ensures consistent WiFi status information in 1-second polling
+  return apiStatusGetHandler(req);
 }
 
 esp_err_t WebServer::apiWifiScanHandler(httpd_req_t *req) {
   ESP_LOGI(TAG, "WiFi scan requested");
   
   // Switch to APSTA mode to allow scanning
-  wifi_mode_t mode;
-  esp_wifi_get_mode(&mode);
-  if (mode == WIFI_MODE_AP) {
+  wifi_mode_t original_mode;
+  esp_wifi_get_mode(&original_mode);
+  if (original_mode == WIFI_MODE_AP) {
     ESP_LOGI(TAG, "Switching to APSTA mode for scanning");
+    esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Failed to switch to APSTA mode: %s", esp_err_to_name(err));
+      const char* errorJson = "{\"error\":\"Mode switch failed\"}";
+      httpd_resp_set_type(req, "application/json");
+      httpd_resp_send(req, errorJson, strlen(errorJson));
+      return ESP_OK;
+    }
+  } else if (original_mode == WIFI_MODE_STA) {
+    ESP_LOGI(TAG, "Switching from STA to APSTA mode for scanning");
     esp_err_t err = esp_wifi_set_mode(WIFI_MODE_APSTA);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "Failed to switch to APSTA mode: %s", esp_err_to_name(err));
@@ -277,9 +485,9 @@ esp_err_t WebServer::apiWifiScanHandler(httpd_req_t *req) {
   esp_err_t err = esp_wifi_scan_start(&scan_config, true);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "WiFi scan failed: %s", esp_err_to_name(err));
-    // Restore AP mode if scan failed
-    if (mode == WIFI_MODE_AP) {
-      esp_wifi_set_mode(WIFI_MODE_AP);
+    // Restore original mode if scan failed
+    if (original_mode != WIFI_MODE_APSTA) {
+      esp_wifi_set_mode(original_mode);
     }
     const char* errorJson = "{\"error\":\"Scan failed\"}";
     httpd_resp_set_type(req, "application/json");
@@ -346,9 +554,13 @@ esp_err_t WebServer::apiWifiScanHandler(httpd_req_t *req) {
   free(ap_list);
   free(json_response);
   
-  // Restore original mode if needed
-  if (mode == WIFI_MODE_AP) {
-    esp_wifi_set_mode(WIFI_MODE_AP);
+  // Restore original WiFi mode
+  if (original_mode != WIFI_MODE_APSTA) {
+    ESP_LOGI(TAG, "Restoring original WiFi mode after scan");
+    esp_wifi_set_mode(original_mode);
+    // Give the WiFi subsystem time to re-establish connection
+    // STA mode needs more time to reconnect properly
+    vTaskDelay(pdMS_TO_TICKS(2000));
   }
   
   return ESP_OK;
@@ -428,6 +640,14 @@ void WebServer::start() {
     .user_ctx = this
   };
   httpd_register_uri_handler(server, &apiTime);
+
+  const httpd_uri_t apiTimeSync = {
+    .uri = "/api/time/sync",
+    .method = HTTP_POST,
+    .handler = apiTimeSyncHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiTimeSync);
 
   const httpd_uri_t apiLiveStatus = {
     .uri = "/api/live-status",

@@ -16,6 +16,9 @@ public:
 
   // Create a one-shot timer (fires after timeout, once)
   virtual Timer *createOneShot(const std::function<void()> &callback) = 0;
+  
+  // Create a periodic timer (fires repeatedly at interval)
+  virtual Timer *createPeriodic(const std::function<void()> &callback) = 0;
 
   // Start the timer; timeoutMs is in milliseconds
   virtual void start(Timer *timer, unsigned int timeoutMs) = 0;

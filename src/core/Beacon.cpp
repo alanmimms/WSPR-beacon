@@ -7,6 +7,11 @@
 #include <vector>
 #include <algorithm>
 
+// Include WebServer.h for updateBeaconState function
+#ifdef ESP_PLATFORM
+  #include "../platform/esp32/WebServer.h"
+#endif
+
 // Include secrets.h if it exists - it contains WiFi credentials for testing
 #if __has_include("secrets.h")
   #include "secrets.h"
@@ -15,7 +20,7 @@
 Beacon::Beacon(AppContext* ctx)
     : ctx(ctx),
       fsm(),
-      scheduler(ctx->timer, ctx->settings),
+      scheduler(ctx->timer, ctx->settings, ctx->logger),
       running(false),
       lastTimeSync(0),
       bandSelectionMode(BandSelectionMode::SEQUENTIAL),
@@ -81,7 +86,7 @@ void Beacon::initialize() {
 void Beacon::initializeHardware() {
     if (ctx->gpio) {
         ctx->gpio->init();
-        ctx->gpio->setOutput(ctx->statusLEDGPIO, false);
+        ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
     }
     
     if (ctx->settings) {
@@ -113,6 +118,9 @@ void Beacon::initializeWebServer() {
         }
         
         ctx->webServer->setSettingsChangedCallback([this]() { this->onSettingsChanged(); });
+        
+        // Give WebServer access to Scheduler for countdown API
+        ctx->webServer->setScheduler(&scheduler);
         
         if (ctx->logger) {
             ctx->logger->logInfo("About to call ctx->webServer->start()");
@@ -155,6 +163,15 @@ void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionSta
             fsm.getNetworkStateString(), fsm.getTransmissionStateString());
         ctx->logger->logInfo(logMsg);
     }
+    
+    // Update WebServer status for ESP32
+    #ifdef ESP_PLATFORM
+    if (ctx->settings) {
+        const char* freqKey = getBandFrequencyKey(currentBand);
+        uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
+        updateBeaconState(fsm.getNetworkStateString(), fsm.getTransmissionStateString(), currentBand, frequency);
+    }
+    #endif
     
     if (networkState == FSM::NetworkState::ERROR) {
         if (ctx->logger) {
@@ -229,7 +246,7 @@ void Beacon::startTransmission() {
     }
     
     if (ctx->gpio) {
-        ctx->gpio->setOutput(ctx->statusLEDGPIO, true);
+        ctx->gpio->setOutput(ctx->statusLEDGPIO, false); // LED on (active-low)
     }
 }
 
@@ -245,7 +262,7 @@ void Beacon::endTransmission() {
     }
     
     if (ctx->gpio) {
-        ctx->gpio->setOutput(ctx->statusLEDGPIO, false);
+        ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
     }
 }
 
@@ -266,6 +283,7 @@ void Beacon::periodicTimeSync() {
         syncTime();
     }
 }
+
 
 bool Beacon::shouldConnectToWiFi() const {
     // Always try to connect if hardcoded credentials are available

@@ -2,6 +2,7 @@
 
 #include "TimerIntf.h"
 #include "SettingsIntf.h"
+#include "LoggerIntf.h"
 #include <ctime>
 #include <functional>
 
@@ -9,7 +10,7 @@ class Scheduler {
 public:
     using TransmissionCallback = std::function<void()>;
 
-    explicit Scheduler(TimerIntf* timer, SettingsIntf* settings);
+    explicit Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger = nullptr);
     ~Scheduler();
 
     void setTransmissionStartCallback(TransmissionCallback callback);
@@ -26,20 +27,19 @@ public:
     int getSecondsUntilNextTransmission() const;
 
     static constexpr double WSPR_TRANSMISSION_DURATION_SEC = 110.592;
-    static constexpr int WSPR_START_OFFSET_SEC = 1;
+    static constexpr int WSPR_START_OFFSET_SEC = 1;  // Not used in new implementation
 
 private:
-    void scheduleNextTransmission();
-    void onTransmissionStart();
+    void checkTransmissionOpportunity();
+    void startTransmission();
     void onTransmissionEnd();
-    
-    time_t calculateNextEvenMinute(time_t currentTime, int intervalMinutes) const;
-    bool isEvenMinuteBoundary(time_t time, int intervalMinutes) const;
+    bool isBandEnabledForCurrentHour() const;
 
     TimerIntf* timer;
     SettingsIntf* settings;
+    LoggerIntf* logger;
     
-    TimerIntf::Timer* transmissionStartTimer;
+    TimerIntf::Timer* schedulerTimer;
     TimerIntf::Timer* transmissionEndTimer;
     
     TransmissionCallback onTransmissionStartCallback;
@@ -47,4 +47,5 @@ private:
     
     bool transmissionInProgress;
     bool schedulerActive;
+    bool waitingForNextOpportunity;
 };
