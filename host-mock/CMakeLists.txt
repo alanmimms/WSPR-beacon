@@ -37,6 +37,7 @@ add_executable(host-testbench
   ../platform/host-mock/Task.cpp
   ../platform/host-mock/EventGroup.cpp
   ../platform/host-mock/Time.cpp
+  ../platform/host-mock/WSPRModulator.cpp
   ../src/BeaconLogger.cpp
 )
 
