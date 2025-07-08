@@ -143,11 +143,9 @@ void Scheduler::checkTransmissionOpportunity() {
         int diceRoll = rand() % 100;
         bool shouldTransmit = (txPercent > 0) && (diceRoll < txPercent);
         
-        if (logger) {
-            logger->logInfo("SCHEDULER", "TX opportunity at %02d:%02d:%02d - txPercent=%d%%, diceRoll=%d - %s",
-                           tmNow.tm_hour, tmNow.tm_min, tmNow.tm_sec,
-                           txPercent, diceRoll, shouldTransmit ? "WILL TRANSMIT" : "SKIP");
-        }
+        // IMPORTANT: NO LOGGING IN TIMER CALLBACK - IT'S NOT SAFE!
+        // The decision will be logged when startTransmission() is called
+        // or by the main loop checking for skipped transmissions
         
         if (shouldTransmit) {
             startTransmission();

@@ -3,6 +3,7 @@
 #include "AppContext.h"
 #include "FSM.h"
 #include "Scheduler.h"
+#include "JTEncode.h"
 #include <ctime>
 
 class Beacon {
@@ -35,6 +36,11 @@ private:
     void syncTime();
     void periodicTimeSync();
     
+    // WSPR modulation methods
+    void startWSPRModulation();
+    void stopWSPRModulation();
+    void modulateNextSymbol();
+    
     bool shouldConnectToWiFi() const;
     bool connectToWiFi();
     void startAccessPoint();
@@ -59,6 +65,17 @@ private:
     char currentBand[8];
     int currentHour;
     bool usedBands[9];  // For tracking used bands in random mode (160m through 10m)
+    
+    // WSPR modulation state
+    WSPREncoder wsprEncoder;
+    TimerIntf::Timer* modulationTimer;
+    int currentSymbolIndex;
+    uint32_t baseFrequency;
+    bool modulationActive;
+    
+    // FreeRTOS task handle for WSPR modulation
+    void* wsprTaskHandle;  // TaskHandle_t, but using void* to avoid FreeRTOS includes in header
+    static void wsprModulationTask(void* param);  // Static task function
     
     static constexpr const char* BAND_NAMES[9] = {
         "160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"

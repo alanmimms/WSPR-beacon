@@ -10,6 +10,8 @@
 // Include WebServer.h for updateBeaconState function
 #ifdef ESP_PLATFORM
   #include "../platform/esp32/WebServer.h"
+  #include "freertos/FreeRTOS.h"
+  #include "freertos/task.h"
 #endif
 
 // Include secrets.h if it exists - it contains WiFi credentials for testing
@@ -25,7 +27,13 @@ Beacon::Beacon(AppContext* ctx)
       lastTimeSync(0),
       bandSelectionMode(BandSelectionMode::SEQUENTIAL),
       currentBandIndex(0),
-      currentHour(-1)
+      currentHour(-1),
+      wsprEncoder(),
+      modulationTimer(nullptr),
+      currentSymbolIndex(0),
+      baseFrequency(0),
+      modulationActive(false),
+      wsprTaskHandle(nullptr)
 {
     strcpy(currentBand, "20m");  // Default band
     memset(usedBands, 0, sizeof(usedBands));
@@ -84,13 +92,35 @@ void Beacon::initialize() {
 }
 
 void Beacon::initializeHardware() {
+    if (ctx->logger) {
+        ctx->logger->logInfo("Initializing hardware components...");
+    }
+    
     if (ctx->gpio) {
         ctx->gpio->init();
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
+        if (ctx->logger) {
+            ctx->logger->logInfo("GPIO initialized, status LED off");
+        }
+    }
+    
+    // Initialize Si5351 clock generator
+    if (ctx->si5351) {
+        if (ctx->logger) {
+            ctx->logger->logInfo("Initializing Si5351 clock generator...");
+        }
+        ctx->si5351->init();
+        if (ctx->logger) {
+            ctx->logger->logInfo("Si5351 initialization complete");
+        }
+    } else if (ctx->logger) {
+        ctx->logger->logError("Si5351 interface not available - no RF output possible!");
     }
     
     if (ctx->settings) {
-        
+        if (ctx->logger) {
+            ctx->logger->logInfo("Settings interface available");
+        }
     } else if (ctx->logger) {
         ctx->logger->logWarn("Settings interface not available");
     }
@@ -213,6 +243,10 @@ void Beacon::onSettingsChanged() {
 }
 
 void Beacon::startTransmission() {
+    if (ctx->logger) {
+        ctx->logger->logInfo("BEACON", "🟢 TRANSMISSION STARTING...");
+    }
+    
     // Select the band for this transmission
     selectNextBand();
     
@@ -221,13 +255,28 @@ void Beacon::startTransmission() {
         const char* freqKey = getBandFrequencyKey(currentBand);
         uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);  // Default to 20m WSPR
         
-        // Set the frequency on the Si5351
-        ctx->si5351->setFrequency(0, frequency);  // Clock 0
-        ctx->si5351->enableOutput(0, true);
+        if (ctx->logger) {
+            ctx->logger->logInfo("BEACON", "Setting up RF for %s band at %.6f MHz", 
+                               currentBand, frequency / 1000000.0);
+        }
+        
+        // Store frequency and enable WSPR modulation
+        baseFrequency = frequency;
         
         // Store current band in settings for status display
         ctx->settings->setString("curBand", currentBand);
         ctx->settings->setInt("freq", frequency);
+        
+        // Start WSPR modulation
+        startWSPRModulation();
+        
+        if (ctx->logger) {
+            ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
+        }
+    } else {
+        if (ctx->logger) {
+            ctx->logger->logError("BEACON", "Cannot start transmission - Si5351 or settings not available!");
+        }
     }
     
     if (ctx->logger && ctx->settings) {
@@ -235,34 +284,45 @@ void Beacon::startTransmission() {
         const char* freqKey = getBandFrequencyKey(currentBand);
         uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
         
-        snprintf(logMsg, sizeof(logMsg), "TX start: %s, %s, %ddBm on %s (%.6f MHz)",
+        snprintf(logMsg, sizeof(logMsg), "🟢 TX START: %s, %s, %ddBm on %s (%.6f MHz)",
             ctx->settings->getString("call", "N0CALL"),
             ctx->settings->getString("loc", "AA00aa"), 
             ctx->settings->getInt("pwr", 10),
             currentBand,
             frequency / 1000000.0
         );
-        ctx->logger->logInfo(logMsg);
+        ctx->logger->logInfo("BEACON", logMsg);
     }
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, false); // LED on (active-low)
+        if (ctx->logger) {
+            ctx->logger->logInfo("BEACON", "Status LED ON (transmission active)");
+        }
     }
 }
 
 void Beacon::endTransmission() {
     if (ctx->logger) {
+        ctx->logger->logInfo("BEACON", "🔴 TRANSMISSION ENDING...");
         char logMsg[128];
-        snprintf(logMsg, sizeof(logMsg), "TX end on %s", currentBand);
-        ctx->logger->logInfo(logMsg);
+        snprintf(logMsg, sizeof(logMsg), "🔴 TX END on %s after %.1f seconds", 
+                currentBand, Scheduler::WSPR_TRANSMISSION_DURATION_SEC);
+        ctx->logger->logInfo("BEACON", logMsg);
     }
     
-    if (ctx->si5351) {
-        ctx->si5351->enableOutput(0, false);  // Disable clock 0
+    // Stop WSPR modulation
+    stopWSPRModulation();
+    
+    if (ctx->logger) {
+        ctx->logger->logInfo("BEACON", "WSPR modulation stopped - RF output off");
     }
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
+        if (ctx->logger) {
+            ctx->logger->logInfo("BEACON", "Status LED OFF (transmission complete)");
+        }
     }
 }
 
@@ -510,4 +570,157 @@ const char* Beacon::getBandFrequencyKey(const char* band) {
     static char key[64];
     snprintf(key, sizeof(key), "bands.%s.freq", band);
     return key;
+}
+
+#ifdef ESP_PLATFORM
+// Static FreeRTOS task function for WSPR modulation
+void Beacon::wsprModulationTask(void* param) {
+    Beacon* beacon = static_cast<Beacon*>(param);
+    
+    // Get the starting time for accurate periodic wakeup
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xPeriod = pdMS_TO_TICKS(683); // 683ms per WSPR symbol
+    
+    while (beacon->modulationActive && beacon->currentSymbolIndex < 162) {
+        // Wait until next symbol period
+        vTaskDelayUntil(&xLastWakeTime, xPeriod);
+        
+        // Process next symbol
+        beacon->modulateNextSymbol();
+    }
+    
+    // Task cleanup - set handle to nullptr before deleting
+    beacon->wsprTaskHandle = nullptr;
+    vTaskDelete(NULL); // Delete this task
+}
+#endif
+
+void Beacon::startWSPRModulation() {
+    if (!ctx->settings || !ctx->si5351 || !ctx->timer) {
+        if (ctx->logger) {
+            ctx->logger->logError("BEACON", "Cannot start WSPR modulation - missing components");
+        }
+        return;
+    }
+    
+    // Get WSPR parameters from settings
+    const char* callsign = ctx->settings->getString("call", "N0CALL");
+    const char* locator = ctx->settings->getString("loc", "AA00aa");
+    int8_t powerDbm = (int8_t)ctx->settings->getInt("pwr", 10);
+    
+    if (ctx->logger) {
+        ctx->logger->logInfo("BEACON", "Encoding WSPR message: %s %s %ddBm", callsign, locator, powerDbm);
+    }
+    
+    // Encode the WSPR message
+    wsprEncoder.encode(callsign, locator, powerDbm);
+    
+    // Reset modulation state
+    currentSymbolIndex = 0;
+    modulationActive = true;
+    
+    // Set initial frequency (symbol 0) - ToneSpacing is in centi-Hz, so divide by 100
+    uint32_t initialFreq = baseFrequency + (wsprEncoder.symbols[0] * WSPREncoder::ToneSpacing / 100);
+    ctx->si5351->setFrequency(0, initialFreq);
+    ctx->si5351->enableOutput(0, true);
+    
+    if (ctx->logger) {
+        ctx->logger->logInfo("BEACON", "Starting with symbol %d, freq %.2f Hz offset", 
+                           wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
+        // Start the symbol stream visualization using stderr (unbuffered)
+        fprintf(stderr, "WSPR: ");
+        // Output the first symbol (symbol 0)
+        char symbolChar = 'A' + wsprEncoder.symbols[0];
+        fputc(symbolChar, stderr);
+    }
+    
+    #ifdef ESP_PLATFORM
+    // Create FreeRTOS task for WSPR modulation
+    BaseType_t result = xTaskCreate(
+        wsprModulationTask,           // Task function
+        "wspr_mod",                   // Task name
+        4096,                         // Stack size (4KB should be plenty)
+        this,                         // Parameter (pass this pointer)
+        10,                           // Priority (higher than normal)
+        (TaskHandle_t*)&wsprTaskHandle // Task handle storage
+    );
+    
+    if (result == pdPASS && ctx->logger) {
+        ctx->logger->logInfo("BEACON", "WSPR modulation task created (683ms symbol period)");
+    } else if (ctx->logger) {
+        ctx->logger->logError("BEACON", "Failed to create WSPR modulation task");
+        modulationActive = false;
+    }
+    #else
+    // Use timer for host-mock builds
+    modulationTimer = ctx->timer->createPeriodic([this]() {
+        this->modulateNextSymbol();
+    });
+    
+    if (modulationTimer) {
+        ctx->timer->start(modulationTimer, 683); // 683ms per WSPR symbol
+        if (ctx->logger) {
+            ctx->logger->logInfo("BEACON", "WSPR symbol timer started (683ms intervals)");
+        }
+    }
+    #endif
+}
+
+void Beacon::stopWSPRModulation() {
+    modulationActive = false;
+    
+    #ifdef ESP_PLATFORM
+    // Delete the FreeRTOS task if it exists
+    if (wsprTaskHandle) {
+        vTaskDelete((TaskHandle_t)wsprTaskHandle);
+        wsprTaskHandle = nullptr;
+    }
+    #else
+    // Stop the modulation timer for host-mock
+    if (modulationTimer) {
+        ctx->timer->stop(modulationTimer);
+        ctx->timer->destroy(modulationTimer);
+        modulationTimer = nullptr;
+    }
+    #endif
+    
+    // Disable Si5351 output
+    if (ctx->si5351) {
+        ctx->si5351->enableOutput(0, false);
+    }
+    
+    // End symbol stream with newline
+    fputc('\n', stderr);
+    
+    if (ctx->logger) {
+        ctx->logger->logInfo("BEACON", "WSPR modulation stopped after %d symbols", currentSymbolIndex);
+    }
+}
+
+void Beacon::modulateNextSymbol() {
+    if (!modulationActive || !ctx->si5351) {
+        return;
+    }
+    
+    // Move to next symbol
+    currentSymbolIndex++;
+    
+    // Check if we've transmitted all symbols
+    if (currentSymbolIndex >= 162) {
+        if (ctx->logger) {
+            ctx->logger->logInfo("BEACON", "All 162 WSPR symbols transmitted");
+        }
+        return; // Let the main transmission timer handle the end
+    }
+    
+    // Get the current symbol and calculate frequency
+    uint8_t symbol = wsprEncoder.symbols[currentSymbolIndex];
+    uint32_t symbolFreq = baseFrequency + (symbol * WSPREncoder::ToneSpacing / 100); // Convert centi-Hz to Hz
+    
+    // Set the new frequency
+    ctx->si5351->setFrequency(0, symbolFreq);
+    
+    // Output symbol letter without newline (A=0, B=1, C=2, D=3)
+    char symbolChar = 'A' + symbol;
+    fputc(symbolChar, stderr);
 }

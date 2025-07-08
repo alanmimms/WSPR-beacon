@@ -21,7 +21,7 @@ AppContext::AppContext() {
   gpio = new GPIO();
   net = new Net();
   nvs = new NVS();
-  si5351 = new Si5351();
+  si5351 = new Si5351Wrapper(logger);  // Pass logger to Si5351Wrapper
   fileSystem = new FileSystem();
   settings = new Settings();
   time = new Time();
