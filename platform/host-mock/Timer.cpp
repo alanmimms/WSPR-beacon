@@ -50,9 +50,11 @@ void Timer::start(TimerIntf::Timer *timer, unsigned int timeoutMs) {
     impl->running_ = true;
     impl->thread_ = std::thread([impl, timeoutMs]() {
       if (impl->isPeriodic_) {
-        // Periodic timer - keep firing until stopped
+        // Periodic timer - keep firing until stopped with accurate timing
+        auto nextWakeTime = std::chrono::steady_clock::now();
         while (impl->running_) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
+          nextWakeTime += std::chrono::milliseconds(timeoutMs);
+          std::this_thread::sleep_until(nextWakeTime);
           if (impl->running_) {
             impl->callback_();
           }
@@ -99,6 +101,23 @@ void Timer::destroy(TimerIntf::Timer *timer) {
 
 void Timer::delayMs(int timeoutMs) {
   std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
+}
+
+void Timer::executeWithPreciseTiming(const std::function<void()> &callback, int intervalMs) {
+  auto startTime = std::chrono::steady_clock::now();
+  
+  // Execute the callback
+  callback();
+  
+  // Calculate remaining time and sleep precisely
+  auto endTime = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+  auto targetDuration = std::chrono::milliseconds(intervalMs);
+  
+  // Only sleep if we haven't already exceeded the interval
+  if (elapsed < targetDuration) {
+    std::this_thread::sleep_for(targetDuration - elapsed);
+  }
 }
 
 void Timer::syncTime() {

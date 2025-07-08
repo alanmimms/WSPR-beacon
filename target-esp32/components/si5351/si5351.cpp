@@ -64,7 +64,8 @@ void Si5351::i2cInit(uint8_t i2cAddr, uint8_t sdaPin, uint8_t sclPin) {
     .intr_priority = 0,
     .trans_queue_depth = 0,
     .flags = {
-      .enable_internal_pullup = true
+      .enable_internal_pullup = true,
+      .allow_pd = false
     }
   };
   ESP_LOGI(TAG, "i2c_new_master_bus i2cAddr=%02X, sdaPin=%u, sclPin=%u", (int) i2cAddr, sdaPin, sclPin);

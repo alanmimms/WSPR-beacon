@@ -12,6 +12,7 @@
   #include "../platform/esp32/WebServer.h"
   #include "freertos/FreeRTOS.h"
   #include "freertos/task.h"
+  #include "driver/uart.h"
 #endif
 
 // Include secrets.h if it exists - it contains WiFi credentials for testing
@@ -50,8 +51,9 @@ void Beacon::run() {
     initialize();
     
     while (running) {
-        periodicTimeSync();
-        ctx->timer->delayMs(100);
+        ctx->timer->executeWithPreciseTiming([this]() {
+            periodicTimeSync();
+        }, 100);
     }
 }
 
@@ -64,6 +66,7 @@ void Beacon::initialize() {
     if (ctx->logger) {
         ctx->logger->logInfo("Beacon initializing...");
     }
+    
     
     // Log current settings from NVS
     if (ctx->settings && ctx->logger) {
@@ -627,11 +630,11 @@ void Beacon::startWSPRModulation() {
     if (ctx->logger) {
         ctx->logger->logInfo("BEACON", "Starting with symbol %d, freq %.2f Hz offset", 
                            wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
-        // Start the symbol stream visualization using stderr (unbuffered)
-        fprintf(stderr, "WSPR: ");
+        // Start the symbol stream visualization using printf with newlines for immediate output
+        printf("WSPR encoding: ");
         // Output the first symbol (symbol 0)
         char symbolChar = 'A' + wsprEncoder.symbols[0];
-        fputc(symbolChar, stderr);
+	putchar(symbolChar); fflush(stdout);
     }
     
     #ifdef ESP_PLATFORM
@@ -690,7 +693,8 @@ void Beacon::stopWSPRModulation() {
     }
     
     // End symbol stream with newline
-    fputc('\n', stderr);
+    printf("\n");
+    fflush(stdout);
     
     if (ctx->logger) {
         ctx->logger->logInfo("BEACON", "WSPR modulation stopped after %d symbols", currentSymbolIndex);
@@ -720,7 +724,7 @@ void Beacon::modulateNextSymbol() {
     // Set the new frequency
     ctx->si5351->setFrequency(0, symbolFreq);
     
-    // Output symbol letter without newline (A=0, B=1, C=2, D=3)
+    // Output symbol letter with newline for immediate output (A=0, B=1, C=2, D=3)
     char symbolChar = 'A' + symbol;
-    fputc(symbolChar, stderr);
+    putchar(symbolChar); fflush(stdout);
 }

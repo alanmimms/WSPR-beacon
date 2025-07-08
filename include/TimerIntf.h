@@ -32,6 +32,9 @@ public:
   // Optional: delay for specified milliseconds
   virtual void delayMs(int timeoutMs) = 0;
 
+  // Execute callback with precise timing - maintains intervalMs regardless of callback duration
+  virtual void executeWithPreciseTiming(const std::function<void()> &callback, int intervalMs) = 0;
+
   // Optional: sync time (e.g., SNTP)
   virtual void syncTime() = 0;
   

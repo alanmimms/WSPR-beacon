@@ -42,6 +42,9 @@ public:
   // Optional: delay for specified milliseconds
   void delayMs(int timeoutMs) override;
 
+  // Execute callback with precise timing - maintains intervalMs regardless of callback duration
+  void executeWithPreciseTiming(const std::function<void()> &callback, int intervalMs) override;
+
   // Optional: sync time (e.g., SNTP)
   void syncTime() override;
   

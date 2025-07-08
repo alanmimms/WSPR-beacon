@@ -104,6 +104,23 @@ void Timer::delayMs(int timeoutMs) {
   vTaskDelay(pdMS_TO_TICKS(timeoutMs));
 }
 
+void Timer::executeWithPreciseTiming(const std::function<void()> &callback, int intervalMs) {
+  TickType_t startTick = xTaskGetTickCount();
+  
+  // Execute the callback
+  callback();
+  
+  // Calculate remaining time and delay precisely
+  TickType_t endTick = xTaskGetTickCount();
+  TickType_t elapsedTicks = endTick - startTick;
+  TickType_t targetTicks = pdMS_TO_TICKS(intervalMs);
+  
+  // Only delay if we haven't already exceeded the interval
+  if (elapsedTicks < targetTicks) {
+    vTaskDelay(targetTicks - elapsedTicks);
+  }
+}
+
 void Timer::syncTime() {
   esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
   esp_sntp_setservername(0, "pool.ntp.org");

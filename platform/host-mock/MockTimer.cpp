@@ -43,7 +43,26 @@ TimerIntf::Timer* MockTimer::createOneShot(const std::function<void()>& callback
     
     timers.push_back(std::move(event));
     
-    logActivity("Created timer ID " + std::to_string(timerPtr->getId()));
+    logActivity("Created one-shot timer ID " + std::to_string(timerPtr->getId()));
+    return timerPtr;
+}
+
+TimerIntf::Timer* MockTimer::createPeriodic(const std::function<void()>& callback) {
+    static int timerId = 1;
+    auto timerImpl = std::make_unique<MockTimerImpl>(timerId);
+    auto timerPtr = timerImpl.get();
+    
+    auto event = std::make_unique<TimerEvent>();
+    event->timer = std::move(timerImpl);
+    event->callback = callback;
+    event->triggerTime = 0;
+    event->active = false;
+    event->oneShot = false;
+    event->id = timerId++;
+    
+    timers.push_back(std::move(event));
+    
+    logActivity("Created periodic timer ID " + std::to_string(timerPtr->getId()));
     return timerPtr;
 }
 
@@ -94,6 +113,23 @@ void MockTimer::delayMs(int timeoutMs) {
     
     std::ostringstream oss;
     oss << "Delayed " << timeoutMs << "ms (advanced time by " << delaySeconds << "s)";
+    logActivity(oss.str());
+}
+
+void MockTimer::executeWithPreciseTiming(const std::function<void()>& callback, int intervalMs) {
+    time_t startTime = mockCurrentTime;
+    
+    // Execute the callback
+    callback();
+    
+    // For mock timer, just advance by the interval (precise timing isn't critical for tests)
+    int intervalSeconds = intervalMs / 1000;
+    if (intervalSeconds > 0) {
+        advanceTime(intervalSeconds);
+    }
+    
+    std::ostringstream oss;
+    oss << "executeWithPreciseTiming: " << intervalMs << "ms interval (advanced time by " << intervalSeconds << "s)";
     logActivity(oss.str());
 }
 

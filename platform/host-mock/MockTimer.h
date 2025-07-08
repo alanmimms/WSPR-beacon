@@ -21,10 +21,12 @@ public:
     ~MockTimer() override;
 
     Timer* createOneShot(const std::function<void()>& callback) override;
+    Timer* createPeriodic(const std::function<void()>& callback) override;
     void start(Timer* timer, unsigned int timeoutMs) override;
     void stop(Timer* timer) override;
     void destroy(Timer* timer) override;
     void delayMs(int timeoutMs) override;
+    void executeWithPreciseTiming(const std::function<void()>& callback, int intervalMs) override;
     void syncTime() override;
     time_t getCurrentTime() override;
 
