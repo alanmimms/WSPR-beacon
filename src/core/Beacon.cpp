@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstdint>
+#include <unistd.h>
 #include <vector>
 #include <algorithm>
 
@@ -601,7 +602,7 @@ void Beacon::startWSPRModulation() {
         printf("WSPR encoding: ");
         // Output the first symbol (symbol 0)
         char symbolChar = 'A' + wsprEncoder.symbols[0];
-	putchar(symbolChar); fflush(stdout);
+	putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
     }
     
     // Start platform-specific WSPR modulation
@@ -664,5 +665,5 @@ void Beacon::modulateSymbol(int symbolIndex) {
     
     // Output symbol letter with newline for immediate output (A=0, B=1, C=2, D=3)
     char symbolChar = 'A' + symbol;
-    putchar(symbolChar); fflush(stdout);
+    putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
 }
