@@ -12,6 +12,7 @@
 #include "TimerIntf.h"
 #include "TimeIntf.h"
 #include "WebServerIntf.h"
+#include "WSPRModulatorIntf.h"
 
 struct AppContext {
   LoggerIntf *logger;
@@ -26,6 +27,7 @@ struct AppContext {
   TimeIntf *time;
   TaskIntf *task;
   EventGroupIntf *eventGroup;
+  WSPRModulatorIntf *wsprModulator;
 
   static constexpr int statusLEDGPIO = 8;
 

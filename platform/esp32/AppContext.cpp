@@ -11,6 +11,7 @@
 #include "Time.h"
 #include "Task.h"
 #include "EventGroup.h"
+#include "WSPRModulator.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 
@@ -29,9 +30,11 @@ AppContext::AppContext() {
   timer = new Timer();
   task = new Task();
   eventGroup = new EventGroup();
+  wsprModulator = new WSPRModulator();
 }
 
 AppContext::~AppContext() {
+  delete wsprModulator;
   delete eventGroup;
   delete task;
   delete timer;

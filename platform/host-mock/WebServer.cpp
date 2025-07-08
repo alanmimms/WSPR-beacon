@@ -60,6 +60,12 @@ void WebServer::setScheduler(Scheduler* sched) {
   scheduler = sched;
 }
 
+void WebServer::updateBeaconState(const char* networkState, const char* transmissionState, const char* band, uint32_t frequency) {
+  // Stub implementation for host-mock - could log or store state if needed
+  std::cout << "[WebServer] Beacon state update: " << networkState << " / " << transmissionState 
+            << " on " << band << " (" << (frequency / 1000000.0) << " MHz)" << std::endl;
+}
+
 void WebServer::start() {
   if (running) return;
   running = true;

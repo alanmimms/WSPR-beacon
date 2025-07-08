@@ -35,13 +35,11 @@ static const char *SPIFFS_BASE_PATH = "/spiffs";
 
 WebServer *WebServer::instanceForApi = nullptr;
 
-// Function to update beacon state from outside
+// Function to update beacon state from outside (legacy - calls member function)
 void updateBeaconState(const char* netState, const char* txState, const char* band, int frequency) {
-  g_beaconState.networkState = netState;
-  g_beaconState.transmissionState = txState;
-  g_beaconState.currentBand = band;
-  g_beaconState.currentFrequency = frequency;
-  g_beaconState.isTransmitting = (strcmp(txState, "TRANSMITTING") == 0);
+  if (WebServer::instanceForApi) {
+    WebServer::instanceForApi->updateBeaconState(netState, txState, band, static_cast<uint32_t>(frequency));
+  }
 }
 
 
@@ -60,6 +58,14 @@ void WebServer::setSettingsChangedCallback(const std::function<void()> &cb) {
 
 void WebServer::setScheduler(Scheduler* sched) {
   scheduler = sched;
+}
+
+void WebServer::updateBeaconState(const char* netState, const char* txState, const char* band, uint32_t frequency) {
+  g_beaconState.networkState = netState;
+  g_beaconState.transmissionState = txState;
+  g_beaconState.currentBand = band;
+  g_beaconState.currentFrequency = frequency;
+  g_beaconState.isTransmitting = (strcmp(txState, "TRANSMITTING") == 0);
 }
 
 esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {

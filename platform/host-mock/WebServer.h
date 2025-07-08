@@ -17,6 +17,7 @@ public:
   void stop() override;
   void setSettingsChangedCallback(const std::function<void()> &cb) override;
   void setScheduler(Scheduler* scheduler) override;
+  void updateBeaconState(const char* networkState, const char* transmissionState, const char* band, uint32_t frequency) override;
 
 private:
   SettingsIntf *settings;

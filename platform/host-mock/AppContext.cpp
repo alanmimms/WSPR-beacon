@@ -10,6 +10,7 @@
 #include "Timer.h"
 #include "Task.h"
 #include "EventGroup.h"
+#include "WSPRModulator.h"
 
 AppContext::AppContext() {
   logger = new Logger();
@@ -23,9 +24,11 @@ AppContext::AppContext() {
   timer = new Timer();
   task = new Task();
   eventGroup = new EventGroup();
+  wsprModulator = new WSPRModulator(timer);
 }
 
 AppContext::~AppContext() {
+  delete wsprModulator;
   delete eventGroup;
   delete task;
   delete timer;

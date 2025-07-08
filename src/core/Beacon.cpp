@@ -7,13 +7,6 @@
 #include <vector>
 #include <algorithm>
 
-// Include WebServer.h for updateBeaconState function
-#ifdef ESP_PLATFORM
-  #include "../platform/esp32/WebServer.h"
-  #include "freertos/FreeRTOS.h"
-  #include "freertos/task.h"
-  #include "driver/uart.h"
-#endif
 
 // Include secrets.h if it exists - it contains WiFi credentials for testing
 #if __has_include("secrets.h")
@@ -30,11 +23,9 @@ Beacon::Beacon(AppContext* ctx)
       currentBandIndex(0),
       currentHour(-1),
       wsprEncoder(),
-      modulationTimer(nullptr),
       currentSymbolIndex(0),
       baseFrequency(0),
-      modulationActive(false),
-      wsprTaskHandle(nullptr)
+      modulationActive(false)
 {
     strcpy(currentBand, "20m");  // Default band
     memset(usedBands, 0, sizeof(usedBands));
@@ -197,14 +188,12 @@ void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionSta
         ctx->logger->logInfo(logMsg);
     }
     
-    // Update WebServer status for ESP32
-    #ifdef ESP_PLATFORM
-    if (ctx->settings) {
+    // Update WebServer status via platform interface
+    if (ctx->webServer && ctx->settings) {
         const char* freqKey = getBandFrequencyKey(currentBand);
         uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
-        updateBeaconState(fsm.getNetworkStateString(), fsm.getTransmissionStateString(), currentBand, frequency);
+        ctx->webServer->updateBeaconState(fsm.getNetworkStateString(), fsm.getTransmissionStateString(), currentBand, frequency);
     }
-    #endif
     
     if (networkState == FSM::NetworkState::ERROR) {
         if (ctx->logger) {
@@ -575,31 +564,9 @@ const char* Beacon::getBandFrequencyKey(const char* band) {
     return key;
 }
 
-#ifdef ESP_PLATFORM
-// Static FreeRTOS task function for WSPR modulation
-void Beacon::wsprModulationTask(void* param) {
-    Beacon* beacon = static_cast<Beacon*>(param);
-    
-    // Get the starting time for accurate periodic wakeup
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xPeriod = pdMS_TO_TICKS(683); // 683ms per WSPR symbol
-    
-    while (beacon->modulationActive && beacon->currentSymbolIndex < 162) {
-        // Wait until next symbol period
-        vTaskDelayUntil(&xLastWakeTime, xPeriod);
-        
-        // Process next symbol
-        beacon->modulateNextSymbol();
-    }
-    
-    // Task cleanup - set handle to nullptr before deleting
-    beacon->wsprTaskHandle = nullptr;
-    vTaskDelete(NULL); // Delete this task
-}
-#endif
 
 void Beacon::startWSPRModulation() {
-    if (!ctx->settings || !ctx->si5351 || !ctx->timer) {
+    if (!ctx->settings || !ctx->si5351 || !ctx->wsprModulator) {
         if (ctx->logger) {
             ctx->logger->logError("BEACON", "Cannot start WSPR modulation - missing components");
         }
@@ -637,55 +604,26 @@ void Beacon::startWSPRModulation() {
 	putchar(symbolChar); fflush(stdout);
     }
     
-    #ifdef ESP_PLATFORM
-    // Create FreeRTOS task for WSPR modulation
-    BaseType_t result = xTaskCreate(
-        wsprModulationTask,           // Task function
-        "wspr_mod",                   // Task name
-        4096,                         // Stack size (4KB should be plenty)
-        this,                         // Parameter (pass this pointer)
-        10,                           // Priority (higher than normal)
-        (TaskHandle_t*)&wsprTaskHandle // Task handle storage
-    );
+    // Start platform-specific WSPR modulation
+    bool started = ctx->wsprModulator->startModulation([this](int symbolIndex) {
+        this->modulateSymbol(symbolIndex);
+    }, 162);
     
-    if (result == pdPASS && ctx->logger) {
-        ctx->logger->logInfo("BEACON", "WSPR modulation task created (683ms symbol period)");
+    if (started && ctx->logger) {
+        ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
     } else if (ctx->logger) {
-        ctx->logger->logError("BEACON", "Failed to create WSPR modulation task");
+        ctx->logger->logError("BEACON", "Failed to start WSPR modulation");
         modulationActive = false;
     }
-    #else
-    // Use timer for host-mock builds
-    modulationTimer = ctx->timer->createPeriodic([this]() {
-        this->modulateNextSymbol();
-    });
-    
-    if (modulationTimer) {
-        ctx->timer->start(modulationTimer, 683); // 683ms per WSPR symbol
-        if (ctx->logger) {
-            ctx->logger->logInfo("BEACON", "WSPR symbol timer started (683ms intervals)");
-        }
-    }
-    #endif
 }
 
 void Beacon::stopWSPRModulation() {
     modulationActive = false;
     
-    #ifdef ESP_PLATFORM
-    // Delete the FreeRTOS task if it exists
-    if (wsprTaskHandle) {
-        vTaskDelete((TaskHandle_t)wsprTaskHandle);
-        wsprTaskHandle = nullptr;
+    // Stop platform-specific WSPR modulation
+    if (ctx->wsprModulator) {
+        ctx->wsprModulator->stopModulation();
     }
-    #else
-    // Stop the modulation timer for host-mock
-    if (modulationTimer) {
-        ctx->timer->stop(modulationTimer);
-        ctx->timer->destroy(modulationTimer);
-        modulationTimer = nullptr;
-    }
-    #endif
     
     // Disable Si5351 output
     if (ctx->si5351) {
@@ -701,16 +639,16 @@ void Beacon::stopWSPRModulation() {
     }
 }
 
-void Beacon::modulateNextSymbol() {
+void Beacon::modulateSymbol(int symbolIndex) {
     if (!modulationActive || !ctx->si5351) {
         return;
     }
     
-    // Move to next symbol
-    currentSymbolIndex++;
+    // Update current symbol index
+    currentSymbolIndex = symbolIndex;
     
     // Check if we've transmitted all symbols
-    if (currentSymbolIndex >= 162) {
+    if (symbolIndex >= 162) {
         if (ctx->logger) {
             ctx->logger->logInfo("BEACON", "All 162 WSPR symbols transmitted");
         }
@@ -718,7 +656,7 @@ void Beacon::modulateNextSymbol() {
     }
     
     // Get the current symbol and calculate frequency
-    uint8_t symbol = wsprEncoder.symbols[currentSymbolIndex];
+    uint8_t symbol = wsprEncoder.symbols[symbolIndex];
     uint32_t symbolFreq = baseFrequency + (symbol * WSPREncoder::ToneSpacing / 100); // Convert centi-Hz to Hz
     
     // Set the new frequency

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <cstdint>
 
 // Forward declarations
 class Scheduler;
@@ -17,4 +18,7 @@ public:
   
   // Set scheduler reference for countdown API (may be ignored if not needed)
   virtual void setScheduler(Scheduler* scheduler) = 0;
+  
+  // Update beacon state for status display (may be ignored if not needed)
+  virtual void updateBeaconState(const char* networkState, const char* transmissionState, const char* band, uint32_t frequency) = 0;
 };

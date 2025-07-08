@@ -11,6 +11,8 @@
 void updateBeaconState(const char* netState, const char* txState, const char* band, int frequency);
 
 class WebServer : public WebServerIntf {
+  friend void updateBeaconState(const char* netState, const char* txState, const char* band, int frequency);
+  
 public:
   WebServer(SettingsIntf *settings, TimeIntf *time);
   ~WebServer() override;
@@ -18,7 +20,8 @@ public:
   void start() override;
   void stop() override;
   void setSettingsChangedCallback(const std::function<void()> &cb) override;
-  void setScheduler(Scheduler* scheduler);
+  void setScheduler(Scheduler* scheduler) override;
+  void updateBeaconState(const char* networkState, const char* transmissionState, const char* band, uint32_t frequency) override;
 
   inline static const char spiffsBasePath[] = "/spiffs";
 

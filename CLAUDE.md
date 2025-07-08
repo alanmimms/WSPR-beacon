@@ -20,6 +20,8 @@ Always make sure both ESP32 and host-mock targets can build and run
 after any significant change to the platform abstraction interfaces or
 to the common code that runs atop the abstraction.
 
+Never commit changes unless I specifically tell you to do so.
+
 
 ## Build Commands
 

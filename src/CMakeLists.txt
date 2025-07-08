@@ -4,4 +4,7 @@ add_library(beacon_core STATIC
   core/Scheduler.cpp
 )
 
-target_include_directories(beacon_core PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../include)
+target_include_directories(beacon_core PUBLIC 
+  ${CMAKE_CURRENT_LIST_DIR}/../include
+  ${CMAKE_CURRENT_LIST_DIR}/jtencode/include
+)

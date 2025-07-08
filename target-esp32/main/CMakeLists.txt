@@ -20,6 +20,7 @@ idf_component_register(
     ../../platform/esp32/Task.cpp
     ../../platform/esp32/EventGroup.cpp
     ../../platform/esp32/Time.cpp
+    ../../platform/esp32/WSPRModulator.cpp
     ../../src/BeaconLogger.cpp
     ../../src/core/Beacon.cpp
     ../../src/core/FSM.cpp
