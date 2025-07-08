@@ -122,9 +122,16 @@ void Timer::executeWithPreciseTiming(const std::function<void()> &callback, int 
 }
 
 void Timer::syncTime() {
-  esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-  esp_sntp_setservername(0, "pool.ntp.org");
-  esp_sntp_init();
+  // Check if SNTP is already initialized
+  if (esp_sntp_enabled()) {
+    // Just trigger a sync request without reinitializing
+    esp_sntp_restart();
+  } else {
+    // First time initialization
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    esp_sntp_init();
+  }
   // Avoid logging in timer context - ESP_LOGI(TAG, "SNTP time sync initiated");
 }
 
