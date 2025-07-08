@@ -229,17 +229,13 @@ bool Settings::fromJsonString(const char *jsonString) {
   cJSON *it = nullptr;
   cJSON_ArrayForEach(it, parsed) {
     const char *key = it->string;
-    ESP_LOGI(TAG, "fromJsonString: Processing key: %s", key);
     
     if (cJSON_IsString(it)) {
-      ESP_LOGI(TAG, "  Setting string: %s = %s", key, it->valuestring);
       setString(key, it->valuestring);
     } else if (cJSON_IsNumber(it)) {
-      ESP_LOGI(TAG, "  Setting number: %s = %f", key, it->valuedouble);
       setFloat(key, (float)it->valuedouble);
     } else if (cJSON_IsObject(it)) {
       // Handle nested objects (like bands)
-      ESP_LOGI(TAG, "  Setting object: %s", key);
       cJSON_AddItemToObject((cJSON *)user, key, cJSON_Duplicate(it, 1));
     }
   }

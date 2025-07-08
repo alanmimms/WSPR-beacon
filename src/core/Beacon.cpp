@@ -55,13 +55,10 @@ void Beacon::stop() {
 }
 
 void Beacon::initialize() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("Beacon initializing...");
-    }
-    
+    ctx->logger->logInfo("Beacon initializing...");
     
     // Log current settings from NVS
-    if (ctx->settings && ctx->logger) {
+    if (ctx->settings) {
         char* settingsJson = ctx->settings->toJsonString();
         if (settingsJson) {
             ctx->logger->logInfo("Current settings from NVS:");
@@ -87,59 +84,41 @@ void Beacon::initialize() {
 }
 
 void Beacon::initializeHardware() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("Initializing hardware components...");
-    }
+    ctx->logger->logInfo("Initializing hardware components...");
     
     if (ctx->gpio) {
         ctx->gpio->init();
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
-        if (ctx->logger) {
-            ctx->logger->logInfo("GPIO initialized, status LED off");
-        }
+        ctx->logger->logInfo("GPIO initialized, status LED off");
     }
     
     // Initialize Si5351 clock generator
     if (ctx->si5351) {
-        if (ctx->logger) {
-            ctx->logger->logInfo("Initializing Si5351 clock generator...");
-        }
+        ctx->logger->logInfo("Initializing Si5351 clock generator...");
         ctx->si5351->init();
-        if (ctx->logger) {
-            ctx->logger->logInfo("Si5351 initialization complete");
-        }
-    } else if (ctx->logger) {
+        ctx->logger->logInfo("Si5351 initialization complete");
+    } else {
         ctx->logger->logError("Si5351 interface not available - no RF output possible!");
     }
     
     if (ctx->settings) {
-        if (ctx->logger) {
-            ctx->logger->logInfo("Settings interface available");
-        }
-    } else if (ctx->logger) {
+        ctx->logger->logInfo("Settings interface available");
+    } else {
         ctx->logger->logWarn("Settings interface not available");
     }
 }
 
 void Beacon::initializeWebServer() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("Beacon::initializeWebServer() called");
-    }
+    ctx->logger->logInfo("Beacon::initializeWebServer() called");
     
     if (ctx->webServer) {
-        if (ctx->logger) {
-            ctx->logger->logInfo("WebServer instance found, starting initialization");
-        }
+        ctx->logger->logInfo("WebServer instance found, starting initialization");
         
         // Mount SPIFFS filesystem first
         if (ctx->fileSystem && !ctx->fileSystem->mount()) {
-            if (ctx->logger) {
-                ctx->logger->logError("Failed to mount SPIFFS filesystem");
-            }
+            ctx->logger->logError("Failed to mount SPIFFS filesystem");
         } else {
-            if (ctx->logger) {
-                ctx->logger->logInfo("SPIFFS filesystem mounted successfully");
-            }
+            ctx->logger->logInfo("SPIFFS filesystem mounted successfully");
         }
         
         ctx->webServer->setSettingsChangedCallback([this]() { this->onSettingsChanged(); });
@@ -147,17 +126,11 @@ void Beacon::initializeWebServer() {
         // Give WebServer access to Scheduler for countdown API
         ctx->webServer->setScheduler(&scheduler);
         
-        if (ctx->logger) {
-            ctx->logger->logInfo("About to call ctx->webServer->start()");
-        }
+        ctx->logger->logInfo("About to call ctx->webServer->start()");
         ctx->webServer->start();
-        if (ctx->logger) {
-            ctx->logger->logInfo("ctx->webServer->start() completed");
-        }
+        ctx->logger->logInfo("ctx->webServer->start() completed");
     } else {
-        if (ctx->logger) {
-            ctx->logger->logError("WebServer instance is NULL!");
-        }
+        ctx->logger->logError("WebServer instance is NULL!");
     }
 }
 
@@ -182,12 +155,10 @@ void Beacon::startNetworking() {
 }
 
 void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionState txState) {
-    if (ctx->logger) {
-        char logMsg[128];
-        snprintf(logMsg, sizeof(logMsg), "State: %s / %s", 
-            fsm.getNetworkStateString(), fsm.getTransmissionStateString());
-        ctx->logger->logInfo(logMsg);
-    }
+    char logMsg[128];
+    snprintf(logMsg, sizeof(logMsg), "State: %s / %s", 
+        fsm.getNetworkStateString(), fsm.getTransmissionStateString());
+    ctx->logger->logInfo(logMsg);
     
     // Update WebServer status via platform interface
     if (ctx->webServer && ctx->settings) {
@@ -197,18 +168,14 @@ void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionSta
     }
     
     if (networkState == FSM::NetworkState::ERROR) {
-        if (ctx->logger) {
-            ctx->logger->logError("Entering error state");
-        }
+        ctx->logger->logError("Entering error state");
         scheduler.stop();
     }
 }
 
 void Beacon::onTransmissionStart() {
     if (!fsm.canStartTransmission()) {
-        if (ctx->logger) {
-            ctx->logger->logWarn("Cannot start transmission in current state");
-        }
+        ctx->logger->logWarn("Cannot start transmission in current state");
         return;
     }
     
@@ -223,9 +190,7 @@ void Beacon::onTransmissionEnd() {
 }
 
 void Beacon::onSettingsChanged() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("Settings changed - restarting scheduler");
-    }
+    ctx->logger->logInfo("Settings changed - restarting scheduler");
     
     scheduler.cancelCurrentTransmission();
     scheduler.stop();
@@ -236,9 +201,7 @@ void Beacon::onSettingsChanged() {
 }
 
 void Beacon::startTransmission() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("BEACON", "🟢 TRANSMISSION STARTING...");
-    }
+    ctx->logger->logInfo("BEACON", "🟢 TRANSMISSION STARTING...");
     
     // Select the band for this transmission
     selectNextBand();
@@ -248,10 +211,8 @@ void Beacon::startTransmission() {
         const char* freqKey = getBandFrequencyKey(currentBand);
         uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);  // Default to 20m WSPR
         
-        if (ctx->logger) {
-            ctx->logger->logInfo("BEACON", "Setting up RF for %s band at %.6f MHz", 
-                               currentBand, frequency / 1000000.0);
-        }
+        ctx->logger->logInfo("BEACON", "Setting up RF for %s band at %.6f MHz", 
+                           currentBand, frequency / 1000000.0);
         
         // Store frequency and enable WSPR modulation
         baseFrequency = frequency;
@@ -263,16 +224,12 @@ void Beacon::startTransmission() {
         // Start WSPR modulation
         startWSPRModulation();
         
-        if (ctx->logger) {
-            ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
-        }
+        ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
     } else {
-        if (ctx->logger) {
-            ctx->logger->logError("BEACON", "Cannot start transmission - Si5351 or settings not available!");
-        }
+        ctx->logger->logError("BEACON", "Cannot start transmission - Si5351 or settings not available!");
     }
     
-    if (ctx->logger && ctx->settings) {
+    if (ctx->settings) {
         char logMsg[256];
         const char* freqKey = getBandFrequencyKey(currentBand);
         uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
@@ -289,40 +246,30 @@ void Beacon::startTransmission() {
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, false); // LED on (active-low)
-        if (ctx->logger) {
-            ctx->logger->logInfo("BEACON", "Status LED ON (transmission active)");
-        }
+        ctx->logger->logInfo("BEACON", "Status LED ON (transmission active)");
     }
 }
 
 void Beacon::endTransmission() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("BEACON", "🔴 TRANSMISSION ENDING...");
-        char logMsg[128];
-        snprintf(logMsg, sizeof(logMsg), "🔴 TX END on %s after %.1f seconds", 
-                currentBand, Scheduler::WSPR_TRANSMISSION_DURATION_SEC);
-        ctx->logger->logInfo("BEACON", logMsg);
-    }
+    ctx->logger->logInfo("BEACON", "🔴 TRANSMISSION ENDING...");
+    char logMsg[128];
+    snprintf(logMsg, sizeof(logMsg), "🔴 TX END on %s after %.1f seconds", 
+            currentBand, Scheduler::WSPR_TRANSMISSION_DURATION_SEC);
+    ctx->logger->logInfo("BEACON", logMsg);
     
     // Stop WSPR modulation
     stopWSPRModulation();
     
-    if (ctx->logger) {
-        ctx->logger->logInfo("BEACON", "WSPR modulation stopped - RF output off");
-    }
+    ctx->logger->logInfo("BEACON", "WSPR modulation stopped - RF output off");
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
-        if (ctx->logger) {
-            ctx->logger->logInfo("BEACON", "Status LED OFF (transmission complete)");
-        }
+        ctx->logger->logInfo("BEACON", "Status LED OFF (transmission complete)");
     }
 }
 
 void Beacon::syncTime() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("Syncing time via SNTP");
-    }
+    ctx->logger->logInfo("Syncing time via SNTP");
     
     if (ctx->timer) {
         ctx->timer->syncTime();
@@ -341,14 +288,10 @@ void Beacon::periodicTimeSync() {
 bool Beacon::shouldConnectToWiFi() const {
     // Always try to connect if hardcoded credentials are available
     #ifdef WIFI_SSID
-    if (ctx->logger) {
-        ctx->logger->logInfo("Using hardcoded WiFi credentials, forcing STA mode");
-    }
+    ctx->logger->logInfo("Using hardcoded WiFi credentials, forcing STA mode");
     return true;
     #else
-    if (ctx->logger) {
-        ctx->logger->logInfo("No hardcoded WiFi credentials, checking settings");
-    }
+    ctx->logger->logInfo("No hardcoded WiFi credentials, checking settings");
     #endif
     
     if (!ctx->settings) return false;
@@ -379,23 +322,19 @@ bool Beacon::connectToWiFi() {
         #ifdef WIFI_SSID
         ssid = WIFI_SSID;
         password = WIFI_PASSWORD;
-        if (ctx->logger) {
-            ctx->logger->logInfo("Using hardcoded WiFi credentials for testing");
-        }
+        ctx->logger->logInfo("Using hardcoded WiFi credentials for testing");
         #else
         return false;
         #endif
     }
     
-    if (ctx->logger) {
-        char logMsg[128];
-        snprintf(logMsg, sizeof(logMsg), "Connecting to WiFi: %s", ssid);
-        ctx->logger->logInfo(logMsg);
-    }
+    char logMsg[128];
+    snprintf(logMsg, sizeof(logMsg), "Connecting to WiFi: %s", ssid);
+    ctx->logger->logInfo(logMsg);
     
     bool connected = ctx->net->connect(ssid, password);
     
-    if (connected && ctx->logger) {
+    if (connected) {
         ctx->logger->logInfo("WiFi connected");
         syncTime();
     }
@@ -404,15 +343,11 @@ bool Beacon::connectToWiFi() {
 }
 
 void Beacon::startAccessPoint() {
-    if (ctx->logger) {
-        ctx->logger->logInfo("Starting Access Point mode");
-    }
+    ctx->logger->logInfo("Starting Access Point mode");
     
     if (ctx->net) {
         if (!ctx->net->init()) {
-            if (ctx->logger) {
-                ctx->logger->logError("Failed to initialize WiFi");
-            }
+            ctx->logger->logError("Failed to initialize WiFi");
             return;
         }
         ctx->net->startServer(80);
@@ -512,11 +447,9 @@ void Beacon::selectNextBand() {
         strcpy(currentBand, BAND_NAMES[selectedIndex]);
         
         // Log band selection
-        if (ctx->logger) {
-            char logMsg[128];
-            snprintf(logMsg, sizeof(logMsg), "Selected band: %s", currentBand);
-            ctx->logger->logInfo(logMsg);
-        }
+        char logMsg[128];
+        snprintf(logMsg, sizeof(logMsg), "Selected band: %s", currentBand);
+        ctx->logger->logInfo(logMsg);
     }
 }
 
@@ -568,9 +501,7 @@ const char* Beacon::getBandFrequencyKey(const char* band) {
 
 void Beacon::startWSPRModulation() {
     if (!ctx->settings || !ctx->si5351 || !ctx->wsprModulator) {
-        if (ctx->logger) {
-            ctx->logger->logError("BEACON", "Cannot start WSPR modulation - missing components");
-        }
+        ctx->logger->logError("BEACON", "Cannot start WSPR modulation - missing components");
         return;
     }
     
@@ -579,9 +510,7 @@ void Beacon::startWSPRModulation() {
     const char* locator = ctx->settings->getString("loc", "AA00aa");
     int8_t powerDbm = (int8_t)ctx->settings->getInt("pwr", 10);
     
-    if (ctx->logger) {
-        ctx->logger->logInfo("BEACON", "Encoding WSPR message: %s %s %ddBm", callsign, locator, powerDbm);
-    }
+    ctx->logger->logInfo("BEACON", "Encoding WSPR message: %s %s %ddBm", callsign, locator, powerDbm);
     
     // Encode the WSPR message
     wsprEncoder.encode(callsign, locator, powerDbm);
@@ -595,24 +524,22 @@ void Beacon::startWSPRModulation() {
     ctx->si5351->setFrequency(0, initialFreq);
     ctx->si5351->enableOutput(0, true);
     
-    if (ctx->logger) {
-        ctx->logger->logInfo("BEACON", "Starting with symbol %d, freq %.2f Hz offset", 
-                           wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
-        // Start the symbol stream visualization using printf with newlines for immediate output
-        printf("WSPR encoding: ");
-        // Output the first symbol (symbol 0)
-        char symbolChar = 'A' + wsprEncoder.symbols[0];
-	putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
-    }
+    ctx->logger->logInfo("BEACON", "Starting with symbol %d, freq %.2f Hz offset", 
+                       wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
+    // Start the symbol stream visualization using printf with newlines for immediate output
+    printf("WSPR encoding: ");
+    // Output the first symbol (symbol 0)
+    char symbolChar = 'A' + wsprEncoder.symbols[0];
+    putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
     
     // Start platform-specific WSPR modulation
     bool started = ctx->wsprModulator->startModulation([this](int symbolIndex) {
         this->modulateSymbol(symbolIndex);
     }, 162);
     
-    if (started && ctx->logger) {
+    if (started) {
         ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
-    } else if (ctx->logger) {
+    } else {
         ctx->logger->logError("BEACON", "Failed to start WSPR modulation");
         modulationActive = false;
     }
@@ -632,12 +559,9 @@ void Beacon::stopWSPRModulation() {
     }
     
     // End symbol stream with newline
-    printf("\n");
-    fflush(stdout);
+    putchar('\n'); fflush(stdout); fsync(fileno(stdout));
     
-    if (ctx->logger) {
-        ctx->logger->logInfo("BEACON", "WSPR modulation stopped after %d symbols", currentSymbolIndex);
-    }
+    ctx->logger->logInfo("BEACON", "WSPR modulation stopped after %d symbols", currentSymbolIndex);
 }
 
 void Beacon::modulateSymbol(int symbolIndex) {
@@ -650,9 +574,7 @@ void Beacon::modulateSymbol(int symbolIndex) {
     
     // Check if we've transmitted all symbols
     if (symbolIndex >= 162) {
-        if (ctx->logger) {
-            ctx->logger->logInfo("BEACON", "All 162 WSPR symbols transmitted");
-        }
+        ctx->logger->logInfo("BEACON", "All 162 WSPR symbols transmitted");
         return; // Let the main transmission timer handle the end
     }
     
