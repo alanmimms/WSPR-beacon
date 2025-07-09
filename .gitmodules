@@ -1,6 +1,6 @@
 [submodule "host-mock/external/cpp-httplib"]
 	path = host-mock/external/cpp-httplib
 	url = https://github.com/yhirose/cpp-httplib.git
-[submodule "host-mock/external/json"]
-	path = host-mock/external/json
-	url = https://github.com/nlohmann/json.git
+[submodule "external/cjson"]
+	path = external/cjson
+	url = https://github.com/DaveGamble/cJSON
