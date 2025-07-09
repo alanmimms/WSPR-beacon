@@ -3,6 +3,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+
+static const char tag[] = "Scheduler";
+
+
 Scheduler::Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger)
     : timer(timer),
       settings(settings),
@@ -40,7 +44,7 @@ void Scheduler::start() {
         });
         if (!schedulerTimer) {
             if (logger) {
-                logger->logError("SCHEDULER", "Failed to create periodic timer");
+                logger->logError(tag, "Failed to create periodic timer");
             }
             return;
         }
@@ -174,7 +178,7 @@ void Scheduler::startTransmission() {
     }
     
     if (logger) {
-        logger->logInfo("SCHEDULER", "Transmitting for %.1f seconds", WSPR_TRANSMISSION_DURATION_SEC);
+        logger->logInfo(tag, "Transmitting for %.1f seconds", WSPR_TRANSMISSION_DURATION_SEC);
     }
     
     timer->start(transmissionEndTimer, static_cast<int>(WSPR_TRANSMISSION_DURATION_SEC * 1000));

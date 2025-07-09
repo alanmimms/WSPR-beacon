@@ -5,9 +5,9 @@ project(wspr-beacon-host-test)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Add dependencies as subdirectories for ease of use in-tree
-# Assumes that you have added nlohmann/json and cpp-httplib as submodules or downloaded them into these paths:
-#   main/external/json (for nlohmann/json)
+# Assumes that you have added cpp-httplib as submodule or downloaded into:
 #   main/external/cpp-httplib (for cpp-httplib)
+# cJSON is added as a submodule in external/cjson
 
 # Add the shared src directory as a library
 add_subdirectory(../src ${CMAKE_BINARY_DIR}/src)
@@ -15,8 +15,8 @@ add_subdirectory(../src ${CMAKE_BINARY_DIR}/src)
 # Add the jtencode library
 add_subdirectory(../src/jtencode ${CMAKE_BINARY_DIR}/jtencode)
 
-# nlohmann/json
-add_subdirectory(external/json)
+# Add cJSON as a static library
+add_subdirectory(../external/cjson ${CMAKE_BINARY_DIR}/cjson)
 
 # cpp-httplib is header-only, just add its include directory
 include_directories(${CMAKE_CURRENT_LIST_DIR}/external/cpp-httplib)
@@ -47,12 +47,13 @@ target_include_directories(host-testbench PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/../src/jtencode/include
   ${CMAKE_CURRENT_LIST_DIR}/../platform/host-mock
   ${CMAKE_CURRENT_LIST_DIR}/external/cpp-httplib
+  ${CMAKE_CURRENT_LIST_DIR}/../external/cjson
 )
 
 target_link_libraries(host-testbench PRIVATE beacon_core jtencode)
 
-# Link nlohmann_json target
-target_link_libraries(host-testbench PRIVATE nlohmann_json::nlohmann_json)
+# Link cJSON target
+target_link_libraries(host-testbench PRIVATE cjson)
 
 # Link OpenSSL for cpp-httplib if SSL support is enabled
 find_package(OpenSSL REQUIRED)

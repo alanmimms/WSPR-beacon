@@ -1,4 +1,5 @@
 #include "WebServer.h"
+#include "Beacon.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
@@ -44,7 +45,7 @@ void updateBeaconState(const char* netState, const char* txState, const char* ba
 
 
 WebServer::WebServer(SettingsIntf *settings, TimeIntf *time)
-  : server(nullptr), settings(settings), time(time), scheduler(nullptr) {
+  : server(nullptr), settings(settings), time(time), scheduler(nullptr), beacon(nullptr) {
   instanceForApi = this;
 }
 
@@ -58,6 +59,10 @@ void WebServer::setSettingsChangedCallback(const std::function<void()> &cb) {
 
 void WebServer::setScheduler(Scheduler* sched) {
   scheduler = sched;
+}
+
+void WebServer::setBeacon(Beacon* beaconInstance) {
+  beacon = beaconInstance;
 }
 
 void WebServer::updateBeaconState(const char* netState, const char* txState, const char* band, uint32_t frequency) {
@@ -325,12 +330,25 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   cJSON_AddStringToObject(status, "curBand", g_beaconState.currentBand);
   cJSON_AddNumberToObject(status, "freq", g_beaconState.currentFrequency);
   
-  // Get next transmission countdown directly from Scheduler (single source of truth)
-  if (self->scheduler) {
+  // Get next transmission info from Beacon (includes predicted band/frequency)
+  if (self->beacon) {
+    Beacon::NextTransmissionInfo nextTxInfo = self->beacon->getNextTransmissionInfo();
+    cJSON_AddNumberToObject(status, "nextTx", nextTxInfo.secondsUntil);
+    cJSON_AddStringToObject(status, "nextTxBand", nextTxInfo.band);
+    cJSON_AddNumberToObject(status, "nextTxFreq", nextTxInfo.frequency);
+    cJSON_AddBoolToObject(status, "nextTxValid", nextTxInfo.valid);
+  } else if (self->scheduler) {
+    // Fallback to scheduler only if beacon not available
     int nextTxSeconds = self->scheduler->getSecondsUntilNextTransmission();
     cJSON_AddNumberToObject(status, "nextTx", nextTxSeconds);
+    cJSON_AddStringToObject(status, "nextTxBand", g_beaconState.currentBand);
+    cJSON_AddNumberToObject(status, "nextTxFreq", g_beaconState.currentFrequency);
+    cJSON_AddBoolToObject(status, "nextTxValid", false);
   } else {
-    cJSON_AddNumberToObject(status, "nextTx", 120); // Fallback if scheduler not available
+    cJSON_AddNumberToObject(status, "nextTx", 120); // Fallback if nothing available
+    cJSON_AddStringToObject(status, "nextTxBand", "20m");
+    cJSON_AddNumberToObject(status, "nextTxFreq", 14097100);
+    cJSON_AddBoolToObject(status, "nextTxValid", false);
   }
   
   // Convert back to JSON string

@@ -7,6 +7,9 @@
 #include <functional>
 #include "esp_http_server.h"
 
+// Forward declaration to avoid circular dependency
+class Beacon;
+
 // Function to update beacon state for status API
 void updateBeaconState(const char* netState, const char* txState, const char* band, int frequency);
 
@@ -21,6 +24,7 @@ public:
   void stop() override;
   void setSettingsChangedCallback(const std::function<void()> &cb) override;
   void setScheduler(Scheduler* scheduler) override;
+  void setBeacon(Beacon* beacon) override;
   void updateBeaconState(const char* networkState, const char* transmissionState, const char* band, uint32_t frequency) override;
 
   inline static const char spiffsBasePath[] = "/spiffs";
@@ -42,6 +46,7 @@ private:
   SettingsIntf *settings;
   TimeIntf *time;
   Scheduler *scheduler;
+  Beacon *beacon;
   std::function<void()> settingsChangedCallback;
   static WebServer *instanceForApi;
 };

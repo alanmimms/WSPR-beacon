@@ -36,9 +36,9 @@ idf_component_register(
     lwip
     esp_netif
     esp_event
-    json
 
     # Local Project Components
+    cjson
     dns-server
     jtencode
     si5351

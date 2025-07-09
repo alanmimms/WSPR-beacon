@@ -14,11 +14,21 @@ public:
         RANDOM_EXHAUSTIVE // Random selection until all used
     };
 
+    struct NextTransmissionInfo {
+        int secondsUntil;
+        char band[8];
+        uint32_t frequency;
+        bool valid;
+    };
+
     explicit Beacon(AppContext* ctx);
     ~Beacon();
 
     void run();
     void stop();
+    
+    // Next transmission prediction for footer display
+    NextTransmissionInfo getNextTransmissionInfo() const;
 
 private:
     
@@ -53,9 +63,13 @@ private:
     void initializeCurrentBand();
     void selectNextBand();
     bool isBandEnabledForCurrentHour(const char* band);
-    int getBandInt(const char* band, const char* property, int defaultValue);
+    int getBandInt(const char* band, const char* property, int defaultValue) const;
     void resetBandTracking();
     int getEnabledBandCount();
+    
+    // Next transmission prediction helpers
+    bool isBandEnabledForHour(const char* band, int hour) const;
+    const char* predictNextBand(time_t futureTime) const;
     
     // Timezone methods (for UI helpers)
     void detectTimezone();

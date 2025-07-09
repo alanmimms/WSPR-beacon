@@ -1,7 +1,7 @@
 #pragma once
 
 #include "SettingsIntf.h"
-#include <nlohmann/json.hpp>
+#include "cJSON.h"
 
 class Settings : public SettingsIntf {
 public:
@@ -22,6 +22,9 @@ public:
   bool fromJsonString(const char *jsonString) override;
 
 private:
-  nlohmann::json userJson;
-  mutable std::string tempString; // for getString return value
+  void* defaults;  // cJSON* stored as void* to avoid exposing cJSON in header
+  void* user;      // cJSON* stored as void* to avoid exposing cJSON in header
+  
+  void mergeDefaults();
+  void loadFromFile();
 };

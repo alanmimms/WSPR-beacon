@@ -2,7 +2,7 @@
 #include "Time.h"
 #include "../../include/BeaconLogger.h"
 #include "JTEncode.h"
-#include <nlohmann/json.hpp>
+#include "cJSON.h"
 #include <string>
 #include <thread>
 #include <iostream>
@@ -22,7 +22,6 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.h"
 
-using nlohmann::json;
 namespace fs = std::filesystem;
 
 // Global variables
@@ -69,68 +68,43 @@ static std::string formatTimeISO(int64_t unixTime) {
   return oss.str();
 }
 
-static json settings = {
-  {"call", "N0CALL"},
-  {"loc", "AA00aa"},
-  {"pwr", 23},
-  {"txPct", 20},
-  {"bandMode", "sequential"},
-  {"wifiMode", "sta"},
-  {"ssid", ""},
-  {"pwd", ""},
-  {"ssidAp", "WSPR-Beacon"},
-  {"pwdAp", "wspr2024"},
-  {"host", "wspr-beacon"},
-  {"bands", {
-    {"160m", {
-      {"en", false},
-      {"freq", 1838100},
-      {"sched", 16777215}
-    }},
-    {"80m", {
-      {"en", false},
-      {"freq", 3570100},
-      {"sched", 16777215}
-    }},
-    {"40m", {
-      {"en", false},
-      {"freq", 7040100},
-      {"sched", 16777215}
-    }},
-    {"30m", {
-      {"en", false},
-      {"freq", 10140200},
-      {"sched", 16777215}
-    }},
-    {"20m", {
-      {"en", false},
-      {"freq", 14097100},
-      {"sched", 16777215}
-    }},
-    {"17m", {
-      {"en", false},
-      {"freq", 18106100},
-      {"sched", 16777215}
-    }},
-    {"15m", {
-      {"en", false},
-      {"freq", 21096100},
-      {"sched", 16777215}
-    }},
-    {"12m", {
-      {"en", false},
-      {"freq", 24926100},
-      {"sched", 16777215}
-    }},
-    {"10m", {
-      {"en", false},
-      {"freq", 28126100},
-      {"sched", 16777215}
-    }}
-  }}
-};
+static cJSON* settings = nullptr;
 
-static json status;
+static void initializeDefaultSettings() {
+  if (settings) {
+    cJSON_Delete(settings);
+  }
+  
+  settings = cJSON_CreateObject();
+  cJSON_AddStringToObject(settings, "call", "N0CALL");
+  cJSON_AddStringToObject(settings, "loc", "AA00aa");
+  cJSON_AddNumberToObject(settings, "pwr", 23);
+  cJSON_AddNumberToObject(settings, "txPct", 20);
+  cJSON_AddStringToObject(settings, "bandMode", "sequential");
+  cJSON_AddStringToObject(settings, "wifiMode", "sta");
+  cJSON_AddStringToObject(settings, "ssid", "");
+  cJSON_AddStringToObject(settings, "pwd", "");
+  cJSON_AddStringToObject(settings, "ssidAp", "WSPR-Beacon");
+  cJSON_AddStringToObject(settings, "pwdAp", "wspr2024");
+  cJSON_AddStringToObject(settings, "host", "wspr-beacon");
+  
+  cJSON* bands = cJSON_CreateObject();
+  
+  const char* bandNames[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"};
+  const int bandFreqs[] = {1838100, 3570100, 7040100, 10140200, 14097100, 18106100, 21096100, 24926100, 28126100};
+  
+  for (int i = 0; i < 9; i++) {
+    cJSON* band = cJSON_CreateObject();
+    cJSON_AddBoolToObject(band, "en", false);
+    cJSON_AddNumberToObject(band, "freq", bandFreqs[i]);
+    cJSON_AddNumberToObject(band, "sched", 16777215);
+    cJSON_AddItemToObject(bands, bandNames[i], band);
+  }
+  
+  cJSON_AddItemToObject(settings, "bands", bands);
+}
+
+static cJSON* status = nullptr;
 
 static bool loadMockData(const std::string& mockDataFile) {
   try {
@@ -141,18 +115,30 @@ static bool loadMockData(const std::string& mockDataFile) {
       return false;
     }
     
-    json mockData = json::parse(mockDataContent);
+    cJSON* mockData = cJSON_Parse(mockDataContent.c_str());
+    if (!mockData) {
+      g_logger->logBasic("ERROR", "Mock data JSON parsing failed", "file=" + mockDataFile);
+      return false;
+    }
     
-    // Merge mock data into status, preserving dynamic fields
-    status = mockData;
+    // Delete existing status and create new one from mock data
+    if (status) {
+      cJSON_Delete(status);
+    }
+    status = cJSON_Duplicate(mockData, true);
     
     // Also update settings with relevant fields from mock data
     int settingsUpdated = 0;
     std::vector<std::string> updatedFields;
     
     auto updateField = [&](const std::string& field) {
-      if (mockData.contains(field)) {
-        settings[field] = mockData[field];
+      cJSON* item = cJSON_GetObjectItem(mockData, field.c_str());
+      if (item) {
+        cJSON* existing = cJSON_GetObjectItem(settings, field.c_str());
+        if (existing) {
+          cJSON_DeleteItemFromObject(settings, field.c_str());
+        }
+        cJSON_AddItemToObject(settings, field.c_str(), cJSON_Duplicate(item, true));
         updatedFields.push_back(field);
         settingsUpdated++;
       }
@@ -177,9 +163,13 @@ static bool loadMockData(const std::string& mockDataFile) {
     g_logger->logSystemEvent("Settings updated from mock data", "fields_updated=" + std::to_string(settingsUpdated) + ", fields=[" + fieldList + "]");
     
     // Always set resetTime to current startup time
-    status["resetTime"] = formatTimeISO(timeInterface.getStartTime());
+    std::string resetTime = formatTimeISO(timeInterface.getStartTime());
+    cJSON_DeleteItemFromObject(status, "resetTime");
+    cJSON_AddStringToObject(status, "resetTime", resetTime.c_str());
     
     g_logger->logSystemEvent("Mock data loaded successfully", "file=" + mockDataFile + ", size=" + std::to_string(mockDataContent.size()) + " bytes");
+    
+    cJSON_Delete(mockData);
     return true;
   } catch (const std::exception& e) {
     g_logger->logBasic("ERROR", "Mock data parsing failed", "file=" + mockDataFile + ", error=" + std::string(e.what()));
@@ -189,68 +179,143 @@ static bool loadMockData(const std::string& mockDataFile) {
 
 static void initializeDefaultStatus() {
   // Fallback default status if mock data loading fails
-  status = {
-    {"call", "N0CALL"},
-    {"loc", "AA00aa"},
-    {"pwr", 23},
-    {"txPct", 20},
-    {"host", "wspr-beacon"},
-    {"curBand", "20m"},
-    {"resetTime", formatTimeISO(timeInterface.getStartTime())},
-    {"ssid", "TestWiFi"},
-    {"rssi", -70},
-    {"netState", "READY"},
-    {"stats", {
-      {"txCnt", 0},
-      {"txMin", 0},
-      {"bands", {
-        {"160m", {"txCnt", 0, "txMin", 0}},
-        {"80m", {"txCnt", 0, "txMin", 0}},
-        {"40m", {"txCnt", 0, "txMin", 0}},
-        {"30m", {"txCnt", 0, "txMin", 0}},
-        {"20m", {"txCnt", 0, "txMin", 0}},
-        {"17m", {"txCnt", 0, "txMin", 0}},
-        {"15m", {"txCnt", 0, "txMin", 0}},
-        {"12m", {"txCnt", 0, "txMin", 0}},
-        {"10m", {"txCnt", 0, "txMin", 0}}
-      }}
-    }}
-  };
+  if (status) {
+    cJSON_Delete(status);
+  }
+  
+  status = cJSON_CreateObject();
+  cJSON_AddStringToObject(status, "call", "N0CALL");
+  cJSON_AddStringToObject(status, "loc", "AA00aa");
+  cJSON_AddNumberToObject(status, "pwr", 23);
+  cJSON_AddNumberToObject(status, "txPct", 20);
+  cJSON_AddStringToObject(status, "host", "wspr-beacon");
+  cJSON_AddStringToObject(status, "curBand", "20m");
+  
+  std::string resetTime = formatTimeISO(timeInterface.getStartTime());
+  cJSON_AddStringToObject(status, "resetTime", resetTime.c_str());
+  
+  cJSON_AddStringToObject(status, "ssid", "TestWiFi");
+  cJSON_AddNumberToObject(status, "rssi", -70);
+  cJSON_AddStringToObject(status, "netState", "READY");
+  
+  // Create stats object
+  cJSON* stats = cJSON_CreateObject();
+  cJSON_AddNumberToObject(stats, "txCnt", 0);
+  cJSON_AddNumberToObject(stats, "txMin", 0);
+  
+  // Create bands stats object
+  cJSON* bands = cJSON_CreateObject();
+  const char* bandNames[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"};
+  
+  for (int i = 0; i < 9; i++) {
+    cJSON* band = cJSON_CreateObject();
+    cJSON_AddNumberToObject(band, "txCnt", 0);
+    cJSON_AddNumberToObject(band, "txMin", 0);
+    cJSON_AddItemToObject(bands, bandNames[i], band);
+  }
+  
+  cJSON_AddItemToObject(stats, "bands", bands);
+  cJSON_AddItemToObject(status, "stats", stats);
+}
+
+static std::string getStringValue(cJSON* obj, const char* key, const char* defaultValue = "") {
+  cJSON* item = cJSON_GetObjectItem(obj, key);
+  if (item && cJSON_IsString(item)) {
+    return std::string(item->valuestring);
+  }
+  return std::string(defaultValue);
+}
+
+static int getIntValue(cJSON* obj, const char* key, int defaultValue = 0) {
+  cJSON* item = cJSON_GetObjectItem(obj, key);
+  if (item && cJSON_IsNumber(item)) {
+    return item->valueint;
+  }
+  return defaultValue;
 }
 
 static void updateStatusFromSettings() {
-  status["call"] = settings["call"];
-  status["loc"] = settings["loc"];
-  status["pwr"] = settings["pwr"];
-  status["txPct"] = settings["txPct"];
-  status["host"] = settings["host"];
-  status["wifiMode"] = settings["wifiMode"];
+  // Copy values from settings to status
+  cJSON* callItem = cJSON_GetObjectItem(settings, "call");
+  if (callItem) {
+    cJSON_DeleteItemFromObject(status, "call");
+    cJSON_AddItemToObject(status, "call", cJSON_Duplicate(callItem, true));
+  }
+  
+  cJSON* locItem = cJSON_GetObjectItem(settings, "loc");
+  if (locItem) {
+    cJSON_DeleteItemFromObject(status, "loc");
+    cJSON_AddItemToObject(status, "loc", cJSON_Duplicate(locItem, true));
+  }
+  
+  cJSON* pwrItem = cJSON_GetObjectItem(settings, "pwr");
+  if (pwrItem) {
+    cJSON_DeleteItemFromObject(status, "pwr");
+    cJSON_AddItemToObject(status, "pwr", cJSON_Duplicate(pwrItem, true));
+  }
+  
+  cJSON* txPctItem = cJSON_GetObjectItem(settings, "txPct");
+  if (txPctItem) {
+    cJSON_DeleteItemFromObject(status, "txPct");
+    cJSON_AddItemToObject(status, "txPct", cJSON_Duplicate(txPctItem, true));
+  }
+  
+  cJSON* hostItem = cJSON_GetObjectItem(settings, "host");
+  if (hostItem) {
+    cJSON_DeleteItemFromObject(status, "host");
+    cJSON_AddItemToObject(status, "host", cJSON_Duplicate(hostItem, true));
+  }
+  
+  cJSON* wifiModeItem = cJSON_GetObjectItem(settings, "wifiMode");
+  if (wifiModeItem) {
+    cJSON_DeleteItemFromObject(status, "wifiMode");
+    cJSON_AddItemToObject(status, "wifiMode", cJSON_Duplicate(wifiModeItem, true));
+  }
   
   // Update WiFi status based on mode
-  std::string wifiMode = settings.value("wifiMode", "sta");
+  std::string wifiMode = getStringValue(settings, "wifiMode", "sta");
   if (wifiMode == "ap") {
-    status["netState"] = "AP_MODE";
-    status["ssid"] = settings.value("ssidAp", "WSPR-Beacon");
+    cJSON_DeleteItemFromObject(status, "netState");
+    cJSON_AddStringToObject(status, "netState", "AP_MODE");
+    
+    std::string ssidAp = getStringValue(settings, "ssidAp", "WSPR-Beacon");
+    cJSON_DeleteItemFromObject(status, "ssid");
+    cJSON_AddStringToObject(status, "ssid", ssidAp.c_str());
+    
     // Simulate connected clients (varying over time)
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - g_serverStartTime).count();
     int clientCount = (elapsed / 30) % 4; // 0-3 clients, changes every 30 seconds
-    status["clientCount"] = clientCount;
-    status.erase("rssi"); // No RSSI in AP mode
+    cJSON_DeleteItemFromObject(status, "clientCount");
+    cJSON_AddNumberToObject(status, "clientCount", clientCount);
+    
+    cJSON_DeleteItemFromObject(status, "rssi"); // No RSSI in AP mode
   } else {
     // STA mode - check if we have credentials
-    std::string ssid = settings.value("ssid", "");
+    std::string ssid = getStringValue(settings, "ssid", "");
     if (!ssid.empty()) {
-      status["netState"] = "READY";
-      status["ssid"] = ssid;
-      status["rssi"] = -65; // Mock RSSI for connected STA
+      cJSON_DeleteItemFromObject(status, "netState");
+      cJSON_AddStringToObject(status, "netState", "READY");
+      
+      cJSON_DeleteItemFromObject(status, "ssid");
+      cJSON_AddStringToObject(status, "ssid", ssid.c_str());
+      
+      cJSON_DeleteItemFromObject(status, "rssi");
+      cJSON_AddNumberToObject(status, "rssi", -65); // Mock RSSI for connected STA
     } else {
-      status["netState"] = "AP_MODE"; // Fall back to AP if no STA config
-      status["ssid"] = settings.value("ssidAp", "WSPR-Beacon");
-      status["clientCount"] = 0;
-      status.erase("rssi");
+      cJSON_DeleteItemFromObject(status, "netState");
+      cJSON_AddStringToObject(status, "netState", "AP_MODE"); // Fall back to AP if no STA config
+      
+      std::string ssidAp = getStringValue(settings, "ssidAp", "WSPR-Beacon");
+      cJSON_DeleteItemFromObject(status, "ssid");
+      cJSON_AddStringToObject(status, "ssid", ssidAp.c_str());
+      
+      cJSON_DeleteItemFromObject(status, "clientCount");
+      cJSON_AddNumberToObject(status, "clientCount", 0);
+      
+      cJSON_DeleteItemFromObject(status, "rssi");
     }
-    status.erase("clientCount"); // No client count in STA mode
+    cJSON_DeleteItemFromObject(status, "clientCount"); // No client count in STA mode
   }
 }
 
@@ -306,6 +371,9 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
   
   g_logger->logTimeEvent("Server startup", timeScale, g_mockStartTime);
   
+  // Initialize default settings first
+  initializeDefaultSettings();
+  
   // Initialize mock data
   g_logger->logSystemEvent("Loading mock data", "file=" + mockDataFile);
   if (!loadMockData(mockDataFile)) {
@@ -318,9 +386,16 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
   httplib::Server svr;
 
   svr.Get("/api/settings", [](const httplib::Request &req, httplib::Response &res) {
-    std::string response = settings.dump();
-    res.set_content(response, "application/json");
-    g_logger->logApiRequest("GET", "/api/settings", 200, std::to_string(response.size()) + " bytes");
+    char* response = cJSON_Print(settings);
+    if (response) {
+      res.set_content(response, "application/json");
+      g_logger->logApiRequest("GET", "/api/settings", 200, std::to_string(strlen(response)) + " bytes");
+      free(response);
+    } else {
+      res.status = 500;
+      res.set_content("{\"error\":\"Internal server error\"}", "application/json");
+      g_logger->logApiRequest("GET", "/api/settings", 500, "error");
+    }
   });
 
   svr.Post("/api/settings", [](const httplib::Request &req, httplib::Response &res) {
@@ -333,22 +408,55 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
         // Form-encoded: use params
         g_logger->logVerbose("SETTINGS", "Processing form-encoded data", "param_count=" + std::to_string(req.params.size()));
         for (auto &item : req.params) {
-          auto oldValue = settings.contains(item.first) ? settings[item.first].dump() : "null";
-          settings[item.first] = item.second;
+          cJSON* existingItem = cJSON_GetObjectItem(settings, item.first.c_str());
+          std::string oldValue = "null";
+          if (existingItem) {
+            char* oldStr = cJSON_Print(existingItem);
+            if (oldStr) {
+              oldValue = std::string(oldStr);
+              free(oldStr);
+            }
+          }
+          
+          cJSON_DeleteItemFromObject(settings, item.first.c_str());
+          cJSON_AddStringToObject(settings, item.first.c_str(), item.second.c_str());
           g_logger->logSettingsChange(item.first, oldValue, item.second);
         }
       } else {
         // Otherwise, treat as JSON
-        auto j = json::parse(req.body);
-        g_logger->logVerbose("SETTINGS", "Processing JSON data", "field_count=" + std::to_string(j.size()));
-        for (auto it = j.begin(); it != j.end(); ++it) {
-          // Skip null values to avoid overwriting existing settings with nulls
-          if (!it.value().is_null()) {
-            auto oldValue = settings.contains(it.key()) ? settings[it.key()].dump() : "null";
-            settings[it.key()] = it.value();
-            g_logger->logSettingsChange(it.key(), oldValue, it.value().dump());
+        cJSON* j = cJSON_Parse(req.body.c_str());
+        if (!j) {
+          throw std::runtime_error("Invalid JSON format");
+        }
+        
+        int fieldCount = cJSON_GetArraySize(j);
+        g_logger->logVerbose("SETTINGS", "Processing JSON data", "field_count=" + std::to_string(fieldCount));
+        
+        cJSON* item = nullptr;
+        cJSON_ArrayForEach(item, j) {
+          if (item->string && !cJSON_IsNull(item)) {
+            cJSON* existingItem = cJSON_GetObjectItem(settings, item->string);
+            std::string oldValue = "null";
+            if (existingItem) {
+              char* oldStr = cJSON_Print(existingItem);
+              if (oldStr) {
+                oldValue = std::string(oldStr);
+                free(oldStr);
+              }
+            }
+            
+            cJSON_DeleteItemFromObject(settings, item->string);
+            cJSON_AddItemToObject(settings, item->string, cJSON_Duplicate(item, true));
+            
+            char* newStr = cJSON_Print(item);
+            std::string newValue = newStr ? std::string(newStr) : "null";
+            if (newStr) free(newStr);
+            
+            g_logger->logSettingsChange(std::string(item->string), oldValue, newValue);
           }
         }
+        
+        cJSON_Delete(j);
       }
       updateStatusFromSettings();
       g_logger->logBasic("SETTINGS", "Settings update completed successfully", "");
@@ -370,7 +478,7 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
 
   svr.Get("/api/status.json", [](const httplib::Request &req, httplib::Response &res) {
     // Calculate dynamic status based on accelerated time
-    json dynamicStatus = status;
+    cJSON* dynamicStatus = cJSON_Duplicate(status, true);
     
     g_logger->logVerbose("API", "GET /api/status.json processing", "time_scale=" + std::to_string(g_timeScale));
     
@@ -385,7 +493,7 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     const int WSPR_TX_DURATION = 111;  // Rounded up
     
     // Get TX percentage from settings
-    int txPercent = dynamicStatus.value("txPct", 20);
+    int txPercent = getIntValue(dynamicStatus, "txPct", 20);
     
     // Simple transmission scheduling: transmit every 100/txPercent cycles
     int cycleNumber = mockElapsedSeconds / WSPR_CYCLE_SECONDS;
@@ -399,17 +507,22 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     }
     
     // Update transmission state
-    std::string prevTxState = dynamicStatus.value("txState", "UNKNOWN");
+    std::string prevTxState = getStringValue(dynamicStatus, "txState", "UNKNOWN");
     if (shouldTransmit && secondsInCycle < WSPR_TX_DURATION) {
-      dynamicStatus["txState"] = "TRANSMITTING";
-      dynamicStatus["nextTx"] = 0;
+      cJSON_DeleteItemFromObject(dynamicStatus, "txState");
+      cJSON_AddStringToObject(dynamicStatus, "txState", "TRANSMITTING");
+      cJSON_DeleteItemFromObject(dynamicStatus, "nextTx");
+      cJSON_AddNumberToObject(dynamicStatus, "nextTx", 0);
       if (prevTxState != "TRANSMITTING") {
-        g_logger->logTransmissionEvent("Transmission started", dynamicStatus.value("curBand", "unknown"), 0);
+        std::string curBand = getStringValue(dynamicStatus, "curBand", "unknown");
+        g_logger->logTransmissionEvent("Transmission started", curBand, 0);
       }
     } else {
-      dynamicStatus["txState"] = "IDLE";
+      cJSON_DeleteItemFromObject(dynamicStatus, "txState");
+      cJSON_AddStringToObject(dynamicStatus, "txState", "IDLE");
       if (prevTxState == "TRANSMITTING") {
-        g_logger->logTransmissionEvent("Transmission ended", dynamicStatus.value("curBand", "unknown"));
+        std::string curBand = getStringValue(dynamicStatus, "curBand", "unknown");
+        g_logger->logTransmissionEvent("Transmission ended", curBand);
       }
       
       // Calculate next transmission
@@ -417,16 +530,19 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
         int cycleInterval = 100 / txPercent;
         int nextTxCycle = ((cycleNumber / cycleInterval) + 1) * cycleInterval;
         int secondsUntilNextCycle = (nextTxCycle - cycleNumber) * WSPR_CYCLE_SECONDS - secondsInCycle;
-        dynamicStatus["nextTx"] = secondsUntilNextCycle;
+        cJSON_DeleteItemFromObject(dynamicStatus, "nextTx");
+        cJSON_AddNumberToObject(dynamicStatus, "nextTx", secondsUntilNextCycle);
         
         // Log next transmission timing if significant change
         static int lastNextTx = -1;
         if (abs(secondsUntilNextCycle - lastNextTx) > 10) {  // Log every 10 second changes
-          g_logger->logTransmissionEvent("Next transmission scheduled", dynamicStatus.value("curBand", "unknown"), secondsUntilNextCycle);
+          std::string curBand = getStringValue(dynamicStatus, "curBand", "unknown");
+          g_logger->logTransmissionEvent("Next transmission scheduled", curBand, secondsUntilNextCycle);
           lastNextTx = secondsUntilNextCycle;
         }
       } else {
-        dynamicStatus["nextTx"] = 9999;  // Never
+        cJSON_DeleteItemFromObject(dynamicStatus, "nextTx");
+        cJSON_AddNumberToObject(dynamicStatus, "nextTx", 9999);  // Never
       }
     }
     
@@ -449,37 +565,57 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       }
     }
     
-    dynamicStatus["stats"]["txCnt"] = completedTransmissions;
-    dynamicStatus["stats"]["txMin"] = totalTransmissionMinutes;
+    cJSON* stats = cJSON_GetObjectItem(dynamicStatus, "stats");
+    if (stats) {
+      cJSON_DeleteItemFromObject(stats, "txCnt");
+      cJSON_AddNumberToObject(stats, "txCnt", completedTransmissions);
+      cJSON_DeleteItemFromObject(stats, "txMin");
+      cJSON_AddNumberToObject(stats, "txMin", totalTransmissionMinutes);
+    }
     
     // Update WiFi status based on current settings and time
-    std::string wifiMode = settings.value("wifiMode", "sta");
+    std::string wifiMode = getStringValue(settings, "wifiMode", "sta");
     if (wifiMode == "ap") {
-      dynamicStatus["netState"] = "AP_MODE";
+      cJSON_DeleteItemFromObject(dynamicStatus, "netState");
+      cJSON_AddStringToObject(dynamicStatus, "netState", "AP_MODE");
       // Simulate varying client count
       int clientCount = (mockElapsedSeconds / 30) % 4; // 0-3 clients
-      dynamicStatus["clientCount"] = clientCount;
-      dynamicStatus.erase("rssi");
+      cJSON_DeleteItemFromObject(dynamicStatus, "clientCount");
+      cJSON_AddNumberToObject(dynamicStatus, "clientCount", clientCount);
+      cJSON_DeleteItemFromObject(dynamicStatus, "rssi");
     } else {
-      std::string ssid = settings.value("ssid", "");
+      std::string ssid = getStringValue(settings, "ssid", "");
       if (!ssid.empty()) {
-        dynamicStatus["netState"] = "READY";
-        dynamicStatus["ssid"] = ssid;
+        cJSON_DeleteItemFromObject(dynamicStatus, "netState");
+        cJSON_AddStringToObject(dynamicStatus, "netState", "READY");
+        cJSON_DeleteItemFromObject(dynamicStatus, "ssid");
+        cJSON_AddStringToObject(dynamicStatus, "ssid", ssid.c_str());
         // Simulate RSSI variation
         int rssiBase = -65;
         int rssiVariation = (mockElapsedSeconds / 10) % 20 - 10; // ±10 dBm variation
-        dynamicStatus["rssi"] = rssiBase + rssiVariation;
+        cJSON_DeleteItemFromObject(dynamicStatus, "rssi");
+        cJSON_AddNumberToObject(dynamicStatus, "rssi", rssiBase + rssiVariation);
       } else {
-        dynamicStatus["netState"] = "AP_MODE";
-        dynamicStatus["clientCount"] = 0;
-        dynamicStatus.erase("rssi");
+        cJSON_DeleteItemFromObject(dynamicStatus, "netState");
+        cJSON_AddStringToObject(dynamicStatus, "netState", "AP_MODE");
+        cJSON_DeleteItemFromObject(dynamicStatus, "clientCount");
+        cJSON_AddNumberToObject(dynamicStatus, "clientCount", 0);
+        cJSON_DeleteItemFromObject(dynamicStatus, "rssi");
       }
-      dynamicStatus.erase("clientCount");
+      cJSON_DeleteItemFromObject(dynamicStatus, "clientCount");
     }
     
-    std::string response = dynamicStatus.dump();
-    res.set_content(response, "application/json");
-    g_logger->logApiRequest("GET", "/api/status.json", 200, std::to_string(response.size()) + " bytes");
+    char* response = cJSON_Print(dynamicStatus);
+    if (response) {
+      res.set_content(response, "application/json");
+      g_logger->logApiRequest("GET", "/api/status.json", 200, std::to_string(strlen(response)) + " bytes");
+      free(response);
+    } else {
+      res.status = 500;
+      res.set_content("{\"error\":\"Internal server error\"}", "application/json");
+      g_logger->logApiRequest("GET", "/api/status.json", 500, "error");
+    }
+    cJSON_Delete(dynamicStatus);
   });
 
   svr.Get("/api/time", [](const httplib::Request &req, httplib::Response &res) {
@@ -496,29 +632,42 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     int64_t timeSinceSync = scaledElapsed % (lastSyncInterval * 2);
     int64_t lastSyncTime = mockTime - timeSinceSync;
     
-    json timeResponse = {
-      {"unixTime", mockTime},
-      {"isoTime", formatTimeISO(mockTime)},
-      {"synced", true},
-      {"lastSyncTime", formatTimeISO(lastSyncTime)},
-      {"timeScale", g_timeScale}
-    };
-    std::string response = timeResponse.dump();
-    res.set_content(response, "application/json");
-    g_logger->logApiRequest("GET", "/api/time", 200, std::to_string(response.size()) + " bytes");
+    cJSON* timeResponse = cJSON_CreateObject();
+    cJSON_AddNumberToObject(timeResponse, "unixTime", mockTime);
+    std::string isoTime = formatTimeISO(mockTime);
+    cJSON_AddStringToObject(timeResponse, "isoTime", isoTime.c_str());
+    cJSON_AddBoolToObject(timeResponse, "synced", true);
+    std::string lastSyncTimeISO = formatTimeISO(lastSyncTime);
+    cJSON_AddStringToObject(timeResponse, "lastSyncTime", lastSyncTimeISO.c_str());
+    cJSON_AddNumberToObject(timeResponse, "timeScale", g_timeScale);
+    
+    char* response = cJSON_Print(timeResponse);
+    if (response) {
+      res.set_content(response, "application/json");
+      g_logger->logApiRequest("GET", "/api/time", 200, std::to_string(strlen(response)) + " bytes");
+      free(response);
+    } else {
+      res.status = 500;
+      res.set_content("{\"error\":\"Internal server error\"}", "application/json");
+      g_logger->logApiRequest("GET", "/api/time", 500, "error");
+    }
+    cJSON_Delete(timeResponse);
   });
 
   svr.Post("/api/wspr/encode", [](const httplib::Request &req, httplib::Response &res) {
     try {
       g_logger->logApiRequest("POST", "/api/wspr/encode", 200, std::to_string(req.body.size()) + " bytes");
       
-      auto requestData = json::parse(req.body);
+      cJSON* requestData = cJSON_Parse(req.body.c_str());
+      if (!requestData) {
+        throw std::runtime_error("Invalid JSON format");
+      }
       
       // Extract parameters
-      std::string callsign = requestData.value("callsign", "N0CALL");
-      std::string locator = requestData.value("locator", "AA00aa");
-      int powerDbm = requestData.value("powerDbm", 10);
-      uint32_t frequency = requestData.value("frequency", 14097100UL);
+      std::string callsign = getStringValue(requestData, "callsign", "N0CALL");
+      std::string locator = getStringValue(requestData, "locator", "AA00aa");
+      int powerDbm = getIntValue(requestData, "powerDbm", 10);
+      uint32_t frequency = static_cast<uint32_t>(getIntValue(requestData, "frequency", 14097100));
       
       g_logger->logBasic("WSPR", "Encoding WSPR message", 
                         "call=" + callsign + ", loc=" + locator + ", pwr=" + std::to_string(powerDbm) + "dBm, freq=" + std::to_string(frequency));
@@ -530,46 +679,64 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
       encoder.encode(callsign.c_str(), locator.c_str(), static_cast<int8_t>(powerDbm));
       
       // Build response with symbols
-      json response;
-      response["success"] = true;
-      response["callsign"] = callsign;
-      response["locator"] = locator;
-      response["powerDbm"] = powerDbm;
-      response["frequency"] = frequency;
-      response["symbolCount"] = WSPREncoder::TxBufferSize;
-      response["toneSpacing"] = WSPREncoder::ToneSpacing;
-      response["symbolPeriod"] = WSPREncoder::SymbolPeriod;
+      cJSON* response = cJSON_CreateObject();
+      cJSON_AddBoolToObject(response, "success", true);
+      cJSON_AddStringToObject(response, "callsign", callsign.c_str());
+      cJSON_AddStringToObject(response, "locator", locator.c_str());
+      cJSON_AddNumberToObject(response, "powerDbm", powerDbm);
+      cJSON_AddNumberToObject(response, "frequency", frequency);
+      cJSON_AddNumberToObject(response, "symbolCount", WSPREncoder::TxBufferSize);
+      cJSON_AddNumberToObject(response, "toneSpacing", WSPREncoder::ToneSpacing);
+      cJSON_AddNumberToObject(response, "symbolPeriod", WSPREncoder::SymbolPeriod);
       
       // Add symbols array
-      json symbolsArray = json::array();
+      cJSON* symbolsArray = cJSON_CreateArray();
       for (int i = 0; i < WSPREncoder::TxBufferSize; i++) {
-        symbolsArray.push_back(encoder.symbols[i]);
+        cJSON_AddItemToArray(symbolsArray, cJSON_CreateNumber(encoder.symbols[i]));
       }
-      response["symbols"] = symbolsArray;
+      cJSON_AddItemToObject(response, "symbols", symbolsArray);
       
       // Calculate transmission duration
       uint32_t transmissionDurationMs = WSPREncoder::TxBufferSize * WSPREncoder::SymbolPeriod;
-      response["transmissionDurationMs"] = transmissionDurationMs;
-      response["transmissionDurationSeconds"] = transmissionDurationMs / 1000.0;
+      cJSON_AddNumberToObject(response, "transmissionDurationMs", transmissionDurationMs);
+      cJSON_AddNumberToObject(response, "transmissionDurationSeconds", transmissionDurationMs / 1000.0);
       
       g_logger->logVerbose("WSPR", "WSPR encoding completed", 
                           "symbols=" + std::to_string(WSPREncoder::TxBufferSize) + 
                           ", duration=" + std::to_string(transmissionDurationMs) + "ms");
       
-      std::string responseStr = response.dump();
-      res.set_content(responseStr, "application/json");
-      g_logger->logApiRequest("POST", "/api/wspr/encode", 200, std::to_string(responseStr.size()) + " bytes");
+      char* responseStr = cJSON_Print(response);
+      if (responseStr) {
+        res.set_content(responseStr, "application/json");
+        g_logger->logApiRequest("POST", "/api/wspr/encode", 200, std::to_string(strlen(responseStr)) + " bytes");
+        free(responseStr);
+      } else {
+        res.status = 500;
+        res.set_content("{\"error\":\"Internal server error\"}", "application/json");
+        g_logger->logApiRequest("POST", "/api/wspr/encode", 500, "error");
+      }
+      
+      cJSON_Delete(response);
+      cJSON_Delete(requestData);
       
     } catch (const std::exception& e) {
       g_logger->logBasic("ERROR", "WSPR encoding failed", "error=" + std::string(e.what()));
       
-      json errorResponse;
-      errorResponse["success"] = false;
-      errorResponse["error"] = e.what();
+      cJSON* errorResponse = cJSON_CreateObject();
+      cJSON_AddBoolToObject(errorResponse, "success", false);
+      cJSON_AddStringToObject(errorResponse, "error", e.what());
       
-      res.status = 400;
-      res.set_content(errorResponse.dump(), "application/json");
+      char* errorStr = cJSON_Print(errorResponse);
+      if (errorStr) {
+        res.status = 400;
+        res.set_content(errorStr, "application/json");
+        free(errorStr);
+      } else {
+        res.status = 400;
+        res.set_content("{\"error\":\"Unknown error\"}", "application/json");
+      }
       g_logger->logApiRequest("POST", "/api/wspr/encode", 400, "error");
+      cJSON_Delete(errorResponse);
     }
   });
 
@@ -583,62 +750,86 @@ void startTestServer(int port, const std::string& mockDataFile, double timeScale
     // Simulate signal strength variations over time
     int timeOffset = elapsed / 5; // Changes every 5 seconds
     
-    json scanResults = json::array({
-      {
-        {"ssid", "MyHomeWiFi"},
-        {"rssi", -45 + (timeOffset % 10) - 5}, // -50 to -40
-        {"encryption", "WPA2"},
-        {"channel", 6}
-      },
-      {
-        {"ssid", "Neighbor_2.4G"},
-        {"rssi", -67 + (timeOffset % 8) - 4}, // -71 to -63
-        {"encryption", "WPA2"},
-        {"channel", 11}
-      },
-      {
-        {"ssid", "CoffeeShop_Guest"},
-        {"rssi", -72 + (timeOffset % 6) - 3}, // -75 to -69
-        {"encryption", "Open"},
-        {"channel", 1}
-      },
-      {
-        {"ssid", "TestNetwork_5G"},
-        {"rssi", -58 + (timeOffset % 12) - 6}, // -64 to -52
-        {"encryption", "WPA3"},
-        {"channel", 36}
-      },
-      {
-        {"ssid", "Enterprise_Corp"},
-        {"rssi", -81 + (timeOffset % 4) - 2}, // -83 to -79
-        {"encryption", "WPA2-Enterprise"},
-        {"channel", 44}
-      },
-      {
-        {"ssid", "WeakSignal_Test"},
-        {"rssi", -85 + (timeOffset % 6) - 3}, // -88 to -82
-        {"encryption", "WPA2"},
-        {"channel", 13}
-      }
-    });
+    cJSON* scanResults = cJSON_CreateArray();
+    
+    // Network 1
+    cJSON* net1 = cJSON_CreateObject();
+    cJSON_AddStringToObject(net1, "ssid", "MyHomeWiFi");
+    cJSON_AddNumberToObject(net1, "rssi", -45 + (timeOffset % 10) - 5); // -50 to -40
+    cJSON_AddStringToObject(net1, "encryption", "WPA2");
+    cJSON_AddNumberToObject(net1, "channel", 6);
+    cJSON_AddItemToArray(scanResults, net1);
+    
+    // Network 2
+    cJSON* net2 = cJSON_CreateObject();
+    cJSON_AddStringToObject(net2, "ssid", "Neighbor_2.4G");
+    cJSON_AddNumberToObject(net2, "rssi", -67 + (timeOffset % 8) - 4); // -71 to -63
+    cJSON_AddStringToObject(net2, "encryption", "WPA2");
+    cJSON_AddNumberToObject(net2, "channel", 11);
+    cJSON_AddItemToArray(scanResults, net2);
+    
+    // Network 3
+    cJSON* net3 = cJSON_CreateObject();
+    cJSON_AddStringToObject(net3, "ssid", "CoffeeShop_Guest");
+    cJSON_AddNumberToObject(net3, "rssi", -72 + (timeOffset % 6) - 3); // -75 to -69
+    cJSON_AddStringToObject(net3, "encryption", "Open");
+    cJSON_AddNumberToObject(net3, "channel", 1);
+    cJSON_AddItemToArray(scanResults, net3);
+    
+    // Network 4
+    cJSON* net4 = cJSON_CreateObject();
+    cJSON_AddStringToObject(net4, "ssid", "TestNetwork_5G");
+    cJSON_AddNumberToObject(net4, "rssi", -58 + (timeOffset % 12) - 6); // -64 to -52
+    cJSON_AddStringToObject(net4, "encryption", "WPA3");
+    cJSON_AddNumberToObject(net4, "channel", 36);
+    cJSON_AddItemToArray(scanResults, net4);
+    
+    // Network 5
+    cJSON* net5 = cJSON_CreateObject();
+    cJSON_AddStringToObject(net5, "ssid", "Enterprise_Corp");
+    cJSON_AddNumberToObject(net5, "rssi", -81 + (timeOffset % 4) - 2); // -83 to -79
+    cJSON_AddStringToObject(net5, "encryption", "WPA2-Enterprise");
+    cJSON_AddNumberToObject(net5, "channel", 44);
+    cJSON_AddItemToArray(scanResults, net5);
+    
+    // Network 6
+    cJSON* net6 = cJSON_CreateObject();
+    cJSON_AddStringToObject(net6, "ssid", "WeakSignal_Test");
+    cJSON_AddNumberToObject(net6, "rssi", -85 + (timeOffset % 6) - 3); // -88 to -82
+    cJSON_AddStringToObject(net6, "encryption", "WPA2");
+    cJSON_AddNumberToObject(net6, "channel", 13);
+    cJSON_AddItemToArray(scanResults, net6);
     
     // Log detailed scan results
+    int networkCount = cJSON_GetArraySize(scanResults);
     std::ostringstream scanDetails;
     scanDetails << "networks=[";
-    for (size_t i = 0; i < scanResults.size(); ++i) {
+    for (int i = 0; i < networkCount; i++) {
       if (i > 0) scanDetails << ", ";
-      auto network = scanResults[i];
-      scanDetails << network["ssid"].get<std::string>()
-                  << "(" << network["rssi"].get<int>() << "dBm,"
-                  << network["encryption"].get<std::string>() << ")";
+      cJSON* network = cJSON_GetArrayItem(scanResults, i);
+      cJSON* ssid = cJSON_GetObjectItem(network, "ssid");
+      cJSON* rssi = cJSON_GetObjectItem(network, "rssi");
+      cJSON* encryption = cJSON_GetObjectItem(network, "encryption");
+      
+      if (ssid && rssi && encryption) {
+        scanDetails << ssid->valuestring << "(" << rssi->valueint << "dBm," << encryption->valuestring << ")";
+      }
     }
     scanDetails << "]";
     
-    g_logger->logWifiScan(scanResults.size(), scanDetails.str());
+    g_logger->logWifiScan(networkCount, scanDetails.str());
     
-    std::string response = scanResults.dump();
-    res.set_content(response, "application/json");
-    g_logger->logApiRequest("GET", "/api/wifi/scan", 200, std::to_string(response.size()) + " bytes");
+    char* response = cJSON_Print(scanResults);
+    if (response) {
+      res.set_content(response, "application/json");
+      g_logger->logApiRequest("GET", "/api/wifi/scan", 200, std::to_string(strlen(response)) + " bytes");
+      free(response);
+    } else {
+      res.status = 500;
+      res.set_content("{\"error\":\"Internal server error\"}", "application/json");
+      g_logger->logApiRequest("GET", "/api/wifi/scan", 500, "error");
+    }
+    cJSON_Delete(scanResults);
   });
 
   // Serve static files - dynamically find web directory

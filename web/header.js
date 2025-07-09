@@ -280,16 +280,22 @@ class HeaderManager {
       } else if (status.txState === 'TX_PENDING') {
         this.footerElements.nextTx.textContent = `TX PENDING @ ${freqMHz}`;
       } else {
-        // Use the nextTx value provided by the ESP32 scheduler
+        // Use the nextTx value provided by the scheduler/beacon
         const nextTransmissionIn = status.nextTx || 0;
         
+        // Use predicted next transmission frequency if available, otherwise fall back to current
+        let nextFreqMHz = freqMHz; // Default to current frequency
+        if (status.nextTxFreq) {
+          nextFreqMHz = (status.nextTxFreq / 1000000).toFixed(6) + ' MHz';
+        }
+        
         if (nextTransmissionIn <= 0) {
-          this.footerElements.nextTx.textContent = `Ready @ ${freqMHz}`;
+          this.footerElements.nextTx.textContent = `Ready @ ${nextFreqMHz}`;
         } else {
           const minutes = Math.floor(nextTransmissionIn / 60);
           const seconds = Math.floor(nextTransmissionIn % 60);
           const timeStr = nextTransmissionIn < 60 ? `${seconds}s` : `${minutes}m ${seconds}s`;
-          this.footerElements.nextTx.textContent = `${timeStr} @ ${freqMHz}`;
+          this.footerElements.nextTx.textContent = `${timeStr} @ ${nextFreqMHz}`;
         }
       }
     }

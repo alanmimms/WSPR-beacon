@@ -12,6 +12,9 @@
 #include "cJSON.h"
 
 
+static const char tag[] = "Beacon";
+
+
 // Include secrets.h if it exists - it contains WiFi credentials for testing
 #if __has_include("secrets.h")
   #include "secrets.h"
@@ -44,7 +47,7 @@ Beacon::~Beacon() {
 
 void Beacon::initializeCurrentBand() {
     if (!ctx->settings) {
-        ctx->logger->logWarn("BEACON", "initializeCurrentBand: No settings available");
+        ctx->logger->logWarn(tag, "initializeCurrentBand: No settings available");
         return;
     }
     
@@ -54,23 +57,21 @@ void Beacon::initializeCurrentBand() {
     int hour = utc->tm_hour;
     currentHour = hour;
     
-    ctx->logger->logInfo("BEACON", "initializeCurrentBand: Checking bands for hour %d", hour);
+    ctx->logger->logInfo(tag, "initializeCurrentBand: Checking bands for UTC hour %d", hour);
     
     // Find first enabled band for current hour
     for (int i = 0; i < 9; i++) {
-        ctx->logger->logInfo("BEACON", "initializeCurrentBand: Checking band %s (index %d)", BAND_NAMES[i], i);
-        
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             currentBandIndex = i;
             strcpy(currentBand, BAND_NAMES[i]);
-            ctx->logger->logInfo("BEACON", "Initialized current band to %s (index %d) for hour %d", 
-                               currentBand, currentBandIndex, hour);
+            ctx->logger->logInfo(tag, "Initialized current band to %s for UTC hour %d", 
+                               currentBand, hour);
             return;
         }
     }
     
     // If no bands are enabled for current hour, keep default
-    ctx->logger->logWarn("BEACON", "No bands enabled for current hour %d, keeping default band %s", 
+    ctx->logger->logWarn(tag, "No bands enabled for current hour %d, keeping default band %s", 
                         hour, currentBand);
 }
 
@@ -202,6 +203,7 @@ void Beacon::startNetworkServices() {
         
         ctx->webServer->setSettingsChangedCallback([this]() { this->onSettingsChanged(); });
         ctx->webServer->setScheduler(&scheduler);
+        ctx->webServer->setBeacon(this);
         ctx->webServer->start();
         ctx->logger->logInfo("Web server started");
     }
@@ -316,7 +318,7 @@ void Beacon::onSettingsChanged() {
 }
 
 void Beacon::startTransmission() {
-    ctx->logger->logInfo("BEACON", "🟢 TRANSMISSION STARTING...");
+    ctx->logger->logInfo(tag, "🟢 TRANSMISSION STARTING...");
     
     // Select the band for this transmission
     selectNextBand();
@@ -325,7 +327,7 @@ void Beacon::startTransmission() {
         // Get frequency for selected band
         uint32_t frequency = getBandInt(currentBand, "freq", 14097100);  // Default to 20m WSPR
         
-        ctx->logger->logInfo("BEACON", "Setting up RF for %s band at %.6f MHz", 
+        ctx->logger->logInfo(tag, "Setting up RF for %s band at %.6f MHz", 
                            currentBand, frequency / 1000000.0);
         
         // Store frequency and enable WSPR modulation
@@ -338,9 +340,9 @@ void Beacon::startTransmission() {
         // Start WSPR modulation
         startWSPRModulation();
         
-        ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
+        ctx->logger->logInfo(tag, "WSPR modulation started - transmitting encoded message");
     } else {
-        ctx->logger->logError("BEACON", "Cannot start transmission - Si5351 or settings not available!");
+        ctx->logger->logError(tag, "Cannot start transmission - Si5351 or settings not available!");
     }
     
     if (ctx->settings) {
@@ -354,30 +356,30 @@ void Beacon::startTransmission() {
             currentBand,
             frequency / 1000000.0
         );
-        ctx->logger->logInfo("BEACON", logMsg);
+        ctx->logger->logInfo(tag, logMsg);
     }
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, false); // LED on (active-low)
-        ctx->logger->logInfo("BEACON", "Status LED ON (transmission active)");
+        ctx->logger->logInfo(tag, "Status LED ON (transmission active)");
     }
 }
 
 void Beacon::endTransmission() {
-    ctx->logger->logInfo("BEACON", "🔴 TRANSMISSION ENDING...");
+    ctx->logger->logInfo(tag, "🔴 TRANSMISSION ENDING...");
     char logMsg[128];
     snprintf(logMsg, sizeof(logMsg), "🔴 TX END on %s after %.1f seconds", 
             currentBand, Scheduler::WSPR_TRANSMISSION_DURATION_SEC);
-    ctx->logger->logInfo("BEACON", logMsg);
+    ctx->logger->logInfo(tag, logMsg);
     
     // Stop WSPR modulation
     stopWSPRModulation();
     
-    ctx->logger->logInfo("BEACON", "WSPR modulation stopped - RF output off");
+    ctx->logger->logInfo(tag, "WSPR modulation stopped - RF output off");
     
     if (ctx->gpio) {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
-        ctx->logger->logInfo("BEACON", "Status LED OFF (transmission complete)");
+        ctx->logger->logInfo(tag, "Status LED OFF (transmission complete)");
     }
 }
 
@@ -502,7 +504,7 @@ void Beacon::selectNextBand() {
     
     if (enabledBandIndices.empty()) {
         // No bands enabled for this hour
-        ctx->logger->logWarn("BEACON", "No bands enabled for hour %d", hour);
+        ctx->logger->logWarn(tag, "No bands enabled for hour %d", hour);
         return;
     }
     
@@ -589,29 +591,29 @@ void Beacon::selectNextBand() {
     }
 }
 
-int Beacon::getBandInt(const char* band, const char* property, int defaultValue) {
+int Beacon::getBandInt(const char* band, const char* property, int defaultValue) const {
     if (!ctx->settings || !band || !property) {
-        ctx->logger->logWarn("BEACON", "getBandInt: Invalid parameters");
+        ctx->logger->logWarn(tag, "getBandInt: Invalid parameters");
         return defaultValue;
     }
     
     // Access nested JSON: settings["bands"][band][property]
     char* settingsJson = ctx->settings->toJsonString();
     if (!settingsJson) {
-        ctx->logger->logWarn("BEACON", "getBandInt: Failed to get settings JSON");
+        ctx->logger->logWarn(tag, "getBandInt: Failed to get settings JSON");
         return defaultValue;
     }
     
     cJSON* root = cJSON_Parse(settingsJson);
     if (!root) {
-        ctx->logger->logWarn("BEACON", "getBandInt: Failed to parse JSON");
+        ctx->logger->logWarn(tag, "getBandInt: Failed to parse JSON");
         free(settingsJson);
         return defaultValue;
     }
     
     cJSON* bands = cJSON_GetObjectItem(root, "bands");
     if (!bands) {
-        ctx->logger->logWarn("BEACON", "getBandInt: No 'bands' object found");
+        ctx->logger->logWarn(tag, "getBandInt: No 'bands' object found");
         cJSON_Delete(root);
         free(settingsJson);
         return defaultValue;
@@ -619,7 +621,7 @@ int Beacon::getBandInt(const char* band, const char* property, int defaultValue)
     
     cJSON* bandObj = cJSON_GetObjectItem(bands, band);
     if (!bandObj) {
-        ctx->logger->logWarn("BEACON", "getBandInt: Band '%s' not found", band);
+        ctx->logger->logWarn(tag, "getBandInt: Band '%s' not found", band);
         cJSON_Delete(root);
         free(settingsJson);
         return defaultValue;
@@ -629,12 +631,10 @@ int Beacon::getBandInt(const char* band, const char* property, int defaultValue)
     int result = defaultValue;
     if (propObj && cJSON_IsNumber(propObj)) {
         result = propObj->valueint;
-        ctx->logger->logInfo("BEACON", "getBandInt: %s.%s = %d", band, property, result);
     } else if (propObj && cJSON_IsBool(propObj)) {
         result = cJSON_IsTrue(propObj) ? 1 : 0;
-        ctx->logger->logInfo("BEACON", "getBandInt: %s.%s = %d (bool)", band, property, result);
     } else {
-        ctx->logger->logWarn("BEACON", "getBandInt: Property '%s' not found or not a number for band '%s'", property, band);
+        ctx->logger->logWarn(tag, "getBandInt: Property '%s' not found or not a number for band '%s'", property, band);
     }
     
     cJSON_Delete(root);
@@ -647,8 +647,6 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     
     // Check if band is enabled
     int enabled = getBandInt(band, "en", 0);
-    ctx->logger->logInfo("BEACON", "  Band %s enabled: %d", band, enabled);
-    
     if (enabled == 0) {
         return false;
     }
@@ -662,8 +660,10 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     uint32_t scheduleBitmap = (uint32_t)getBandInt(band, "sched", 0xFFFFFF);
     bool hourEnabled = (scheduleBitmap & (1 << hour)) != 0;
     
-    ctx->logger->logInfo("BEACON", "  Band %s schedule: 0x%08X, UTC hour %d enabled: %d", 
-                       band, scheduleBitmap, hour, hourEnabled);
+    // Only log if band is both enabled and scheduled for this hour
+    if (hourEnabled) {
+        ctx->logger->logInfo(tag, "  Band %s available for UTC hour %d", band, hour);
+    }
     
     return hourEnabled;
 }
@@ -709,7 +709,7 @@ void Beacon::detectTimezone() {
             if (timezoneOffset < -12) timezoneOffset = -12;
             if (timezoneOffset > 12) timezoneOffset = 12;
             
-            ctx->logger->logInfo("BEACON", "Auto-detected timezone: UTC%+d from locator %s", timezoneOffset, locator);
+            ctx->logger->logInfo(tag, "Auto-detected timezone: UTC%+d from locator %s", timezoneOffset, locator);
         }
     } else {
         // Use manual timezone setting
@@ -723,7 +723,7 @@ void Beacon::detectTimezone() {
             }
         }
         
-        ctx->logger->logInfo("BEACON", "Using manual timezone: %s (UTC%+d)", timezone, timezoneOffset);
+        ctx->logger->logInfo(tag, "Using manual timezone: %s (UTC%+d)", timezone, timezoneOffset);
     }
 }
 
@@ -744,12 +744,122 @@ int Beacon::getLocalHour(time_t utcTime) {
     return localTm->tm_hour;
 }
 
+// Next transmission prediction methods
+Beacon::NextTransmissionInfo Beacon::getNextTransmissionInfo() const {
+    NextTransmissionInfo info = {0, "", 0, false};
+    
+    if (!ctx->settings) {
+        return info;
+    }
+    
+    // Get seconds until next transmission opportunity
+    info.secondsUntil = scheduler.getSecondsUntilNextTransmission();
+    
+    // Calculate the future time when transmission will occur
+    time_t nextTxTime = time(nullptr) + info.secondsUntil;
+    
+    // Predict which band will be selected for that time
+    const char* nextBand = predictNextBand(nextTxTime);
+    if (nextBand) {
+        strcpy(info.band, nextBand);
+        info.frequency = getBandInt(nextBand, "freq", 14097100);
+        info.valid = true;
+    } else {
+        // Fallback to current band if prediction fails
+        strcpy(info.band, currentBand);
+        info.frequency = getBandInt(currentBand, "freq", 14097100);
+        info.valid = false;
+    }
+    
+    return info;
+}
+
+bool Beacon::isBandEnabledForHour(const char* band, int hour) const {
+    if (!ctx->settings || !band) return false;
+    
+    // Check if band is enabled
+    int enabled = getBandInt(band, "en", 0);
+    if (enabled == 0) {
+        return false;
+    }
+    
+    // Get schedule bitmap (32-bit integer with bits set for active hours)
+    uint32_t scheduleBitmap = (uint32_t)getBandInt(band, "sched", 0xFFFFFF);
+    return (scheduleBitmap & (1 << hour)) != 0;
+}
+
+const char* Beacon::predictNextBand(time_t futureTime) const {
+    if (!ctx->settings) return nullptr;
+    
+    struct tm* utc = gmtime(&futureTime);
+    int futureHour = utc->tm_hour;
+    
+    // Get band selection mode from settings
+    const char* modeStr = ctx->settings->getString("bandMode", "sequential");
+    BandSelectionMode mode = BandSelectionMode::SEQUENTIAL;
+    if (strcmp(modeStr, "roundRobin") == 0) {
+        mode = BandSelectionMode::ROUND_ROBIN;
+    } else if (strcmp(modeStr, "randomExhaustive") == 0) {
+        mode = BandSelectionMode::RANDOM_EXHAUSTIVE;
+    }
+    
+    // Get list of enabled bands for the future hour
+    std::vector<int> enabledBandIndices;
+    for (int i = 0; i < 9; i++) {
+        if (isBandEnabledForHour(BAND_NAMES[i], futureHour)) {
+            enabledBandIndices.push_back(i);
+        }
+    }
+    
+    if (enabledBandIndices.empty()) {
+        return nullptr; // No bands enabled for that hour
+    }
+    
+    // Predict next band based on mode
+    int selectedIndex = -1;
+    
+    switch (mode) {
+        case BandSelectionMode::SEQUENTIAL:
+        case BandSelectionMode::ROUND_ROBIN:
+            {
+                // Find current band in enabled list and advance to next
+                auto it = std::find(enabledBandIndices.begin(), enabledBandIndices.end(), currentBandIndex);
+                if (it != enabledBandIndices.end()) {
+                    // Move to next band
+                    ++it;
+                    if (it == enabledBandIndices.end()) {
+                        it = enabledBandIndices.begin();  // Wrap around
+                    }
+                    selectedIndex = *it;
+                } else {
+                    // Current band not in enabled list, start from beginning
+                    selectedIndex = enabledBandIndices[0];
+                }
+            }
+            break;
+            
+        case BandSelectionMode::RANDOM_EXHAUSTIVE:
+            {
+                // For random mode, we can't predict exactly, so return first available
+                // This is a reasonable approximation for footer display
+                selectedIndex = enabledBandIndices[0];
+            }
+            break;
+    }
+    
+    if (selectedIndex >= 0 && selectedIndex < 9) {
+        return BAND_NAMES[selectedIndex];
+    }
+    
+    return nullptr;
+}
+
 
 
 
 void Beacon::startWSPRModulation() {
     if (!ctx->settings || !ctx->si5351 || !ctx->wsprModulator) {
-        ctx->logger->logError("BEACON", "Cannot start WSPR modulation - missing components");
+        ctx->logger->logError(tag, "Cannot start WSPR modulation - missing components");
         return;
     }
     
@@ -758,7 +868,7 @@ void Beacon::startWSPRModulation() {
     const char* locator = ctx->settings->getString("loc", "AA00aa");
     int8_t powerDbm = (int8_t)ctx->settings->getInt("pwr", 10);
     
-    ctx->logger->logInfo("BEACON", "Encoding WSPR message: %s %s %ddBm", callsign, locator, powerDbm);
+    ctx->logger->logInfo(tag, "Encoding WSPR message: %s %s %ddBm", callsign, locator, powerDbm);
     
     // Encode the WSPR message
     wsprEncoder.encode(callsign, locator, powerDbm);
@@ -772,7 +882,7 @@ void Beacon::startWSPRModulation() {
     ctx->si5351->setFrequency(0, initialFreq);
     ctx->si5351->enableOutput(0, true);
     
-    ctx->logger->logInfo("BEACON", "Starting with symbol %d, freq %.2f Hz offset", 
+    ctx->logger->logInfo(tag, "Starting with symbol %d, freq %.2f Hz offset", 
                        wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
     // Start the symbol stream visualization using printf with newlines for immediate output
     printf("WSPR encoding: ");
@@ -786,9 +896,9 @@ void Beacon::startWSPRModulation() {
     }, 162);
     
     if (started) {
-        ctx->logger->logInfo("BEACON", "WSPR modulation started - transmitting encoded message");
+        ctx->logger->logInfo(tag, "WSPR modulation started - transmitting encoded message");
     } else {
-        ctx->logger->logError("BEACON", "Failed to start WSPR modulation");
+        ctx->logger->logError(tag, "Failed to start WSPR modulation");
         modulationActive = false;
     }
 }
@@ -809,7 +919,7 @@ void Beacon::stopWSPRModulation() {
     // End symbol stream with newline
     putchar('\n'); fflush(stdout); fsync(fileno(stdout));
     
-    ctx->logger->logInfo("BEACON", "WSPR modulation stopped after %d symbols", currentSymbolIndex);
+    ctx->logger->logInfo(tag, "WSPR modulation stopped after %d symbols", currentSymbolIndex);
 }
 
 void Beacon::modulateSymbol(int symbolIndex) {
@@ -822,7 +932,7 @@ void Beacon::modulateSymbol(int symbolIndex) {
     
     // Check if we've transmitted all symbols
     if (symbolIndex >= 162) {
-        ctx->logger->logInfo("BEACON", "All 162 WSPR symbols transmitted");
+        ctx->logger->logInfo(tag, "All 162 WSPR symbols transmitted");
         return; // Let the main transmission timer handle the end
     }
     

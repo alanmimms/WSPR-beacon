@@ -1,6 +1,6 @@
 #include "WebServer.h"
 #include <httplib.h>
-#include <nlohmann/json.hpp>
+#include "cJSON.h"
 #include <iostream>
 #include <atomic>
 #include <thread>
@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <limits.h>
 
-using nlohmann::json;
 namespace fs = std::filesystem;
 
 std::string findWebDirectory() {
@@ -46,7 +45,7 @@ std::string findWebDirectory() {
 }
 
 WebServer::WebServer(SettingsIntf *settings)
-  : settings(settings), scheduler(nullptr), running(false) {}
+  : settings(settings), scheduler(nullptr), beacon(nullptr), running(false) {}
 
 WebServer::~WebServer() {
   stop();
@@ -58,6 +57,10 @@ void WebServer::setSettingsChangedCallback(const std::function<void()> &cb) {
 
 void WebServer::setScheduler(Scheduler* sched) {
   scheduler = sched;
+}
+
+void WebServer::setBeacon(Beacon* beaconInstance) {
+  beacon = beaconInstance;
 }
 
 void WebServer::updateBeaconState(const char* networkState, const char* transmissionState, const char* band, uint32_t frequency) {

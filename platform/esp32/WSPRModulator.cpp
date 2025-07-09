@@ -86,7 +86,7 @@ void WSPRModulator::modulationTask(void* param) {
         vTaskDelayUntil(&xLastWakeTime, xPeriod);
         
         // Move to next symbol
-        modulator->currentSymbolIndex++;
+        modulator->currentSymbolIndex = modulator->currentSymbolIndex + 1;
         
         // Call the callback for the next symbol
         if (modulator->symbolCallback && modulator->currentSymbolIndex < modulator->totalSymbols) {

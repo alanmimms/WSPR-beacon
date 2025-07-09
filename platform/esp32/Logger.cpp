@@ -3,24 +3,26 @@
 #include <cstdio>
 #include <cstring>
 
+static const char tag[] = "App";
+
 Logger::Logger() {}
 
 Logger::~Logger() {}
 
 void Logger::logInfo(const char *msg) {
-  ESP_LOGI("APP", "%s", msg);
+  ESP_LOGI(tag, "%s", msg);
 }
 
 void Logger::logWarn(const char *msg) {
-  ESP_LOGW("APP", "%s", msg);
+  ESP_LOGW(tag, "%s", msg);
 }
 
 void Logger::logError(const char *msg) {
-  ESP_LOGE("APP", "%s", msg);
+  ESP_LOGE(tag, "%s", msg);
 }
 
 void Logger::logDebug(const char *msg) {
-  ESP_LOGD("APP", "%s", msg);
+  ESP_LOGD(tag, "%s", msg);
 }
 
 // Printf-style methods with subsystem tag
