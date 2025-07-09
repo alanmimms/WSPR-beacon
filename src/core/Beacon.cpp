@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <vector>
 #include <algorithm>
+#include <stdexcept>
+#include "cJSON.h"
 
 
 // Include secrets.h if it exists - it contains WiFi credentials for testing
@@ -23,12 +25,14 @@ Beacon::Beacon(AppContext* ctx)
       bandSelectionMode(BandSelectionMode::SEQUENTIAL),
       currentBandIndex(0),
       currentHour(-1),
+      firstTransmission(true),
       wsprEncoder(),
       currentSymbolIndex(0),
       baseFrequency(0),
       modulationActive(false)
 {
-    strcpy(currentBand, "20m");  // Default band
+    strcpy(currentBand, "20m");  // Default fallback band
+    currentBandIndex = 4;  // Default fallback index
     memset(usedBands, 0, sizeof(usedBands));
 }
 
@@ -36,16 +40,66 @@ Beacon::~Beacon() {
     stop();
 }
 
+void Beacon::initializeCurrentBand() {
+    if (!ctx->settings) {
+        ctx->logger->logWarn("BEACON", "initializeCurrentBand: No settings available");
+        return;
+    }
+    
+    // Get current UTC hour
+    time_t now = time(nullptr);
+    struct tm* utc = gmtime(&now);
+    int hour = utc->tm_hour;
+    currentHour = hour;
+    
+    ctx->logger->logInfo("BEACON", "initializeCurrentBand: Checking bands for hour %d", hour);
+    
+    // Find first enabled band for current hour
+    for (int i = 0; i < 9; i++) {
+        ctx->logger->logInfo("BEACON", "initializeCurrentBand: Checking band %s (index %d)", BAND_NAMES[i], i);
+        
+        if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
+            currentBandIndex = i;
+            strcpy(currentBand, BAND_NAMES[i]);
+            ctx->logger->logInfo("BEACON", "Initialized current band to %s (index %d) for hour %d", 
+                               currentBand, currentBandIndex, hour);
+            return;
+        }
+    }
+    
+    // If no bands are enabled for current hour, keep default
+    ctx->logger->logWarn("BEACON", "No bands enabled for current hour %d, keeping default band %s", 
+                        hour, currentBand);
+}
+
 void Beacon::run() {
     if (running) return;
     
     running = true;
-    initialize();
+    ctx->logger->logInfo("Beacon orchestrator starting...");
     
-    while (running) {
-        ctx->timer->executeWithPreciseTiming([this]() {
-            periodicTimeSync();
-        }, 100);
+    try {
+        // Phase 1: Platform Services Ready
+        waitForPlatformServices();
+        
+        // Phase 2: Load Configuration  
+        loadAndValidateSettings();
+        
+        // Phase 3: Initialize Core Components
+        initializeBeaconCore();
+        
+        // Phase 4: Start Network Services
+        startNetworkServices();
+        
+        // Phase 5: Begin Transmission Operations
+        startTransmissionScheduler();
+        
+        // Phase 6: Main Operation Loop
+        mainOperationLoop();
+        
+    } catch (...) {
+        ctx->logger->logError("Beacon orchestration failed - stopping");
+        running = false;
     }
 }
 
@@ -54,36 +108,51 @@ void Beacon::stop() {
     scheduler.stop();
 }
 
-void Beacon::initialize() {
-    ctx->logger->logInfo("Beacon initializing...");
+// Phase 1: Platform Services Ready
+void Beacon::waitForPlatformServices() {
+    ctx->logger->logInfo("Phase 1: Waiting for platform services...");
     
-    // Log current settings from NVS
-    if (ctx->settings) {
-        char* settingsJson = ctx->settings->toJsonString();
-        if (settingsJson) {
-            ctx->logger->logInfo("Current settings from NVS:");
-            ctx->logger->logInfo(settingsJson);
-            free(settingsJson);
-        }
+    // Verify all required platform services are available
+    if (!ctx->logger) throw std::runtime_error("Logger service not available");
+    if (!ctx->settings) throw std::runtime_error("Settings service not available");
+    if (!ctx->timer) throw std::runtime_error("Timer service not available");
+    if (!ctx->gpio) throw std::runtime_error("GPIO service not available");
+    if (!ctx->si5351) throw std::runtime_error("Si5351 service not available");
+    if (!ctx->net) throw std::runtime_error("Network service not available");
+    if (!ctx->webServer) throw std::runtime_error("WebServer service not available");
+    if (!ctx->wsprModulator) throw std::runtime_error("WSPR modulator service not available");
+    
+    ctx->logger->logInfo("Phase 1: All platform services ready");
+}
+
+// Phase 2: Load Configuration
+void Beacon::loadAndValidateSettings() {
+    ctx->logger->logInfo("Phase 2: Loading and validating settings...");
+    
+    // Settings should already be loaded by AppContext, but let's verify
+    char* settingsJson = ctx->settings->toJsonString();
+    if (!settingsJson) {
+        throw std::runtime_error("Failed to load settings");
     }
+    
+    ctx->logger->logInfo("Current settings:");
+    ctx->logger->logInfo(settingsJson);
+    free(settingsJson);
     
     // Initialize random number generator for band selection
     srand(time(nullptr));
     
-    initializeHardware();
+    // Initialize current band based on settings
+    initializeCurrentBand();
     
-    fsm.setStateChangeCallback([this](FSM::NetworkState networkState, FSM::TransmissionState txState) {
-        this->onStateChanged(networkState, txState);
-    });
-    
-    scheduler.setTransmissionStartCallback([this]() { this->onTransmissionStart(); });
-    scheduler.setTransmissionEndCallback([this]() { this->onTransmissionEnd(); });
-    
-    initializeWebServer();
-    startNetworking();
+    ctx->logger->logInfo("Phase 2: Settings loaded and validated");
 }
 
-void Beacon::initializeHardware() {
+// Phase 3: Initialize Core Components
+void Beacon::initializeBeaconCore() {
+    ctx->logger->logInfo("Phase 3: Initializing beacon core components...");
+    
+    // Initialize hardware
     ctx->logger->logInfo("Initializing hardware components...");
     
     if (ctx->gpio) {
@@ -97,22 +166,27 @@ void Beacon::initializeHardware() {
         ctx->logger->logInfo("Initializing Si5351 clock generator...");
         ctx->si5351->init();
         ctx->logger->logInfo("Si5351 initialization complete");
-    } else {
-        ctx->logger->logError("Si5351 interface not available - no RF output possible!");
     }
     
-    if (ctx->settings) {
-        ctx->logger->logInfo("Settings interface available");
-    } else {
-        ctx->logger->logWarn("Settings interface not available");
-    }
+    // Set up FSM callbacks
+    fsm.setStateChangeCallback([this](FSM::NetworkState networkState, FSM::TransmissionState txState) {
+        this->onStateChanged(networkState, txState);
+    });
+    
+    // Set up scheduler callbacks
+    scheduler.setTransmissionStartCallback([this]() { this->onTransmissionStart(); });
+    scheduler.setTransmissionEndCallback([this]() { this->onTransmissionEnd(); });
+    
+    ctx->logger->logInfo("Phase 3: Core components initialized");
 }
 
-void Beacon::initializeWebServer() {
-    ctx->logger->logInfo("Beacon::initializeWebServer() called");
+// Phase 4: Start Network Services
+void Beacon::startNetworkServices() {
+    ctx->logger->logInfo("Phase 4: Starting network services...");
     
+    // Initialize web server
     if (ctx->webServer) {
-        ctx->logger->logInfo("WebServer instance found, starting initialization");
+        ctx->logger->logInfo("Initializing web server...");
         
         // Mount SPIFFS filesystem first
         if (ctx->fileSystem && !ctx->fileSystem->mount()) {
@@ -122,36 +196,56 @@ void Beacon::initializeWebServer() {
         }
         
         ctx->webServer->setSettingsChangedCallback([this]() { this->onSettingsChanged(); });
-        
-        // Give WebServer access to Scheduler for countdown API
         ctx->webServer->setScheduler(&scheduler);
-        
-        ctx->logger->logInfo("About to call ctx->webServer->start()");
         ctx->webServer->start();
-        ctx->logger->logInfo("ctx->webServer->start() completed");
-    } else {
-        ctx->logger->logError("WebServer instance is NULL!");
+        ctx->logger->logInfo("Web server started");
     }
-}
-
-void Beacon::startNetworking() {
+    
+    // Start WiFi connection
     if (shouldConnectToWiFi()) {
         fsm.transitionToStaConnecting();
         if (connectToWiFi()) {
             fsm.transitionToReady();
-            scheduler.start();
         } else {
             fsm.transitionToApMode();
             startAccessPoint();
             fsm.transitionToReady();
-            scheduler.start();
         }
     } else {
         fsm.transitionToApMode();
         startAccessPoint();
         fsm.transitionToReady();
-        scheduler.start();
     }
+    
+    ctx->logger->logInfo("Phase 4: Network services started");
+}
+
+// Phase 5: Begin Transmission Operations
+void Beacon::startTransmissionScheduler() {
+    ctx->logger->logInfo("Phase 5: Starting transmission scheduler...");
+    
+    // Only start scheduler if we're in ready state
+    if (fsm.getNetworkState() == FSM::NetworkState::READY) {
+        scheduler.start();
+        ctx->logger->logInfo("Transmission scheduler started");
+    } else {
+        ctx->logger->logWarn("Network not ready - scheduler not started");
+    }
+    
+    ctx->logger->logInfo("Phase 5: Transmission scheduler ready");
+}
+
+// Phase 6: Main Operation Loop
+void Beacon::mainOperationLoop() {
+    ctx->logger->logInfo("Phase 6: Entering main operation loop...");
+    
+    while (running) {
+        ctx->timer->executeWithPreciseTiming([this]() {
+            periodicTimeSync();
+        }, 100);
+    }
+    
+    ctx->logger->logInfo("Main operation loop exited");
 }
 
 void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionState txState) {
@@ -162,8 +256,7 @@ void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionSta
     
     // Update WebServer status via platform interface
     if (ctx->webServer && ctx->settings) {
-        const char* freqKey = getBandFrequencyKey(currentBand);
-        uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
+        uint32_t frequency = getBandInt(currentBand, "freq", 14097100);
         ctx->webServer->updateBeaconState(fsm.getNetworkStateString(), fsm.getTransmissionStateString(), currentBand, frequency);
     }
     
@@ -199,12 +292,20 @@ void Beacon::onSettingsChanged() {
         return;
     }
     
-    // Only restart scheduler if we're not transmitting
+    // Orchestrated restart: stop scheduler, reload settings, restart scheduler
     scheduler.cancelCurrentTransmission();
     scheduler.stop();
     
-    if (fsm.getNetworkState() == FSM::NetworkState::READY) {
-        scheduler.start();
+    try {
+        // Re-run configuration phase
+        loadAndValidateSettings();
+        
+        // Restart scheduler if network is ready
+        if (fsm.getNetworkState() == FSM::NetworkState::READY) {
+            scheduler.start();
+        }
+    } catch (const std::exception& e) {
+        ctx->logger->logError("Failed to apply settings changes: %s", e.what());
     }
 }
 
@@ -216,8 +317,7 @@ void Beacon::startTransmission() {
     
     if (ctx->settings && ctx->si5351) {
         // Get frequency for selected band
-        const char* freqKey = getBandFrequencyKey(currentBand);
-        uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);  // Default to 20m WSPR
+        uint32_t frequency = getBandInt(currentBand, "freq", 14097100);  // Default to 20m WSPR
         
         ctx->logger->logInfo("BEACON", "Setting up RF for %s band at %.6f MHz", 
                            currentBand, frequency / 1000000.0);
@@ -239,8 +339,7 @@ void Beacon::startTransmission() {
     
     if (ctx->settings) {
         char logMsg[256];
-        const char* freqKey = getBandFrequencyKey(currentBand);
-        uint32_t frequency = ctx->settings->getInt(freqKey, 14097100);
+        uint32_t frequency = getBandInt(currentBand, "freq", 14097100);
         
         snprintf(logMsg, sizeof(logMsg), "🟢 TX START: %s, %s, %ddBm on %s (%.6f MHz)",
             ctx->settings->getString("call", "N0CALL"),
@@ -397,6 +496,7 @@ void Beacon::selectNextBand() {
     
     if (enabledBandIndices.empty()) {
         // No bands enabled for this hour
+        ctx->logger->logWarn("BEACON", "No bands enabled for hour %d", hour);
         return;
     }
     
@@ -404,21 +504,40 @@ void Beacon::selectNextBand() {
     
     switch (bandSelectionMode) {
         case BandSelectionMode::SEQUENTIAL:
-            // Always use the first enabled band
-            selectedIndex = enabledBandIndices[0];
+            // Cycle through enabled bands in order
+            {
+                auto it = std::find(enabledBandIndices.begin(), enabledBandIndices.end(), currentBandIndex);
+                if (it != enabledBandIndices.end() && !firstTransmission) {
+                    // Move to next band (but not on first transmission)
+                    ++it;
+                    if (it == enabledBandIndices.end()) {
+                        it = enabledBandIndices.begin();  // Wrap around
+                    }
+                    selectedIndex = *it;
+                } else if (it != enabledBandIndices.end() && firstTransmission) {
+                    // First transmission - use current band
+                    selectedIndex = currentBandIndex;
+                } else {
+                    // Current band not in enabled list, start from beginning
+                    selectedIndex = enabledBandIndices[0];
+                }
+            }
             break;
             
         case BandSelectionMode::ROUND_ROBIN:
             // Find current band in enabled list and move to next
             {
                 auto it = std::find(enabledBandIndices.begin(), enabledBandIndices.end(), currentBandIndex);
-                if (it != enabledBandIndices.end()) {
-                    // Move to next band
+                if (it != enabledBandIndices.end() && !firstTransmission) {
+                    // Move to next band (but not on first transmission)
                     ++it;
                     if (it == enabledBandIndices.end()) {
                         it = enabledBandIndices.begin();  // Wrap around
                     }
                     selectedIndex = *it;
+                } else if (it != enabledBandIndices.end() && firstTransmission) {
+                    // First transmission - use current band
+                    selectedIndex = currentBandIndex;
                 } else {
                     // Current band not in enabled list, start from beginning
                     selectedIndex = enabledBandIndices[0];
@@ -458,21 +577,75 @@ void Beacon::selectNextBand() {
         char logMsg[128];
         snprintf(logMsg, sizeof(logMsg), "Selected band: %s", currentBand);
         ctx->logger->logInfo(logMsg);
+        
+        // Clear first transmission flag after first selection
+        firstTransmission = false;
     }
+}
+
+int Beacon::getBandInt(const char* band, const char* property, int defaultValue) {
+    if (!ctx->settings || !band || !property) {
+        ctx->logger->logWarn("BEACON", "getBandInt: Invalid parameters");
+        return defaultValue;
+    }
+    
+    // Access nested JSON: settings["bands"][band][property]
+    char* settingsJson = ctx->settings->toJsonString();
+    if (!settingsJson) {
+        ctx->logger->logWarn("BEACON", "getBandInt: Failed to get settings JSON");
+        return defaultValue;
+    }
+    
+    cJSON* root = cJSON_Parse(settingsJson);
+    if (!root) {
+        ctx->logger->logWarn("BEACON", "getBandInt: Failed to parse JSON");
+        free(settingsJson);
+        return defaultValue;
+    }
+    
+    cJSON* bands = cJSON_GetObjectItem(root, "bands");
+    if (!bands) {
+        ctx->logger->logWarn("BEACON", "getBandInt: No 'bands' object found");
+        cJSON_Delete(root);
+        free(settingsJson);
+        return defaultValue;
+    }
+    
+    cJSON* bandObj = cJSON_GetObjectItem(bands, band);
+    if (!bandObj) {
+        ctx->logger->logWarn("BEACON", "getBandInt: Band '%s' not found", band);
+        cJSON_Delete(root);
+        free(settingsJson);
+        return defaultValue;
+    }
+    
+    cJSON* propObj = cJSON_GetObjectItem(bandObj, property);
+    int result = defaultValue;
+    if (propObj && cJSON_IsNumber(propObj)) {
+        result = propObj->valueint;
+        ctx->logger->logInfo("BEACON", "getBandInt: %s.%s = %d", band, property, result);
+    } else if (propObj && cJSON_IsBool(propObj)) {
+        result = cJSON_IsTrue(propObj) ? 1 : 0;
+        ctx->logger->logInfo("BEACON", "getBandInt: %s.%s = %d (bool)", band, property, result);
+    } else {
+        ctx->logger->logWarn("BEACON", "getBandInt: Property '%s' not found or not a number for band '%s'", property, band);
+    }
+    
+    cJSON_Delete(root);
+    free(settingsJson);
+    return result;
 }
 
 bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     if (!ctx->settings || !band) return false;
     
-    // Build key for band enabled state
-    char key[32];
-    snprintf(key, sizeof(key), "bands.%s.en", band);
-    if (ctx->settings->getInt(key, 0) == 0) {  // 0 = false, 1 = true
+    // Check if band is enabled
+    int enabled = getBandInt(band, "en", 0);
+    ctx->logger->logInfo("BEACON", "  Band %s enabled: %d", band, enabled);
+    
+    if (enabled == 0) {
         return false;
     }
-    
-    // Check if band is scheduled for current hour
-    snprintf(key, sizeof(key), "bands.%s.sched", band);
     
     // Get current UTC hour
     time_t now = time(nullptr);
@@ -480,10 +653,13 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     int hour = utc->tm_hour;
     
     // Get schedule bitmap (32-bit integer with bits set for active hours)
-    uint32_t scheduleBitmap = (uint32_t)ctx->settings->getInt(key, 0xFFFFFF); // Default: all 24 hours enabled
+    uint32_t scheduleBitmap = (uint32_t)getBandInt(band, "sched", 0xFFFFFF);
+    bool hourEnabled = (scheduleBitmap & (1 << hour)) != 0;
     
-    // Check if the current hour bit is set
-    return (scheduleBitmap & (1 << hour)) != 0;
+    ctx->logger->logInfo("BEACON", "  Band %s schedule: 0x%08X, hour %d enabled: %d", 
+                       band, scheduleBitmap, hour, hourEnabled);
+    
+    return hourEnabled;
 }
 
 void Beacon::resetBandTracking() {
@@ -500,11 +676,6 @@ int Beacon::getEnabledBandCount() {
     return count;
 }
 
-const char* Beacon::getBandFrequencyKey(const char* band) {
-    static char key[64];
-    snprintf(key, sizeof(key), "bands.%s.freq", band);
-    return key;
-}
 
 
 void Beacon::startWSPRModulation() {

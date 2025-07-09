@@ -21,10 +21,6 @@ public:
     void stop();
 
 private:
-    void initialize();
-    void initializeHardware();
-    void initializeWebServer();
-    void startNetworking();
     
     void onStateChanged(FSM::NetworkState networkState, FSM::TransmissionState txState);
     void onTransmissionStart();
@@ -45,12 +41,21 @@ private:
     bool connectToWiFi();
     void startAccessPoint();
     
+    // Orchestration phases
+    void waitForPlatformServices();
+    void loadAndValidateSettings();
+    void initializeBeaconCore();
+    void startNetworkServices();
+    void startTransmissionScheduler();
+    void mainOperationLoop();
+    
     // Band selection methods
+    void initializeCurrentBand();
     void selectNextBand();
     bool isBandEnabledForCurrentHour(const char* band);
+    int getBandInt(const char* band, const char* property, int defaultValue);
     void resetBandTracking();
     int getEnabledBandCount();
-    const char* getBandFrequencyKey(const char* band);
     
     AppContext* ctx;
     FSM fsm;
@@ -65,6 +70,7 @@ private:
     char currentBand[8];
     int currentHour;
     bool usedBands[9];  // For tracking used bands in random mode (160m through 10m)
+    bool firstTransmission;  // Track if this is the first transmission after initialization
     
     // WSPR modulation state
     WSPREncoder wsprEncoder;
