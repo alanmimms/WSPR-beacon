@@ -57,12 +57,18 @@ private:
     void resetBandTracking();
     int getEnabledBandCount();
     
+    // Timezone methods (for UI helpers)
+    void detectTimezone();
+    bool isLocalDaylight(time_t utcTime);
+    int getLocalHour(time_t utcTime);
+    
     AppContext* ctx;
     FSM fsm;
     Scheduler scheduler;
     
     bool running;
     time_t lastTimeSync;
+    int timezoneOffset;  // Hours offset from UTC (-12 to +12)
     
     // Band selection state
     BandSelectionMode bandSelectionMode;

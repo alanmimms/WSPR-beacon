@@ -366,6 +366,71 @@ h1 {
   }
 }
 
+.time-zone {
+  background: hsl(280, 40%, 92%);
+
+  legend {
+    color: hsl(280, 40%, 30%);
+    font-weight: 600;
+    padding: 0 0.5em;
+  }
+}
+
+/* Timezone controls */
+.timezone-display {
+  padding: 0.5em;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: 500;
+  color: #333;
+  border: 1px solid #dee2e6;
+}
+
+.form-row input[type="checkbox"] {
+  margin-right: 0.5em;
+  transform: scale(1.1);
+}
+
+#manual-timezone-row {
+  margin-left: 1.5em;
+  padding-left: 1em;
+  border-left: 2px solid #ddd;
+}
+
+.time-sync-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.time-sync-info p {
+  margin: 0;
+  color: #666;
+  font-size: 0.95em;
+}
+
+.sync-time-btn {
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5em 1em;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background 0.15s;
+  align-self: flex-start;
+}
+
+.sync-time-btn:hover {
+  background: #1976d2;
+}
+
+.sync-time-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
 .form-row {
   display: flex;
   align-items: center;
@@ -762,6 +827,7 @@ h1 {
 .schedule-controls {
   display: flex;
   gap: 0.5em;
+  align-items: center;
 }
 
 .schedule-btn {
@@ -785,6 +851,22 @@ h1 {
 .schedule-btn:active {
   background: #e3f2fd;
   transform: translateY(1px);
+}
+
+/* Schedule control checkboxes */
+.schedule-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.9em;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
+.schedule-controls input[type="checkbox"] {
+  margin: 0;
+  transform: scale(1.1);
 }
 
 .select-all-btn:hover {
@@ -815,7 +897,7 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5em 0.3em;
+  padding: 0.3em 0.2em;
   border: 2px solid #e5e9f0;
   border-radius: 6px;
   font-size: 0.9em;
@@ -823,7 +905,7 @@ h1 {
   cursor: pointer;
   background: white;
   transition: all 0.2s ease;
-  min-height: 2.2em;
+  min-height: 2em;
   box-sizing: border-box;
 }
 
@@ -842,6 +924,27 @@ h1 {
 .hour-box.selected:hover {
   background: #1976d2;
   border-color: #1565c0;
+}
+
+/* Day/night hour indicators */
+.hour-box.day-hour {
+  border-color: #ffc107;
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.3);
+}
+
+.hour-box.night-hour {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.3);
+}
+
+.hour-box.day-hour.selected {
+  border-color: #ff8f00;
+  box-shadow: 0 0 0 2px rgba(255, 143, 0, 0.4);
+}
+
+.hour-box.night-hour.selected {
+  border-color: #0d47a1;
+  box-shadow: 0 0 0 2px rgba(13, 71, 161, 0.4);
 }
 
 /* Home Page Styles */

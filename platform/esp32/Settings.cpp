@@ -21,6 +21,8 @@ static const char *defaultSettingsJson = R"({
   "wifiMode": "sta",
   "ssid": "",
   "pwd": "",
+  "timezone": "UTC",
+  "autoTimezone": true,
   "bands": {
     "160m": {"en": 0, "freq": 1838100, "sched": 16777215},
     "80m": {"en": 0, "freq": 3570100, "sched": 16777215},

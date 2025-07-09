@@ -541,6 +541,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('band-selection-mode').value = s.bandMode;
       }
       
+      // Load timezone settings
+      if (typeof s.autoTimezone === 'boolean') {
+        document.getElementById('auto-timezone').checked = s.autoTimezone;
+      }
+      if (s.timezone) {
+        document.getElementById('timezone-select').value = s.timezone;
+      }
+      
+      // Update timezone UI visibility
+      updateTimezoneUI();
+      
       // Load band configurations
       if (s.bands) {
         loadBandConfiguration(s.bands);
@@ -632,6 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pwr: parseInt(powerDbmInput.value, 10) || 0,
         txPct: parseInt(document.getElementById('tx-percent').value, 10) || 0,
         bandMode: document.getElementById('band-selection-mode').value,
+        autoTimezone: document.getElementById('auto-timezone').checked,
+        timezone: document.getElementById('timezone-select').value,
         bands: bands
       };
       
@@ -740,6 +753,142 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Day/Night hour calculation functions
+  function getTimezoneOffset() {
+    const autoTimezone = document.getElementById('auto-timezone');
+    const timezoneSelect = document.getElementById('timezone-select');
+    
+    if (autoTimezone && autoTimezone.checked) {
+      // Auto-detect from locator
+      const locator = document.getElementById('locator').value || 'AA00aa';
+      return estimateTimezoneFromLocator(locator);
+    } else if (timezoneSelect) {
+      // Use manual timezone
+      const timezoneValue = timezoneSelect.value;
+      if (timezoneValue.startsWith('UTC')) {
+        const offset = timezoneValue.slice(3);
+        return offset === '' ? 0 : parseInt(offset);
+      }
+    }
+    return 0; // Default to UTC
+  }
+  
+  function estimateTimezoneFromLocator(locator) {
+    if (locator.length < 4) return 0;
+    
+    // Extract longitude from maidenhead grid
+    const lonField = (locator.charCodeAt(0) - 65) * 20 + (parseInt(locator[2]) * 2) - 180;
+    const lonSquare = (locator.charCodeAt(1) - 65) * 10 + parseInt(locator[3]) - 90;
+    
+    // Rough longitude (center of grid square)
+    const longitude = lonField + lonSquare / 10.0 + 1.0;
+    
+    // Estimate timezone (15 degrees per hour)
+    let offset = Math.round(longitude / 15.0);
+    
+    // Clamp to reasonable range
+    if (offset < -12) offset = -12;
+    if (offset > 12) offset = 12;
+    
+    return offset;
+  }
+  
+  function getDayHours() {
+    const timezoneOffset = getTimezoneOffset();
+    const dayHours = [];
+    
+    // Day hours are 6 AM to 6 PM in local time
+    for (let localHour = 6; localHour < 18; localHour++) {
+      let utcHour = localHour - timezoneOffset;
+      
+      // Handle wrap-around
+      if (utcHour < 0) utcHour += 24;
+      if (utcHour >= 24) utcHour -= 24;
+      
+      dayHours.push(utcHour);
+    }
+    
+    return dayHours;
+  }
+  
+  function getNightHours() {
+    const timezoneOffset = getTimezoneOffset();
+    const nightHours = [];
+    
+    // Night hours are 6 PM to 6 AM in local time
+    for (let localHour = 18; localHour < 30; localHour++) { // 18-29 to handle wrap-around
+      let actualLocalHour = localHour >= 24 ? localHour - 24 : localHour;
+      let utcHour = actualLocalHour - timezoneOffset;
+      
+      // Handle wrap-around
+      if (utcHour < 0) utcHour += 24;
+      if (utcHour >= 24) utcHour -= 24;
+      
+      nightHours.push(utcHour);
+    }
+    
+    return nightHours;
+  }
+  
+  function updateTimezoneUI() {
+    const autoTimezone = document.getElementById('auto-timezone');
+    const manualTimezoneRow = document.getElementById('manual-timezone-row');
+    const timezoneDisplay = document.getElementById('current-timezone-display');
+    
+    if (autoTimezone && manualTimezoneRow) {
+      manualTimezoneRow.style.display = autoTimezone.checked ? 'none' : 'block';
+    }
+    
+    // Update timezone display
+    if (timezoneDisplay) {
+      const offset = getTimezoneOffset();
+      const locator = document.getElementById('locator').value || 'AA00aa';
+      
+      if (autoTimezone && autoTimezone.checked) {
+        timezoneDisplay.textContent = `UTC${offset >= 0 ? '+' : ''}${offset} (auto-detected from ${locator})`;
+      } else {
+        const manualValue = document.getElementById('timezone-select').value;
+        timezoneDisplay.textContent = `${manualValue} (manual)`;
+      }
+    }
+  }
+  
+  function updateScheduleCheckboxes(bandName) {
+    const scheduleDiv = document.querySelector(`#schedule-${bandName}`);
+    if (!scheduleDiv) return;
+    
+    const allHourBoxes = scheduleDiv.querySelectorAll('.hour-box');
+    const selectedHours = Array.from(allHourBoxes).filter(box => box.classList.contains('selected'));
+    
+    // Update All checkbox
+    const selectAllCheckbox = document.querySelector(`.select-all-checkbox[data-band="${bandName}"]`);
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = selectedHours.length === allHourBoxes.length;
+    }
+    
+    // Update Day checkbox
+    const dayHoursCheckbox = document.querySelector(`.day-hours-checkbox[data-band="${bandName}"]`);
+    if (dayHoursCheckbox) {
+      const dayHours = getDayHours();
+      const selectedDayHours = dayHours.filter(hour => {
+        const hourBox = scheduleDiv.querySelector(`[data-hour="${hour}"]`);
+        return hourBox && hourBox.classList.contains('selected');
+      });
+      dayHoursCheckbox.checked = selectedDayHours.length === dayHours.length;
+    }
+    
+    // Update Night checkbox
+    const nightHoursCheckbox = document.querySelector(`.night-hours-checkbox[data-band="${bandName}"]`);
+    if (nightHoursCheckbox) {
+      const nightHours = getNightHours();
+      const selectedNightHours = nightHours.filter(hour => {
+        const hourBox = scheduleDiv.querySelector(`[data-hour="${hour}"]`);
+        return hourBox && hourBox.classList.contains('selected');
+      });
+      nightHoursCheckbox.checked = selectedNightHours.length === nightHours.length;
+    }
+  }
+
   // Band configuration functions
   function loadBandConfiguration(bands) {
     const container = document.getElementById('band-config');
@@ -796,25 +945,47 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="schedule-header">
               <label>Active Hours (UTC):</label>
               <div class="schedule-controls">
-                <button type="button" class="schedule-btn select-all-btn" data-band="${bandName}" title="Select all 24 hours for ${bandName}">Select All</button>
-                <button type="button" class="schedule-btn select-none-btn" data-band="${bandName}" title="Clear all hours for ${bandName}">Select None</button>
+                <label class="schedule-toggle" title="Select all 24 hours for ${bandName}">
+                  <input type="checkbox" class="schedule-checkbox select-all-checkbox" data-band="${bandName}">
+                  <span class="schedule-label">All</span>
+                </label>
+                <label class="schedule-toggle" title="Toggle day hours (6AM-6PM local time) for ${bandName}">
+                  <input type="checkbox" class="schedule-checkbox day-hours-checkbox" data-band="${bandName}">
+                  <span class="schedule-label">☀️ Day</span>
+                </label>
+                <label class="schedule-toggle" title="Toggle night hours (6PM-6AM local time) for ${bandName}">
+                  <input type="checkbox" class="schedule-checkbox night-hours-checkbox" data-band="${bandName}">
+                  <span class="schedule-label">🌙 Night</span>
+                </label>
               </div>
             </div>
             <div class="schedule-hours" id="schedule-${bandName}">
               <div class="hour-group">
-                ${Array.from({length: 12}, (_, hour) => `
-                  <div class="hour-box ${(bandConfig.sched & (1 << hour)) ? 'selected' : ''}" 
-                       data-hour="${hour}" 
-                       title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
-                    ${hour.toString().padStart(2, '0')}
-                  </div>
-                `).join('')}
+                ${Array.from({length: 12}, (_, hour) => {
+                  const dayHours = getDayHours();
+                  const nightHours = getNightHours();
+                  const isDayHour = dayHours.includes(hour);
+                  const isNightHour = nightHours.includes(hour);
+                  const hourClass = isDayHour ? 'day-hour' : (isNightHour ? 'night-hour' : '');
+                  return `
+                    <div class="hour-box ${(bandConfig.sched & (1 << hour)) ? 'selected' : ''} ${hourClass}" 
+                         data-hour="${hour}" 
+                         title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
+                      ${hour.toString().padStart(2, '0')}
+                    </div>
+                  `;
+                }).join('')}
               </div>
               <div class="hour-group">
                 ${Array.from({length: 12}, (_, i) => {
                   const hour = i + 12;
+                  const dayHours = getDayHours();
+                  const nightHours = getNightHours();
+                  const isDayHour = dayHours.includes(hour);
+                  const isNightHour = nightHours.includes(hour);
+                  const hourClass = isDayHour ? 'day-hour' : (isNightHour ? 'night-hour' : '');
                   return `
-                    <div class="hour-box ${(bandConfig.sched & (1 << hour)) ? 'selected' : ''}" 
+                    <div class="hour-box ${(bandConfig.sched & (1 << hour)) ? 'selected' : ''} ${hourClass}" 
                          data-hour="${hour}" 
                          title="Enable transmission during hour ${hour.toString().padStart(2, '0')}:00-${hour.toString().padStart(2, '0')}:59 UTC">
                       ${hour.toString().padStart(2, '0')}
@@ -834,34 +1005,71 @@ document.addEventListener('DOMContentLoaded', () => {
       hourBoxes.forEach(box => {
         box.addEventListener('click', function() {
           this.classList.toggle('selected');
+          updateScheduleCheckboxes(bandName);
           markSettingsChanged();
         });
       });
       
-      // Add Select All button functionality
-      const selectAllBtn = bandDiv.querySelector('.select-all-btn');
-      if (selectAllBtn) {
-        selectAllBtn.addEventListener('click', (e) => {
-          e.preventDefault();
+      // Add Select All checkbox functionality
+      const selectAllCheckbox = bandDiv.querySelector('.select-all-checkbox');
+      if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => {
           const scheduleDiv = bandDiv.querySelector(`#schedule-${bandName}`);
           const allHourBoxes = scheduleDiv.querySelectorAll('.hour-box');
-          allHourBoxes.forEach(box => {
-            box.classList.add('selected');
-          });
+          
+          if (e.target.checked) {
+            allHourBoxes.forEach(box => box.classList.add('selected'));
+          } else {
+            allHourBoxes.forEach(box => box.classList.remove('selected'));
+          }
+          
+          updateScheduleCheckboxes(bandName);
           markSettingsChanged();
         });
       }
       
-      // Add Select None button functionality
-      const selectNoneBtn = bandDiv.querySelector('.select-none-btn');
-      if (selectNoneBtn) {
-        selectNoneBtn.addEventListener('click', (e) => {
-          e.preventDefault();
+      // Add Day Hours checkbox functionality
+      const dayHoursCheckbox = bandDiv.querySelector('.day-hours-checkbox');
+      if (dayHoursCheckbox) {
+        dayHoursCheckbox.addEventListener('change', (e) => {
           const scheduleDiv = bandDiv.querySelector(`#schedule-${bandName}`);
-          const allHourBoxes = scheduleDiv.querySelectorAll('.hour-box');
-          allHourBoxes.forEach(box => {
-            box.classList.remove('selected');
+          const dayHours = getDayHours();
+          
+          dayHours.forEach(hour => {
+            const hourBox = scheduleDiv.querySelector(`[data-hour="${hour}"]`);
+            if (hourBox) {
+              if (e.target.checked) {
+                hourBox.classList.add('selected');
+              } else {
+                hourBox.classList.remove('selected');
+              }
+            }
           });
+          
+          updateScheduleCheckboxes(bandName);
+          markSettingsChanged();
+        });
+      }
+      
+      // Add Night Hours checkbox functionality
+      const nightHoursCheckbox = bandDiv.querySelector('.night-hours-checkbox');
+      if (nightHoursCheckbox) {
+        nightHoursCheckbox.addEventListener('change', (e) => {
+          const scheduleDiv = bandDiv.querySelector(`#schedule-${bandName}`);
+          const nightHours = getNightHours();
+          
+          nightHours.forEach(hour => {
+            const hourBox = scheduleDiv.querySelector(`[data-hour="${hour}"]`);
+            if (hourBox) {
+              if (e.target.checked) {
+                hourBox.classList.add('selected');
+              } else {
+                hourBox.classList.remove('selected');
+              }
+            }
+          });
+          
+          updateScheduleCheckboxes(bandName);
           markSettingsChanged();
         });
       }
@@ -949,4 +1157,23 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     return defaults[bandName] || 14097100;
   }
+  
+  // Add timezone event listeners
+  const autoTimezoneCheckbox = document.getElementById('auto-timezone');
+  if (autoTimezoneCheckbox) {
+    autoTimezoneCheckbox.addEventListener('change', () => {
+      updateTimezoneUI();
+      markSettingsChanged();
+    });
+  }
+  
+  const timezoneSelect = document.getElementById('timezone-select');
+  if (timezoneSelect) {
+    timezoneSelect.addEventListener('change', () => {
+      markSettingsChanged();
+    });
+  }
+  
+  // Initialize timezone UI
+  updateTimezoneUI();
 });

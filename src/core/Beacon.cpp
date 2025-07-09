@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
+#include <cmath>
 #include "cJSON.h"
 
 
@@ -22,6 +23,7 @@ Beacon::Beacon(AppContext* ctx)
       scheduler(ctx->timer, ctx->settings, ctx->logger),
       running(false),
       lastTimeSync(0),
+      timezoneOffset(0),
       bandSelectionMode(BandSelectionMode::SEQUENTIAL),
       currentBandIndex(0),
       currentHour(-1),
@@ -141,6 +143,9 @@ void Beacon::loadAndValidateSettings() {
     
     // Initialize random number generator for band selection
     srand(time(nullptr));
+    
+    // Detect timezone for day/night scheduling
+    detectTimezone();
     
     // Initialize current band based on settings
     initializeCurrentBand();
@@ -298,7 +303,8 @@ void Beacon::onSettingsChanged() {
     
     try {
         // Re-run configuration phase
-        loadAndValidateSettings();
+        detectTimezone();  // Update timezone first
+        initializeCurrentBand();  // Then update band selection
         
         // Restart scheduler if network is ready
         if (fsm.getNetworkState() == FSM::NetworkState::READY) {
@@ -656,7 +662,7 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
     uint32_t scheduleBitmap = (uint32_t)getBandInt(band, "sched", 0xFFFFFF);
     bool hourEnabled = (scheduleBitmap & (1 << hour)) != 0;
     
-    ctx->logger->logInfo("BEACON", "  Band %s schedule: 0x%08X, hour %d enabled: %d", 
+    ctx->logger->logInfo("BEACON", "  Band %s schedule: 0x%08X, UTC hour %d enabled: %d", 
                        band, scheduleBitmap, hour, hourEnabled);
     
     return hourEnabled;
@@ -675,6 +681,69 @@ int Beacon::getEnabledBandCount() {
     }
     return count;
 }
+
+// Timezone and day/night methods
+void Beacon::detectTimezone() {
+    if (!ctx->settings) return;
+    
+    bool autoTimezone = ctx->settings->getInt("autoTimezone", 1);
+    
+    if (autoTimezone) {
+        // Try to detect timezone from location (maidenhead grid)
+        const char* locator = ctx->settings->getString("loc", "AA00aa");
+        
+        // Simple timezone estimation based on longitude from maidenhead
+        // This is a rough approximation - could be improved with a proper timezone database
+        if (strlen(locator) >= 4) {
+            // Extract longitude from maidenhead grid
+            int lonField = (locator[0] - 'A') * 20 + (locator[2] - '0') * 2 - 180;
+            int lonSquare = (locator[1] - 'A') * 10 + (locator[3] - '0') - 90;
+            
+            // Rough longitude (center of grid square)
+            float longitude = lonField + lonSquare / 10.0f + 1.0f;
+            
+            // Estimate timezone (15 degrees per hour)
+            timezoneOffset = (int)round(longitude / 15.0f);
+            
+            // Clamp to reasonable range
+            if (timezoneOffset < -12) timezoneOffset = -12;
+            if (timezoneOffset > 12) timezoneOffset = 12;
+            
+            ctx->logger->logInfo("BEACON", "Auto-detected timezone: UTC%+d from locator %s", timezoneOffset, locator);
+        }
+    } else {
+        // Use manual timezone setting
+        const char* timezone = ctx->settings->getString("timezone", "UTC");
+        // Parse timezone string (e.g., "UTC+5", "UTC-8", "UTC")
+        if (strncmp(timezone, "UTC", 3) == 0) {
+            if (strlen(timezone) > 3) {
+                timezoneOffset = atoi(&timezone[3]);
+            } else {
+                timezoneOffset = 0;
+            }
+        }
+        
+        ctx->logger->logInfo("BEACON", "Using manual timezone: %s (UTC%+d)", timezone, timezoneOffset);
+    }
+}
+
+bool Beacon::isLocalDaylight(time_t utcTime) {
+    // Convert UTC to local time
+    time_t localTime = utcTime + (timezoneOffset * 3600);
+    struct tm* localTm = gmtime(&localTime);
+    
+    // Simple daylight detection: 6 AM to 6 PM local time
+    // This could be improved with sunrise/sunset calculations
+    int hour = localTm->tm_hour;
+    return (hour >= 6 && hour < 18);
+}
+
+int Beacon::getLocalHour(time_t utcTime) {
+    time_t localTime = utcTime + (timezoneOffset * 3600);
+    struct tm* localTm = gmtime(&localTime);
+    return localTm->tm_hour;
+}
+
 
 
 
