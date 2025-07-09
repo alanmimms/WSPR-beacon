@@ -190,8 +190,16 @@ void Beacon::onTransmissionEnd() {
 }
 
 void Beacon::onSettingsChanged() {
-    ctx->logger->logInfo("Settings changed - restarting scheduler");
+    ctx->logger->logInfo("Settings changed - will apply after current transmission");
     
+    // If we're currently transmitting, let it complete naturally
+    // The scheduler will pick up the new settings when it runs after transmission ends
+    if (fsm.getTransmissionState() == FSM::TransmissionState::TRANSMITTING) {
+        ctx->logger->logInfo("Transmission in progress - new settings will take effect on next cycle");
+        return;
+    }
+    
+    // Only restart scheduler if we're not transmitting
     scheduler.cancelCurrentTransmission();
     scheduler.stop();
     
