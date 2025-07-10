@@ -60,7 +60,7 @@ void Beacon::initializeCurrentBand() {
     ctx->logger->logInfo(tag, "initializeCurrentBand: Checking bands for UTC hour %d", hour);
     
     // Find first enabled band for current hour
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 11; i++) {
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             currentBandIndex = i;
             strcpy(currentBand, BAND_NAMES[i]);
@@ -306,6 +306,7 @@ void Beacon::onSettingsChanged() {
     try {
         // Re-run configuration phase
         detectTimezone();  // Update timezone first
+        firstTransmission = true;  // Reset to start from first enabled band
         initializeCurrentBand();  // Then update band selection
         
         // Restart scheduler if network is ready
@@ -496,7 +497,7 @@ void Beacon::selectNextBand() {
     
     // Get list of enabled bands for current hour
     std::vector<int> enabledBandIndices;
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 11; i++) {
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             enabledBandIndices.push_back(i);
         }
@@ -577,7 +578,7 @@ void Beacon::selectNextBand() {
             break;
     }
     
-    if (selectedIndex >= 0 && selectedIndex < 9) {
+    if (selectedIndex >= 0 && selectedIndex < 11) {
         currentBandIndex = selectedIndex;
         strcpy(currentBand, BAND_NAMES[selectedIndex]);
         
@@ -674,7 +675,7 @@ void Beacon::resetBandTracking() {
 
 int Beacon::getEnabledBandCount() {
     int count = 0;
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 11; i++) {
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             count++;
         }
@@ -805,7 +806,7 @@ const char* Beacon::predictNextBand(time_t futureTime) const {
     
     // Get list of enabled bands for the future hour
     std::vector<int> enabledBandIndices;
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 11; i++) {
         if (isBandEnabledForHour(BAND_NAMES[i], futureHour)) {
             enabledBandIndices.push_back(i);
         }
@@ -847,7 +848,7 @@ const char* Beacon::predictNextBand(time_t futureTime) const {
             break;
     }
     
-    if (selectedIndex >= 0 && selectedIndex < 9) {
+    if (selectedIndex >= 0 && selectedIndex < 11) {
         return BAND_NAMES[selectedIndex];
     }
     
