@@ -90,10 +90,10 @@ static void initializeDefaultSettings() {
   
   cJSON* bands = cJSON_CreateObject();
   
-  const char* bandNames[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"};
-  const int bandFreqs[] = {1838100, 3570100, 7040100, 10140200, 14097100, 18106100, 21096100, 24926100, 28126100};
+  const char* bandNames[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"};
+  const int bandFreqs[] = {1838100, 3570100, 7040100, 10140200, 14097100, 18106100, 21096100, 24926100, 28126100, 50293000, 144489000};
   
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 11; i++) {
     cJSON* band = cJSON_CreateObject();
     cJSON_AddBoolToObject(band, "en", false);
     cJSON_AddNumberToObject(band, "freq", bandFreqs[i]);
@@ -205,9 +205,9 @@ static void initializeDefaultStatus() {
   
   // Create bands stats object
   cJSON* bands = cJSON_CreateObject();
-  const char* bandNames[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"};
+  const char* bandNames[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"};
   
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 11; i++) {
     cJSON* band = cJSON_CreateObject();
     cJSON_AddNumberToObject(band, "txCnt", 0);
     cJSON_AddNumberToObject(band, "txMin", 0);

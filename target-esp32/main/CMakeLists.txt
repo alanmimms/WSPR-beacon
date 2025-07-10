@@ -38,7 +38,7 @@ idf_component_register(
     esp_event
 
     # Local Project Components
-    cjson
+    json
     dns-server
     jtencode
     si5351

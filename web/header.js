@@ -71,7 +71,9 @@ class HeaderManager {
       '17m': '18.106100 MHz',
       '15m': '21.096100 MHz',
       '12m': '24.926100 MHz',
-      '10m': '28.126100 MHz'
+      '10m': '28.126100 MHz',
+      '6m': '50.293000 MHz',
+      '2m': '144.489000 MHz'
     };
     return frequencies[band] || 'Unknown';
   }

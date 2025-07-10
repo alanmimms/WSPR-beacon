@@ -26,7 +26,9 @@
       "17m": {"txCnt": 75, "txMin": 2700},
       "15m": {"txCnt": 165, "txMin": 5940},
       "12m": {"txCnt": 0, "txMin": 0},
-      "10m": {"txCnt": 0, "txMin": 0}
+      "10m": {"txCnt": 0, "txMin": 0},
+      "6m": {"txCnt": 0, "txMin": 0},
+      "2m": {"txCnt": 0, "txMin": 0}
     }
   }
 }

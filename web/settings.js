@@ -898,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     container.innerHTML = '';
     
-    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m'];
     
     bandOrder.forEach(bandName => {
       const rawBandConfig = bands[bandName] || {
@@ -1088,7 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   function collectBandConfiguration() {
     const bands = {};
-    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m'];
     
     let missingCount = 0;
     
@@ -1153,7 +1153,9 @@ document.addEventListener('DOMContentLoaded', () => {
       '17m': 18106100,
       '15m': 21096100,
       '12m': 24926100,
-      '10m': 28126100
+      '10m': 28126100,
+      '6m': 50293000,
+      '2m': 144489000
     };
     return defaults[bandName] || 14097100;
   }

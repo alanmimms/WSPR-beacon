@@ -89,7 +89,7 @@ private:
     int currentBandIndex;
     char currentBand[8];
     int currentHour;
-    bool usedBands[9];  // For tracking used bands in random mode (160m through 10m)
+    bool usedBands[11];  // For tracking used bands in random mode (160m through 2m)
     bool firstTransmission;  // Track if this is the first transmission after initialization
     
     // WSPR modulation state
@@ -98,8 +98,8 @@ private:
     uint32_t baseFrequency;
     bool modulationActive;
     
-    static constexpr const char* BAND_NAMES[9] = {
-        "160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"
+    static constexpr const char* BAND_NAMES[11] = {
+        "160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"
     };
     
     static constexpr const char* DEFAULT_SETTINGS_JSON = 
