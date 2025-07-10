@@ -898,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     container.innerHTML = '';
     
-    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m'];
+    const bandOrder = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m'];
     
     bandOrder.forEach(bandName => {
       const rawBandConfig = bands[bandName] || {
@@ -1088,7 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   function collectBandConfiguration() {
     const bands = {};
-    const bandOrder = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m'];
+    const bandOrder = ['160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m', '6m', '2m'];
     
     let missingCount = 0;
     
@@ -1145,19 +1145,20 @@ document.addEventListener('DOMContentLoaded', () => {
   
   function getDefaultFrequency(bandName) {
     const defaults = {
-      '160m': 1838100,
-      '80m': 3570100,
-      '40m': 7040100,
-      '30m': 10140200,
-      '20m': 14097100,
-      '17m': 18106100,
-      '15m': 21096100,
-      '12m': 24926100,
-      '10m': 28126100,
+      '160m': 1836600,
+      '80m': 3568600,
+      '60m': 5287200,
+      '40m': 7038600,
+      '30m': 10138700,
+      '20m': 14095600,
+      '17m': 18104600,
+      '15m': 21094600,
+      '12m': 24924600,
+      '10m': 28124600,
       '6m': 50293000,
-      '2m': 144489000
+      '2m': 144488500
     };
-    return defaults[bandName] || 14097100;
+    return defaults[bandName] || 14095600;
   }
   
   // Add timezone event listeners

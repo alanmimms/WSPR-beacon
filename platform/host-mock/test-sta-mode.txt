@@ -18,6 +18,7 @@
     "bands": {
       "160m": {"txCnt": 0, "txMin": 0},
       "80m": {"txCnt": 2, "txMin": 4},
+      "60m": {"txCnt": 0, "txMin": 0},
       "40m": {"txCnt": 6, "txMin": 12},
       "30m": {"txCnt": 1, "txMin": 2},
       "20m": {"txCnt": 3, "txMin": 6},

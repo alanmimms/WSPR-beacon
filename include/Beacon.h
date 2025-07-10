@@ -84,12 +84,16 @@ private:
     time_t lastTimeSync;
     int timezoneOffset;  // Hours offset from UTC (-12 to +12)
     
+    static constexpr const char* BAND_NAMES[12] = {
+        "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"
+    };
+    
     // Band selection state
     BandSelectionMode bandSelectionMode;
     int currentBandIndex;
     char currentBand[8];
     int currentHour;
-    bool usedBands[11];  // For tracking used bands in random mode (160m through 2m)
+    bool usedBands[sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0])];  // For tracking used bands in random mode
     bool firstTransmission;  // Track if this is the first transmission after initialization
     
     // WSPR modulation state
@@ -97,10 +101,6 @@ private:
     int currentSymbolIndex;
     uint32_t baseFrequency;
     bool modulationActive;
-    
-    static constexpr const char* BAND_NAMES[11] = {
-        "160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"
-    };
     
     static constexpr const char* DEFAULT_SETTINGS_JSON = 
         "{"

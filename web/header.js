@@ -63,17 +63,18 @@ class HeaderManager {
   // Get frequency for band (fallback for host-mock)
   getFrequencyForBand(band) {
     const frequencies = {
-      '160m': '1.838100 MHz',
-      '80m': '3.570100 MHz', 
-      '40m': '7.040100 MHz',
-      '30m': '10.140200 MHz',
-      '20m': '14.097100 MHz',
-      '17m': '18.106100 MHz',
-      '15m': '21.096100 MHz',
-      '12m': '24.926100 MHz',
-      '10m': '28.126100 MHz',
+      '160m': '1.836600 MHz',
+      '80m': '3.568600 MHz',
+      '60m': '5.287200 MHz',
+      '40m': '7.038600 MHz',
+      '30m': '10.138700 MHz',
+      '20m': '14.095600 MHz',
+      '17m': '18.104600 MHz',
+      '15m': '21.094600 MHz',
+      '12m': '24.924600 MHz',
+      '10m': '28.124600 MHz',
       '6m': '50.293000 MHz',
-      '2m': '144.489000 MHz'
+      '2m': '144.488500 MHz'
     };
     return frequencies[band] || 'Unknown';
   }

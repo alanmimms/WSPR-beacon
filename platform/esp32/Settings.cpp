@@ -15,7 +15,7 @@ static const char *defaultSettingsJson = R"({
   "call": "N0CALL",
   "loc": "AA00aa",
   "pwr": 10,
-  "txPct": 0,
+  "txPct": 100,
   "txIntervalMinutes": 4,
   "bandMode": "sequential",
   "wifiMode": "sta",
@@ -24,17 +24,18 @@ static const char *defaultSettingsJson = R"({
   "timezone": "UTC",
   "autoTimezone": true,
   "bands": {
-    "160m": {"en": 0, "freq": 1838100, "sched": 16777215},
-    "80m": {"en": 0, "freq": 3570100, "sched": 16777215},
-    "40m": {"en": 0, "freq": 7040100, "sched": 16777215},
-    "30m": {"en": 0, "freq": 10140200, "sched": 16777215},
-    "20m": {"en": 1, "freq": 14097100, "sched": 16777215},
-    "17m": {"en": 0, "freq": 18106100, "sched": 16777215},
-    "15m": {"en": 0, "freq": 21096100, "sched": 16777215},
-    "12m": {"en": 0, "freq": 24926100, "sched": 16777215},
-    "10m": {"en": 0, "freq": 28126100, "sched": 16777215},
+    "160m": {"en": 0, "freq": 1836600, "sched": 16777215},
+    "80m": {"en": 0, "freq": 3568600, "sched": 16777215},
+    "60m": {"en": 0, "freq": 5287200, "sched": 16777215},
+    "40m": {"en": 0, "freq": 7038600, "sched": 16777215},
+    "30m": {"en": 0, "freq": 10138700, "sched": 16777215},
+    "20m": {"en": 1, "freq": 14095600, "sched": 16777215},
+    "17m": {"en": 0, "freq": 18104600, "sched": 16777215},
+    "15m": {"en": 0, "freq": 21094600, "sched": 16777215},
+    "12m": {"en": 0, "freq": 24924600, "sched": 16777215},
+    "10m": {"en": 0, "freq": 28124600, "sched": 16777215},
     "6m": {"en": 0, "freq": 50293000, "sched": 16777215},
-    "2m": {"en": 0, "freq": 144489000, "sched": 16777215}
+    "2m": {"en": 0, "freq": 144488500, "sched": 16777215}
   }
 })";
 

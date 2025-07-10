@@ -60,7 +60,7 @@ void Beacon::initializeCurrentBand() {
     ctx->logger->logInfo(tag, "initializeCurrentBand: Checking bands for UTC hour %d", hour);
     
     // Find first enabled band for current hour
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < (int)(sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0])); i++) {
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             currentBandIndex = i;
             strcpy(currentBand, BAND_NAMES[i]);
@@ -263,7 +263,7 @@ void Beacon::onStateChanged(FSM::NetworkState networkState, FSM::TransmissionSta
     
     // Update WebServer status via platform interface
     if (ctx->webServer && ctx->settings) {
-        uint32_t frequency = getBandInt(currentBand, "freq", 14097100);
+        uint32_t frequency = getBandInt(currentBand, "freq", 14095600);
         ctx->webServer->updateBeaconState(fsm.getNetworkStateString(), fsm.getTransmissionStateString(), currentBand, frequency);
     }
     
@@ -326,7 +326,7 @@ void Beacon::startTransmission() {
     
     if (ctx->settings && ctx->si5351) {
         // Get frequency for selected band
-        uint32_t frequency = getBandInt(currentBand, "freq", 14097100);  // Default to 20m WSPR
+        uint32_t frequency = getBandInt(currentBand, "freq", 14095600);  // Default to 20m WSPR
         
         ctx->logger->logInfo(tag, "Setting up RF for %s band at %.6f MHz", 
                            currentBand, frequency / 1000000.0);
@@ -348,7 +348,7 @@ void Beacon::startTransmission() {
     
     if (ctx->settings) {
         char logMsg[256];
-        uint32_t frequency = getBandInt(currentBand, "freq", 14097100);
+        uint32_t frequency = getBandInt(currentBand, "freq", 14095600);
         
         snprintf(logMsg, sizeof(logMsg), "🟢 TX START: %s, %s, %ddBm on %s (%.6f MHz)",
             ctx->settings->getString("call", "N0CALL"),
@@ -497,7 +497,7 @@ void Beacon::selectNextBand() {
     
     // Get list of enabled bands for current hour
     std::vector<int> enabledBandIndices;
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < (int)(sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0])); i++) {
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             enabledBandIndices.push_back(i);
         }
@@ -578,7 +578,7 @@ void Beacon::selectNextBand() {
             break;
     }
     
-    if (selectedIndex >= 0 && selectedIndex < 11) {
+    if (selectedIndex >= 0 && selectedIndex < (int)(sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0]))) {
         currentBandIndex = selectedIndex;
         strcpy(currentBand, BAND_NAMES[selectedIndex]);
         
@@ -675,7 +675,7 @@ void Beacon::resetBandTracking() {
 
 int Beacon::getEnabledBandCount() {
     int count = 0;
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < (int)(sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0])); i++) {
         if (isBandEnabledForCurrentHour(BAND_NAMES[i])) {
             count++;
         }
@@ -763,12 +763,12 @@ Beacon::NextTransmissionInfo Beacon::getNextTransmissionInfo() const {
     const char* nextBand = predictNextBand(nextTxTime);
     if (nextBand) {
         strcpy(info.band, nextBand);
-        info.frequency = getBandInt(nextBand, "freq", 14097100);
+        info.frequency = getBandInt(nextBand, "freq", 14095600);
         info.valid = true;
     } else {
         // Fallback to current band if prediction fails
         strcpy(info.band, currentBand);
-        info.frequency = getBandInt(currentBand, "freq", 14097100);
+        info.frequency = getBandInt(currentBand, "freq", 14095600);
         info.valid = false;
     }
     
@@ -806,7 +806,7 @@ const char* Beacon::predictNextBand(time_t futureTime) const {
     
     // Get list of enabled bands for the future hour
     std::vector<int> enabledBandIndices;
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < (int)(sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0])); i++) {
         if (isBandEnabledForHour(BAND_NAMES[i], futureHour)) {
             enabledBandIndices.push_back(i);
         }
@@ -848,7 +848,7 @@ const char* Beacon::predictNextBand(time_t futureTime) const {
             break;
     }
     
-    if (selectedIndex >= 0 && selectedIndex < 11) {
+    if (selectedIndex >= 0 && selectedIndex < (int)(sizeof(BAND_NAMES) / sizeof(BAND_NAMES[0]))) {
         return BAND_NAMES[selectedIndex];
     }
     
