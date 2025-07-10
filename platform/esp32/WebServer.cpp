@@ -347,8 +347,44 @@ esp_err_t WebServer::apiStatusGetHandler(httpd_req_t *req) {
   } else {
     cJSON_AddNumberToObject(status, "nextTx", 120); // Fallback if nothing available
     cJSON_AddStringToObject(status, "nextTxBand", "20m");
-    cJSON_AddNumberToObject(status, "nextTxFreq", 14097100);
+    cJSON_AddNumberToObject(status, "nextTxFreq", 14095600);
     cJSON_AddBoolToObject(status, "nextTxValid", false);
+  }
+  
+  // Add transmission statistics from settings
+  cJSON *stats = cJSON_CreateObject();
+  if (stats) {
+    // Get total transmission statistics from settings
+    int totalTxCnt = self->settings ? self->settings->getInt("totalTxCnt", 0) : 0;
+    int totalTxMin = self->settings ? self->settings->getInt("totalTxMin", 0) : 0;
+    cJSON_AddNumberToObject(stats, "txCnt", totalTxCnt);
+    cJSON_AddNumberToObject(stats, "txMin", totalTxMin);
+    
+    // Add band-specific stats from settings
+    cJSON *bands = cJSON_CreateObject();
+    if (bands) {
+      const char* bandNames[] = {"160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"};
+      const int numBands = sizeof(bandNames) / sizeof(bandNames[0]);
+      
+      for (int i = 0; i < numBands; i++) {
+        cJSON *band = cJSON_CreateObject();
+        if (band) {
+          // Get band-specific statistics from settings
+          char bandTxCntKey[32], bandTxMinKey[32];
+          snprintf(bandTxCntKey, sizeof(bandTxCntKey), "%sTxCnt", bandNames[i]);
+          snprintf(bandTxMinKey, sizeof(bandTxMinKey), "%sTxMin", bandNames[i]);
+          
+          int bandTxCnt = self->settings ? self->settings->getInt(bandTxCntKey, 0) : 0;
+          int bandTxMin = self->settings ? self->settings->getInt(bandTxMinKey, 0) : 0;
+          
+          cJSON_AddNumberToObject(band, "txCnt", bandTxCnt);
+          cJSON_AddNumberToObject(band, "txMin", bandTxMin);
+          cJSON_AddItemToObject(bands, bandNames[i], band);
+        }
+      }
+      cJSON_AddItemToObject(stats, "bands", bands);
+    }
+    cJSON_AddItemToObject(status, "stats", stats);
   }
   
   // Convert back to JSON string

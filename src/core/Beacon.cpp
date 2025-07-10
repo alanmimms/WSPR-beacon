@@ -382,6 +382,9 @@ void Beacon::endTransmission() {
         ctx->gpio->setOutput(ctx->statusLEDGPIO, true); // LED off (active-low)
         ctx->logger->logInfo(tag, "Status LED OFF (transmission complete)");
     }
+    
+    // Track transmission statistics after successful completion
+    incrementTransmissionStats();
 }
 
 void Beacon::syncTime() {
@@ -947,4 +950,43 @@ void Beacon::modulateSymbol(int symbolIndex) {
     // Output symbol letter with newline for immediate output (A=0, B=1, C=2, D=3)
     char symbolChar = 'A' + symbol;
     putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
+}
+
+void Beacon::incrementTransmissionStats() {
+    if (!ctx->settings) {
+        ctx->logger->logWarn(tag, "Cannot update transmission stats - settings not available");
+        return;
+    }
+    
+    // Get current statistics (RAM-only, not persisted)
+    int totalTxCnt = ctx->settings->getInt("totalTxCnt", 0);
+    int totalTxMin = ctx->settings->getInt("totalTxMin", 0);
+    
+    // Increment totals
+    totalTxCnt++;
+    totalTxMin += 2; // WSPR transmission is ~2 minutes (110.6 seconds)
+    
+    // Update totals (RAM-only, no NVS writes)
+    ctx->settings->setInt("totalTxCnt", totalTxCnt);
+    ctx->settings->setInt("totalTxMin", totalTxMin);
+    
+    // Update band-specific statistics
+    char bandTxCntKey[32], bandTxMinKey[32];
+    snprintf(bandTxCntKey, sizeof(bandTxCntKey), "%sTxCnt", currentBand);
+    snprintf(bandTxMinKey, sizeof(bandTxMinKey), "%sTxMin", currentBand);
+    
+    int bandTxCnt = ctx->settings->getInt(bandTxCntKey, 0);
+    int bandTxMin = ctx->settings->getInt(bandTxMinKey, 0);
+    
+    bandTxCnt++;
+    bandTxMin += 2;
+    
+    ctx->settings->setInt(bandTxCntKey, bandTxCnt);
+    ctx->settings->setInt(bandTxMinKey, bandTxMin);
+    
+    // NOTE: Statistics are kept in RAM only to avoid flash wear
+    // They reset to zero on reboot, which is acceptable for this use case
+    
+    ctx->logger->logInfo(tag, "Updated stats (RAM-only): Total TX=%d (%dmins), %s TX=%d (%dmins)", 
+                        totalTxCnt, totalTxMin, currentBand, bandTxCnt, bandTxMin);
 }

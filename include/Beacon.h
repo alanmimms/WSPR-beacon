@@ -76,6 +76,9 @@ private:
     bool isLocalDaylight(time_t utcTime);
     int getLocalHour(time_t utcTime);
     
+    // Transmission statistics tracking
+    void incrementTransmissionStats();
+    
     AppContext* ctx;
     FSM fsm;
     Scheduler scheduler;
