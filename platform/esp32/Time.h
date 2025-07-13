@@ -28,6 +28,9 @@ public:
   // Returns true if time is considered synchronized by SNTP
   bool isTimeSynced() override;
 
+  // Returns the last successful sync time (0 if never synced)
+  int64_t getLastSyncTime() override;
+
   // Returns the time when this Time object was created (boot time)
   int64_t getStartTime();
 
@@ -38,6 +41,7 @@ private:
   std::chrono::steady_clock::time_point bootTime;
   std::atomic<bool> timeSynced{false};
   std::atomic<int64_t> firstSyncTime{0};
+  std::atomic<int64_t> lastSyncTime{0};
   
   void initializeSNTP();
 };

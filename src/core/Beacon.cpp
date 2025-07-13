@@ -290,16 +290,23 @@ void Beacon::onTransmissionEnd() {
 }
 
 void Beacon::onSettingsChanged() {
-    ctx->logger->logInfo("Settings changed - will apply after current transmission");
+    ctx->logger->logInfo("Settings changed - stopping current transmission and applying immediately");
     
-    // If we're currently transmitting, let it complete naturally
-    // The scheduler will pick up the new settings when it runs after transmission ends
-    if (fsm.getTransmissionState() == FSM::TransmissionState::TRANSMITTING) {
-        ctx->logger->logInfo("Transmission in progress - new settings will take effect on next cycle");
-        return;
+    // Stop any active transmission immediately
+    if (fsm.getTransmissionState() == FSM::TransmissionState::TRANSMITTING || 
+        fsm.getTransmissionState() == FSM::TransmissionState::TX_PENDING) {
+        ctx->logger->logInfo("Stopping active transmission to apply new settings");
+        
+        // Stop WSPR modulation if active
+        if (modulationActive) {
+            stopWSPRModulation();
+        }
+        
+        // Force transition back to IDLE state
+        fsm.transitionToIdle();
     }
     
-    // Orchestrated restart: stop scheduler, reload settings, restart scheduler
+    // Cancel any scheduled transmissions and stop scheduler
     scheduler.cancelCurrentTransmission();
     scheduler.stop();
     
@@ -309,9 +316,10 @@ void Beacon::onSettingsChanged() {
         firstTransmission = true;  // Reset to start from first enabled band
         initializeCurrentBand();  // Then update band selection
         
-        // Restart scheduler if network is ready
+        // Restart scheduler if network is ready - this will immediately check for next transmission opportunity
         if (fsm.getNetworkState() == FSM::NetworkState::READY) {
             scheduler.start();
+            ctx->logger->logInfo("Scheduler restarted - new settings applied, will transmit on next even minute if scheduled");
         }
     } catch (const std::exception& e) {
         ctx->logger->logError("Failed to apply settings changes: %s", e.what());
@@ -390,9 +398,15 @@ void Beacon::endTransmission() {
 void Beacon::syncTime() {
     ctx->logger->logInfo("Syncing time via SNTP");
     
-    if (ctx->timer) {
-        ctx->timer->syncTime();
-        lastTimeSync = time(nullptr);
+    if (ctx->time) {
+        // Use NTP pool servers for time synchronization
+        const char* ntpServer = "pool.ntp.org";
+        if (ctx->time->syncTime(ntpServer)) {
+            lastTimeSync = time(nullptr);
+            ctx->logger->logInfo("Time sync initiated with %s", ntpServer);
+        } else {
+            ctx->logger->logWarn("Failed to initiate time sync");
+        }
     }
 }
 

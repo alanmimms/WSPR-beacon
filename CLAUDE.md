@@ -100,7 +100,7 @@ Precise timing implementation:
 
 #### Real-time Updates
 - **Persistent header**: callsign, locator, power, bold red "TRANSMITTING" state, frequency, UTC time with NTP sync status
-- **Persistent footer**: node name, uptime, WiFi status/RSSI, next TX countdown, "TX: N Mmins" format
+- **Persistent footer**: node name, uptime, WiFi status/RSSI, next TX countdown, "TX: N in Mmins" format
 - **Time acceleration support**: Configurable time scaling for testing (1x to 1000x+)
 - **Dynamic transmission state**: Automatically cycles between IDLE and TRANSMITTING based on schedule
 - **Live countdown timer**: Shows exact seconds until next transmission
@@ -134,7 +134,7 @@ Precise timing implementation:
 - **Bold red transmission state**: Prominent "TRANSMITTING" indicator with pulsing animation
 - **Full-width footer**: Spans entire page width, no wrapping issues
 - **Simplified statistics**: Single-column band layout, removed redundant totals
-- **Improved footer format**: "TX: N Mmins" showing transmission count and actual transmission time
+- **Improved footer format**: "TX: N in Mmins" showing transmission count and actual transmission time
 
 ## Development Patterns
 

@@ -427,12 +427,14 @@ esp_err_t WebServer::apiTimeGetHandler(httpd_req_t *req) {
   int64_t currentTime = self->time->getTime();
   std::string isoTime = formatTimeISO(currentTime);
   bool synced = self->time->isTimeSynced();
+  int64_t lastSync = self->time->getLastSyncTime();
   
-  // Build JSON response
-  char jsonResponse[256];
+  // Build JSON response - convert lastSyncTime to milliseconds for JavaScript Date compatibility
+  char jsonResponse[512];
   snprintf(jsonResponse, sizeof(jsonResponse),
-           "{\"unixTime\":%lld,\"isoTime\":\"%s\",\"synced\":%s}",
-           (long long)currentTime, isoTime.c_str(), synced ? "true" : "false");
+           "{\"unixTime\":%lld,\"isoTime\":\"%s\",\"synced\":%s,\"lastSyncTime\":%lld}",
+           (long long)currentTime, isoTime.c_str(), synced ? "true" : "false", 
+           lastSync > 0 ? (long long)(lastSync * 1000) : 0LL);
   
   httpd_resp_set_type(req, "application/json");
   httpd_resp_send(req, jsonResponse, strlen(jsonResponse));

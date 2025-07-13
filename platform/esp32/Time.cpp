@@ -81,6 +81,10 @@ bool Time::isTimeSynced() {
   return timeSynced.load();
 }
 
+int64_t Time::getLastSyncTime() {
+  return lastSyncTime.load();
+}
+
 int64_t Time::getStartTime() {
   // If we have a first sync time, use that as the effective boot time
   int64_t firstSync = firstSyncTime.load();
@@ -105,6 +109,9 @@ void Time::sntpTimeSyncNotificationCallback(struct timeval *tv) {
   if (instance && tv) {
     ESP_LOGI(TAG, "SNTP time synchronized: %lld", (long long)tv->tv_sec);
     instance->timeSynced.store(true);
+    
+    // Store the last sync time for NTP sync status display
+    instance->lastSyncTime.store(tv->tv_sec);
     
     // Store the first sync time as our reference boot time
     int64_t currentFirstSync = instance->firstSyncTime.load();

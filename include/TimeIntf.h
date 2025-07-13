@@ -26,4 +26,7 @@ public:
 
   // Returns true if time is considered synchronized by SNTP/NTP
   virtual bool isTimeSynced() = 0;
+
+  // Returns the last successful sync time (0 if never synced)
+  virtual int64_t getLastSyncTime() = 0;
 };

@@ -28,6 +28,9 @@ public:
   // Returns true since host mock always uses system time
   bool isTimeSynced() override;
 
+  // Returns the last successful sync time (startup time for host mock)
+  int64_t getLastSyncTime() override;
+
   // Returns the time when this Time object was created (application start)
   int64_t getStartTime() const;
 

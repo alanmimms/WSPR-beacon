@@ -309,7 +309,7 @@ class HeaderManager {
                      status.txCnt || 0;
       const txMinutes = status.stats?.txMin || 
                        status.txMin || 0;
-      this.footerElements.txCount.textContent = `${txCount} ${txMinutes}mins`;
+      this.footerElements.txCount.textContent = `${txCount} in ${txMinutes}mins`;
     }
   }
 

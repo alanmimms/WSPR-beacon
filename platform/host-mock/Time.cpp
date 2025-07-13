@@ -58,6 +58,11 @@ bool Time::isTimeSynced() {
   return timeSynced.load();
 }
 
+int64_t Time::getLastSyncTime() {
+  // Host mock considers start time as sync time
+  return getStartTime();
+}
+
 int64_t Time::getStartTime() const {
   auto duration = startTime.time_since_epoch();
   return std::chrono::duration_cast<std::chrono::seconds>(duration).count();
