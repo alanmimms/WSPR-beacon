@@ -63,6 +63,7 @@ public:
   void calcIQ(int32_t fclk, PLLConfig& pllConf, OutputConfig& outConf);
   void setupPLL(PLL pll, const PLLConfig& conf);
   int setupOutput(uint8_t output, PLL pllSource, DriveStrength driveStrength, const OutputConfig& conf, uint8_t phaseOffset);
+  void setCorrection(int32_t correctionPPM);
 
 private:
   // --- Private Methods ---

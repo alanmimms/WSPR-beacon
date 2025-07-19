@@ -1,5 +1,6 @@
 #include "WebServer.h"
 #include "Beacon.h"
+#include "AppContext.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_vfs.h"
@@ -23,6 +24,10 @@
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define SCRATCH_BUFSIZE (8192)
 static const char *TAG = "WebServer";
+
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
 
 // Global beacon state for status API
 static struct {
@@ -74,10 +79,26 @@ void WebServer::updateBeaconState(const char* netState, const char* txState, con
 }
 
 esp_err_t WebServer::setContentTypeFromFile(httpd_req_t *req, const char *filename) {
-  if (strstr(filename, ".html")) return httpd_resp_set_type(req, "text/html");
-  if (strstr(filename, ".css")) return httpd_resp_set_type(req, "text/css");
-  if (strstr(filename, ".js")) return httpd_resp_set_type(req, "application/javascript");
-  if (strstr(filename, ".ico")) return httpd_resp_set_type(req, "image/x-icon");
+  if (strstr(filename, ".html")) {
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
+    return ESP_OK;
+  }
+  if (strstr(filename, ".css")) {
+    httpd_resp_set_type(req, "text/css");
+    httpd_resp_set_hdr(req, "Cache-Control", "max-age=3600");
+    return ESP_OK;
+  }
+  if (strstr(filename, ".js")) {
+    httpd_resp_set_type(req, "application/javascript");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
+    return ESP_OK;
+  }
+  if (strstr(filename, ".ico")) {
+    httpd_resp_set_type(req, "image/x-icon");
+    httpd_resp_set_hdr(req, "Cache-Control", "max-age=86400");
+    return ESP_OK;
+  }
   return httpd_resp_set_type(req, "text/plain");
 }
 
@@ -644,6 +665,205 @@ esp_err_t WebServer::captivePortalHandler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+esp_err_t WebServer::apiCalibrationStartHandler(httpd_req_t *req) {
+  WebServer* server = static_cast<WebServer*>(req->user_ctx);
+  
+  // Get content length from header
+  char content[256] = {0};
+  size_t recv_size = MIN(req->content_len, sizeof(content) - 1);
+  
+  if (recv_size == 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty request body");
+    return ESP_FAIL;
+  }
+  
+  int ret = httpd_req_recv(req, content, recv_size);
+  if (ret <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+      httpd_resp_send_408(req);
+    } else {
+      httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive request body");
+    }
+    return ESP_FAIL;
+  }
+  content[ret] = '\0';
+  
+  cJSON *json = cJSON_Parse(content);
+  if (!json) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    return ESP_FAIL;
+  }
+  
+  cJSON *frequency = cJSON_GetObjectItem(json, "frequency");
+  if (!cJSON_IsNumber(frequency)) {
+    cJSON_Delete(json);
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing frequency");
+    return ESP_FAIL;
+  }
+  
+  uint32_t freq = (uint32_t)frequency->valueint;
+  ESP_LOGI(TAG, "Starting calibration test signal at %lu Hz", (unsigned long)freq);
+  ESP_LOGD(TAG, "Received JSON: %s", content);
+  
+  // Set calibration mode to prevent TX interference
+  if (server->beacon) {
+    server->beacon->setCalibrationMode(true);
+  }
+  
+  // Use Si5351 from the beacon
+  Si5351Intf* si5351 = server->beacon ? server->beacon->getSi5351() : nullptr;
+  if (si5351) {
+    ESP_LOGI(TAG, "Setting Si5351 CLK0 to %lu Hz", (unsigned long)freq);
+    // First disable output to ensure clean state
+    si5351->enableOutput(0, false);
+    // Set frequency (this calls setupCLK0 which configures PLL and sets drive to MAX)
+    si5351->setFrequency(0, freq);
+    // Enable output
+    ESP_LOGI(TAG, "Enabling Si5351 CLK0 output");
+    si5351->enableOutput(0, true);
+    ESP_LOGI(TAG, "Si5351 calibration signal started successfully");
+  } else {
+    ESP_LOGE(TAG, "Si5351 not available!");
+  }
+  
+  cJSON_Delete(json);
+  
+  httpd_resp_set_type(req, "application/json");
+  const char* response = "{\"status\":\"started\"}";
+  httpd_resp_send(req, response, strlen(response));
+  return ESP_OK;
+}
+
+esp_err_t WebServer::apiCalibrationStopHandler(httpd_req_t *req) {
+  WebServer* server = static_cast<WebServer*>(req->user_ctx);
+  
+  ESP_LOGI(TAG, "Stopping calibration test signal");
+  
+  // Disable calibration mode
+  if (server->beacon) {
+    server->beacon->setCalibrationMode(false);
+  }
+  
+  // Use Si5351 from the beacon
+  Si5351Intf* si5351 = server->beacon ? server->beacon->getSi5351() : nullptr;
+  if (si5351) {
+    si5351->enableOutput(0, false);
+  }
+  
+  httpd_resp_set_type(req, "application/json");
+  const char* response = "{\"status\":\"stopped\"}";
+  httpd_resp_send(req, response, strlen(response));
+  return ESP_OK;
+}
+
+esp_err_t WebServer::apiCalibrationAdjustHandler(httpd_req_t *req) {
+  WebServer* server = static_cast<WebServer*>(req->user_ctx);
+  
+  // Get content length from header
+  char content[256] = {0};
+  size_t recv_size = MIN(req->content_len, sizeof(content) - 1);
+  
+  if (recv_size == 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty request body");
+    return ESP_FAIL;
+  }
+  
+  int ret = httpd_req_recv(req, content, recv_size);
+  if (ret <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+      httpd_resp_send_408(req);
+    } else {
+      httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive request body");
+    }
+    return ESP_FAIL;
+  }
+  content[ret] = '\0';
+  
+  cJSON *json = cJSON_Parse(content);
+  if (!json) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    return ESP_FAIL;
+  }
+  
+  cJSON *frequency = cJSON_GetObjectItem(json, "frequency");
+  if (!cJSON_IsNumber(frequency)) {
+    cJSON_Delete(json);
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing frequency");
+    return ESP_FAIL;
+  }
+  
+  uint32_t freq = (uint32_t)frequency->valueint;
+  ESP_LOGI(TAG, "Adjusting calibration frequency to %lu Hz", (unsigned long)freq);
+  
+  // Use Si5351 from the beacon
+  Si5351Intf* si5351 = server->beacon ? server->beacon->getSi5351() : nullptr;
+  if (si5351) {
+    // Just update frequency, output should already be enabled
+    si5351->setFrequency(0, freq);
+    ESP_LOGD(TAG, "Updated calibration frequency to %lu Hz", (unsigned long)freq);
+  }
+  
+  cJSON_Delete(json);
+  
+  httpd_resp_set_type(req, "application/json");
+  const char* response = "{\"status\":\"adjusted\"}";
+  httpd_resp_send(req, response, strlen(response));
+  return ESP_OK;
+}
+
+esp_err_t WebServer::apiCalibrationCorrectionHandler(httpd_req_t *req) {
+  WebServer* server = static_cast<WebServer*>(req->user_ctx);
+  
+  // Get content length from header
+  char content[256] = {0};
+  size_t recv_size = MIN(req->content_len, sizeof(content) - 1);
+  
+  if (recv_size == 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty request body");
+    return ESP_FAIL;
+  }
+  
+  int ret = httpd_req_recv(req, content, recv_size);
+  if (ret <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+      httpd_resp_send_408(req);
+    } else {
+      httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to receive request body");
+    }
+    return ESP_FAIL;
+  }
+  content[ret] = '\0';
+  
+  cJSON *json = cJSON_Parse(content);
+  if (!json) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    return ESP_FAIL;
+  }
+  
+  cJSON *correction = cJSON_GetObjectItem(json, "correction");
+  if (!cJSON_IsNumber(correction)) {
+    cJSON_Delete(json);
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing correction");
+    return ESP_FAIL;
+  }
+  
+  int32_t correctionPPM = (int32_t)(correction->valuedouble * 1000); // Convert to milli-PPM for Si5351
+  ESP_LOGI(TAG, "Setting Si5351 calibration correction to %ld mPPM", (long)correctionPPM);
+  
+  // Apply calibration to Si5351 - this will be used for future frequency settings
+  Si5351Intf* si5351 = server->beacon ? server->beacon->getSi5351() : nullptr;
+  if (si5351) {
+    si5351->setCalibration(correctionPPM);
+  }
+  
+  cJSON_Delete(json);
+  
+  httpd_resp_set_type(req, "application/json");
+  const char* response = "{\"status\":\"applied\"}";
+  httpd_resp_send(req, response, strlen(response));
+  return ESP_OK;
+}
+
 void WebServer::start() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.lru_purge_enable = true;
@@ -726,6 +946,39 @@ void WebServer::start() {
     .user_ctx = this
   };
   httpd_register_uri_handler(server, &apiWifiScan);
+
+  // Calibration API endpoints
+  const httpd_uri_t apiCalibrationStart = {
+    .uri = "/api/calibration/start",
+    .method = HTTP_POST,
+    .handler = apiCalibrationStartHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiCalibrationStart);
+
+  const httpd_uri_t apiCalibrationStop = {
+    .uri = "/api/calibration/stop",
+    .method = HTTP_POST,
+    .handler = apiCalibrationStopHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiCalibrationStop);
+
+  const httpd_uri_t apiCalibrationAdjust = {
+    .uri = "/api/calibration/adjust",
+    .method = HTTP_POST,
+    .handler = apiCalibrationAdjustHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiCalibrationAdjust);
+
+  const httpd_uri_t apiCalibrationCorrection = {
+    .uri = "/api/calibration/correction",
+    .method = HTTP_POST,
+    .handler = apiCalibrationCorrectionHandler,
+    .user_ctx = this
+  };
+  httpd_register_uri_handler(server, &apiCalibrationCorrection);
 
   const httpd_uri_t captivePortal1 = {
     .uri = "/generate_204",

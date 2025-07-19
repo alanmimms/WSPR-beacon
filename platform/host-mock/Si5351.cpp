@@ -42,6 +42,10 @@ void Si5351::reset() {
   }
 }
 
+void Si5351::setCalibration(int32_t correction) {
+  printf("[Si5351HostMock] setCalibration correction=%d mPPM\n", correction);
+}
+
 void Si5351::printState() {
   for (int i = 0; i < 3; i++) {
     printf("[Si5351HostMock] channel %d: freq=%.6f Hz, enabled=%d\n", i, freq[i], outputEnabled[i] ? 1 : 0);

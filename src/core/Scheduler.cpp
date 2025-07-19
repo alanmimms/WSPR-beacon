@@ -15,7 +15,8 @@ Scheduler::Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logge
       transmissionEndTimer(nullptr),
       transmissionInProgress(false),
       schedulerActive(false),
-      waitingForNextOpportunity(false)
+      waitingForNextOpportunity(false),
+      calibrationMode(false)
 {}
 
 Scheduler::~Scheduler() {
@@ -139,7 +140,7 @@ void Scheduler::checkTransmissionOpportunity() {
     // Check if we're at an even minute boundary (within first 2 seconds)
     bool isTransmissionOpportunity = (tmNow.tm_min % 2 == 0) && (tmNow.tm_sec < 2);
     
-    if (isTransmissionOpportunity && !transmissionInProgress && !waitingForNextOpportunity) {
+    if (isTransmissionOpportunity && !transmissionInProgress && !waitingForNextOpportunity && !calibrationMode) {
         // This is a transmission opportunity - roll dice
         waitingForNextOpportunity = true; // Prevent multiple checks in same window
         
@@ -192,6 +193,17 @@ void Scheduler::onTransmissionEnd() {
     }
     
     // The periodic timer will automatically handle the next opportunity check
+}
+
+void Scheduler::setCalibrationMode(bool enabled) {
+    calibrationMode = enabled;
+    if (logger) {
+        logger->logInfo(tag, "Calibration mode %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+bool Scheduler::isCalibrationMode() const {
+    return calibrationMode;
 }
 
 // Simple helper to check if band/hour is enabled

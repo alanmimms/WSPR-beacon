@@ -166,13 +166,28 @@ void Si5351::calc(int32_t fclk, PLLConfig& pllConf, OutputConfig& outConf) {
 
   fclk = fclk - (int32_t)((((double)fclk)/100000000.0)*((double)this->correction));
 
-  const int32_t fxtal = 25000000;
+  const int32_t fxtal = CONFIG_SI5351_CRYSTAL_FREQ;
   int32_t a, b, c, x, y, z, t;
 
   if (fclk < 81000000) {
-    a = 36; b = 0; c = 1;
-    int32_t fpll = 900000000;
-    x = fpll/fclk;
+    // For low frequencies, target PLL around 600-900 MHz
+    // Choose a PLL multiplier that gives us a good divisor
+    int32_t target_pll = 600000000;  // Start with 600 MHz target
+    a = target_pll / fxtal;          // Initial multiplier
+    
+    // Find the best integer divisor
+    int32_t fpll = a * fxtal;
+    x = fpll / fclk;
+    
+    // If divisor is too large, increase PLL frequency
+    while (x > 900 && a < 90) {  // Si5351 max multisynth divisor is 900
+      a++;
+      fpll = a * fxtal;
+      x = fpll / fclk;
+    }
+    
+    // Use fractional if needed for better accuracy
+    b = 0; c = 1;
     t = (fclk >> 20) + 1;
     y = (fpll % fclk) / t;
     z = fclk / t;
@@ -200,6 +215,20 @@ void Si5351::setupCLK0(int32_t fclk, DriveStrength driveStrength) {
   PLLConfig pllConf;
   OutputConfig outConf;
   calc(fclk, pllConf, outConf);
+  
+#if 0
+  // Debug logging
+  ESP_LOGI(TAG, "setupCLK0: Target=%ld Hz, Crystal=%d Hz", (long)fclk, CONFIG_SI5351_CRYSTAL_FREQ);
+  ESP_LOGI(TAG, "PLL: mult=%ld, num=%ld, denom=%ld", (long)pllConf.mult, (long)pllConf.num, (long)pllConf.denom);
+  ESP_LOGI(TAG, "Output: div=%ld, num=%ld, denom=%ld", (long)outConf.div, (long)outConf.num, (long)outConf.denom);
+
+  // Calculate actual frequency
+  int64_t pll_freq = ((int64_t)CONFIG_SI5351_CRYSTAL_FREQ * pllConf.mult) + 
+                     ((int64_t)CONFIG_SI5351_CRYSTAL_FREQ * pllConf.num / pllConf.denom);
+  int64_t actual_freq = pll_freq / outConf.div;
+  ESP_LOGI(TAG, "Calculated: PLL=%lld Hz, Output=%lld Hz", (long long)pll_freq, (long long)actual_freq);
+#endif
+  
   setupPLL(PLL::A, pllConf);
   setupOutput(0, PLL::A, driveStrength, outConf, 0);
 }
@@ -214,4 +243,8 @@ void Si5351::setupCLK2(int32_t fclk, DriveStrength driveStrength) {
 
 void Si5351::enableOutputs(uint8_t enabled) {
   write(SI5351_REG_OUTPUT_ENABLE_CONTROL, ~enabled);
+}
+
+void Si5351::setCorrection(int32_t correctionPPM) {
+  correction = correctionPPM;
 }

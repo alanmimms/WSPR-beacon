@@ -1004,3 +1004,14 @@ void Beacon::incrementTransmissionStats() {
     ctx->logger->logInfo(tag, "Updated stats (RAM-only): Total TX=%d (%dmins), %s TX=%d (%dmins)", 
                         totalTxCnt, totalTxMin, currentBand, bandTxCnt, bandTxMin);
 }
+
+void Beacon::setCalibrationMode(bool enabled) {
+    scheduler.setCalibrationMode(enabled);
+    if (ctx->logger) {
+        ctx->logger->logInfo(tag, "Calibration mode %s", enabled ? "enabled" : "disabled");
+    }
+}
+
+bool Beacon::isCalibrationMode() const {
+    return scheduler.isCalibrationMode();
+}

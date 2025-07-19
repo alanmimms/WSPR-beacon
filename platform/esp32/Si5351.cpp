@@ -232,3 +232,23 @@ void Si5351Wrapper::logFrequencyCalculation(int channel, double freqHz, const ch
                      channel, freqHz / 1000000.0, pllInfo, pllFreq / 1000000.0);
   }
 }
+
+void Si5351Wrapper::setCalibration(int32_t correction) {
+  if (!initialized || !hardware) {
+    if (logger) {
+      logger->logError(TAG, "Cannot set calibration - Si5351 not initialized");
+    }
+    return;
+  }
+
+  if (logger) {
+    logger->logInfo(TAG, "Setting Si5351 calibration correction to %d mPPM", correction);
+  }
+
+  Si5351* si5351 = static_cast<Si5351*>(hardware);
+  si5351->setCorrection(correction);
+
+  if (logger) {
+    logger->logInfo(TAG, "Si5351 calibration applied successfully");
+  }
+}

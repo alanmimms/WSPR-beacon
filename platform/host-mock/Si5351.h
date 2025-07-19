@@ -12,6 +12,7 @@ public:
   void setFrequency(int channel, double freqHz) override;
   void enableOutput(int channel, bool enable) override;
   void reset() override;
+  void setCalibration(int32_t correction) override;
 
   // For testing/logging purposes
   void printState();

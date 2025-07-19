@@ -39,6 +39,10 @@ private:
   static esp_err_t apiTimeSyncHandler(httpd_req_t *req);
   static esp_err_t apiLiveStatusHandler(httpd_req_t *req);
   static esp_err_t apiWifiScanHandler(httpd_req_t *req);
+  static esp_err_t apiCalibrationStartHandler(httpd_req_t *req);
+  static esp_err_t apiCalibrationStopHandler(httpd_req_t *req);
+  static esp_err_t apiCalibrationAdjustHandler(httpd_req_t *req);
+  static esp_err_t apiCalibrationCorrectionHandler(httpd_req_t *req);
   static esp_err_t captivePortalHandler(httpd_req_t *req);
   static esp_err_t setContentTypeFromFile(httpd_req_t *req, const char *filename);
 

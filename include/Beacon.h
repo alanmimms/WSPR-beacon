@@ -4,6 +4,7 @@
 #include "FSM.h"
 #include "Scheduler.h"
 #include "JTEncode.h"
+#include "Si5351Intf.h"
 #include <ctime>
 
 class Beacon {
@@ -26,6 +27,13 @@ public:
 
     void run();
     void stop();
+    
+    // Calibration mode support
+    void setCalibrationMode(bool enabled);
+    bool isCalibrationMode() const;
+    
+    // Si5351 access for calibration
+    Si5351Intf* getSi5351() const { return ctx ? ctx->si5351 : nullptr; }
     
     // Next transmission prediction for footer display
     NextTransmissionInfo getNextTransmissionInfo() const;

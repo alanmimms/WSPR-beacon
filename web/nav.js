@@ -2,7 +2,8 @@
 function createNavigation(currentPage = '') {
   const navItems = [
     { id: 'home', href: '/index.html', text: 'Home' },
-    { id: 'settings', href: '/settings.html', text: 'Settings' }
+    { id: 'settings', href: '/settings.html', text: 'Settings' },
+    { id: 'calibration', href: '/calibration.html', text: 'Calibration' }
   ];
 
   return `

@@ -23,6 +23,9 @@ public:
     bool isTransmissionInProgress() const;
     bool isValidTransmissionTime() const;
     
+    void setCalibrationMode(bool enabled);
+    bool isCalibrationMode() const;
+    
     time_t getNextTransmissionTime() const;
     int getSecondsUntilNextTransmission() const;
 
@@ -48,4 +51,5 @@ private:
     bool transmissionInProgress;
     bool schedulerActive;
     bool waitingForNextOpportunity;
+    bool calibrationMode;
 };
