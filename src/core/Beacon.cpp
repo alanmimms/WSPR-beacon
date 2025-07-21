@@ -23,7 +23,7 @@ static const char tag[] = "Beacon";
 Beacon::Beacon(AppContext* ctx)
     : ctx(ctx),
       fsm(),
-      scheduler(ctx->timer, ctx->settings, ctx->logger, ctx->random),
+      scheduler(ctx->timer, ctx->settings, ctx->logger, ctx->random, ctx->time),
       running(false),
       lastTimeSync(0),
       timezoneOffset(0),
@@ -317,7 +317,30 @@ void Beacon::onSettingsChanged() {
         // Restart scheduler if network is ready - this will immediately check for next transmission opportunity
         if (fsm.getNetworkState() == FSM::NetworkState::READY) {
             scheduler.start();
-            ctx->logger->logInfo("Scheduler restarted - new settings applied, will transmit on next even minute if scheduled");
+            
+            // Show actual next transmission time instead of generic message
+            NextTransmissionInfo nextTx = getNextTransmissionInfo();
+            if (nextTx.secondsUntil < 0) {
+                ctx->logger->logInfo(tag, "Scheduler restarted - new settings applied, no transmissions scheduled (txPct=0 or no enabled bands)");
+            } else if (nextTx.secondsUntil == 0) {
+                ctx->logger->logInfo(tag, "Scheduler restarted - new settings applied, ready to transmit on %s @ %.6f MHz", 
+                                   nextTx.band, nextTx.frequency / 1000000.0);
+            } else {
+                int hours = nextTx.secondsUntil / 3600;
+                int minutes = (nextTx.secondsUntil % 3600) / 60;
+                int seconds = nextTx.secondsUntil % 60;
+                
+                if (hours > 0) {
+                    ctx->logger->logInfo(tag, "Scheduler restarted - new settings applied, next TX in %dh %dm on %s @ %.6f MHz", 
+                                       hours, minutes, nextTx.band, nextTx.frequency / 1000000.0);
+                } else if (minutes > 0) {
+                    ctx->logger->logInfo(tag, "Scheduler restarted - new settings applied, next TX in %dm %ds on %s @ %.6f MHz", 
+                                       minutes, seconds, nextTx.band, nextTx.frequency / 1000000.0);
+                } else {
+                    ctx->logger->logInfo(tag, "Scheduler restarted - new settings applied, next TX in %ds on %s @ %.6f MHz", 
+                                       seconds, nextTx.band, nextTx.frequency / 1000000.0);
+                }
+            }
         }
     } catch (const std::exception& e) {
         ctx->logger->logError("Failed to apply settings changes: %s", e.what());
@@ -767,21 +790,29 @@ Beacon::NextTransmissionInfo Beacon::getNextTransmissionInfo() const {
         return info;
     }
     
-    // Get seconds until next transmission opportunity
-    info.secondsUntil = scheduler.getSecondsUntilNextTransmission();
+    // Get seconds until next actual transmission (not just opportunity)
+    info.secondsUntil = scheduler.getSecondsUntilNextActualTransmission();
     
-    // Calculate the future time when transmission will occur
-    int64_t nowTime = ctx->time->getTime();
-    time_t nextTxTime = static_cast<time_t>(nowTime) + info.secondsUntil;
-    
-    // Predict which band will be selected for that time
-    const char* nextBand = predictNextBand(nextTxTime);
-    if (nextBand) {
-        strcpy(info.band, nextBand);
-        info.frequency = getBandInt(nextBand, "freq", 14095600);
-        info.valid = true;
+    // Only calculate future time if transmission is expected
+    if (info.secondsUntil >= 0) {
+        // Calculate the future time when transmission will occur
+        int64_t nowTime = ctx->time->getTime();
+        time_t nextTxTime = static_cast<time_t>(nowTime) + info.secondsUntil;
+        
+        // Predict which band will be selected for that time
+        const char* nextBand = predictNextBand(nextTxTime);
+        if (nextBand) {
+            strcpy(info.band, nextBand);
+            info.frequency = getBandInt(nextBand, "freq", 14095600);
+            info.valid = true;
+        } else {
+            // Fallback to current band if prediction fails
+            strcpy(info.band, currentBand);
+            info.frequency = getBandInt(currentBand, "freq", 14095600);
+            info.valid = false;
+        }
     } else {
-        // Fallback to current band if prediction fails
+        // No transmission expected - use current band for display but mark invalid
         strcpy(info.band, currentBand);
         info.frequency = getBandInt(currentBand, "freq", 14095600);
         info.valid = false;

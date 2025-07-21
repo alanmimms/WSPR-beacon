@@ -292,13 +292,39 @@ class HeaderManager {
           nextFreqMHz = (status.nextTxFreq / 1000000).toFixed(6) + ' MHz';
         }
         
-        if (nextTransmissionIn <= 0) {
+        if (nextTransmissionIn < 0) {
+          // No transmission will occur (txPct = 0 or no enabled bands)
+          this.footerElements.nextTx.textContent = `No TX scheduled`;
+        } else if (nextTransmissionIn <= 0) {
           this.footerElements.nextTx.textContent = `Ready @ ${nextFreqMHz}`;
         } else {
+          // Format time based on duration
+          let timeStr;
           const minutes = Math.floor(nextTransmissionIn / 60);
+          const hours = Math.floor(minutes / 60);
+          const remainingMinutes = minutes % 60;
           const seconds = Math.floor(nextTransmissionIn % 60);
-          const timeStr = nextTransmissionIn < 60 ? `${seconds}s` : `${minutes}m ${seconds}s`;
-          this.footerElements.nextTx.textContent = `${timeStr} @ ${nextFreqMHz}`;
+          
+          if (hours > 0) {
+            // Show hours and minutes for long waits
+            if (remainingMinutes > 0) {
+              timeStr = `${hours}h ${remainingMinutes}m`;
+            } else {
+              timeStr = `${hours}h`;
+            }
+          } else if (minutes > 0) {
+            // Show minutes and seconds for medium waits
+            if (seconds > 0 && minutes < 10) {
+              timeStr = `${minutes}m ${seconds}s`;
+            } else {
+              timeStr = `${minutes}m`;
+            }
+          } else {
+            // Show only seconds for short waits
+            timeStr = `${seconds}s`;
+          }
+          
+          this.footerElements.nextTx.textContent = `Next TX: ${timeStr} @ ${nextFreqMHz}`;
         }
       }
     }
