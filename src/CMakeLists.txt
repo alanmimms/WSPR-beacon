@@ -3,6 +3,7 @@ add_library(beacon_core STATIC
   core/FSM.cpp
   core/Scheduler.cpp
   core/HttpEndpointHandler.cpp
+  core/SettingsBase.cpp
 )
 
 target_include_directories(beacon_core PUBLIC 

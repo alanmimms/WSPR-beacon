@@ -27,6 +27,7 @@ idf_component_register(
     ../../src/core/FSM.cpp
     ../../src/core/Scheduler.cpp
     ../../src/core/HttpEndpointHandler.cpp
+    ../../src/core/SettingsBase.cpp
   REQUIRES 
     # ESP-IDF Framework Components
     esp_http_server

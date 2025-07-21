@@ -132,14 +132,11 @@ void Beacon::waitForPlatformServices() {
 void Beacon::loadAndValidateSettings() {
     ctx->logger->logInfo("Phase 2: Loading and validating settings...");
     
-    // Settings should already be loaded by AppContext, but let's verify
+    // Settings should already be loaded by AppContext, verify they exist
     char* settingsJson = ctx->settings->toJsonString();
     if (!settingsJson) {
         throw std::runtime_error("Failed to load settings");
     }
-    
-    ctx->logger->logInfo("Current settings:");
-    ctx->logger->logInfo(settingsJson);
     free(settingsJson);
     
     // Initialize random number generator for band selection
