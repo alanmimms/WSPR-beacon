@@ -29,4 +29,18 @@ public:
 
   // Returns the last successful sync time (0 if never synced)
   virtual int64_t getLastSyncTime() = 0;
+  
+  // Time utility methods to avoid direct use of C time functions
+  
+  // Convert UNIX timestamp to UTC struct tm, returns true on success
+  virtual bool getUTCTime(int64_t unixTime, struct tm* result) = 0;
+  
+  // Get current UTC hour (0-23)
+  virtual int getCurrentUTCHour() = 0;
+  
+  // Get UTC hour for a specific timestamp
+  virtual int getUTCHour(int64_t unixTime) = 0;
+  
+  // Format time as ISO 8601 string (YYYY-MM-DDTHH:MM:SSZ)
+  virtual const char* formatTimeISO(int64_t unixTime) = 0;
 };

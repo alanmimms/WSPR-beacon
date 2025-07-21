@@ -125,6 +125,41 @@ void Time::sntpTimeSyncNotificationCallback(struct timeval *tv) {
   }
 }
 
+bool Time::getUTCTime(int64_t unixTime, struct tm* result) {
+  if (!result) return false;
+  time_t timeVal = static_cast<time_t>(unixTime);
+  return gmtime_r(&timeVal, result) != nullptr;
+}
+
+int Time::getCurrentUTCHour() {
+  struct tm utc_tm;
+  int64_t now = getTime();
+  if (!getUTCTime(now, &utc_tm)) {
+    return 0;
+  }
+  return utc_tm.tm_hour;
+}
+
+int Time::getUTCHour(int64_t unixTime) {
+  struct tm utc_tm;
+  if (!getUTCTime(unixTime, &utc_tm)) {
+    return 0;
+  }
+  return utc_tm.tm_hour;
+}
+
+const char* Time::formatTimeISO(int64_t unixTime) {
+  struct tm utc_tm;
+  if (!getUTCTime(unixTime, &utc_tm)) {
+    static const char* error = "1970-01-01T00:00:00Z";
+    return error;
+  }
+  
+  static char buffer[32];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc_tm);
+  return buffer;
+}
+
 void Time::initializeSNTP() {
   ESP_LOGI(TAG, "Initializing SNTP client");
   

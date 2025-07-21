@@ -43,7 +43,7 @@ BeaconLogger::BeaconLogger(const std::string& logFileName, LogLevel defaultLogLe
   subsystemLevels["SCHEDULER"] = LOG_LEVEL_SCHEDULER;
   subsystemLevels["NETWORK"] = LOG_LEVEL_NETWORK;
   
-  logBasic("SYSTEM", "Logger initialized for ESP32", "compile_time_config=true");
+  logBasic("SYSTEM", "Logger initialized", "compile_time_config=true");
 #else
   // Host: Use file logging if specified
   fileLogging = !logFileName.empty();

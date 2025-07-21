@@ -23,7 +23,7 @@ static const char tag[] = "Beacon";
 Beacon::Beacon(AppContext* ctx)
     : ctx(ctx),
       fsm(),
-      scheduler(ctx->timer, ctx->settings, ctx->logger),
+      scheduler(ctx->timer, ctx->settings, ctx->logger, ctx->random),
       running(false),
       lastTimeSync(0),
       timezoneOffset(0),
@@ -51,10 +51,8 @@ void Beacon::initializeCurrentBand() {
         return;
     }
     
-    // Get current UTC hour
-    time_t now = time(nullptr);
-    struct tm* utc = gmtime(&now);
-    int hour = utc->tm_hour;
+    // Get current UTC hour using platform time interface
+    int hour = ctx->time->getCurrentUTCHour();
     currentHour = hour;
     
     ctx->logger->logInfo(tag, "initializeCurrentBand: Checking bands for UTC hour %d", hour);
@@ -139,8 +137,11 @@ void Beacon::loadAndValidateSettings() {
     }
     free(settingsJson);
     
-    // Initialize random number generator for band selection
-    srand(time(nullptr));
+    // Initialize random number generator for band selection using platform time
+    if (ctx->random) {
+        int64_t nowTime = ctx->time->getTime();
+        ctx->random->seed(static_cast<uint32_t>(nowTime));
+    }
     
     // Detect timezone for day/night scheduling
     detectTimezone();
@@ -399,7 +400,7 @@ void Beacon::syncTime() {
         // Use NTP pool servers for time synchronization
         const char* ntpServer = "pool.ntp.org";
         if (ctx->time->syncTime(ntpServer)) {
-            lastTimeSync = time(nullptr);
+            lastTimeSync = ctx->time->getTime();
             ctx->logger->logInfo("Time sync initiated with %s", ntpServer);
         } else {
             ctx->logger->logWarn("Failed to initiate time sync");
@@ -408,7 +409,7 @@ void Beacon::syncTime() {
 }
 
 void Beacon::periodicTimeSync() {
-    time_t now = time(nullptr);
+    int64_t now = ctx->time->getTime();
     if ((now - lastTimeSync) > 3600) {
         syncTime();
     }
@@ -454,6 +455,7 @@ bool Beacon::connectToWiFi() {
         password = WIFI_PASSWORD;
         ctx->logger->logInfo("Using hardcoded WiFi credentials for testing");
         #else
+        ctx->logger->logInfo("No WiFi SSID configured in settings");
         return false;
         #endif
     }
@@ -488,10 +490,8 @@ void Beacon::startAccessPoint() {
 void Beacon::selectNextBand() {
     if (!ctx->settings) return;
     
-    // Get current UTC hour
-    time_t now = time(nullptr);
-    struct tm* utc = gmtime(&now);
-    int hour = utc->tm_hour;
+    // Get current UTC hour using platform time interface
+    int hour = ctx->time->getCurrentUTCHour();
     
     // Check if hour has changed - reset tracking if needed
     if (hour != currentHour) {
@@ -585,7 +585,7 @@ void Beacon::selectNextBand() {
                 }
                 
                 // Random selection
-                int randomIdx = rand() % unusedEnabledBands.size();
+                int randomIdx = ctx->random ? ctx->random->randInt(unusedEnabledBands.size()) : 0;
                 selectedIndex = unusedEnabledBands[randomIdx];
                 usedBands[selectedIndex] = true;
             }
@@ -666,10 +666,8 @@ bool Beacon::isBandEnabledForCurrentHour(const char* band) {
         return false;
     }
     
-    // Get current UTC hour
-    time_t now = time(nullptr);
-    struct tm* utc = gmtime(&now);
-    int hour = utc->tm_hour;
+    // Get current UTC hour using platform time interface
+    int hour = ctx->time->getCurrentUTCHour();
     
     // Get schedule bitmap (32-bit integer with bits set for active hours)
     uint32_t scheduleBitmap = (uint32_t)getBandInt(band, "sched", 0xFFFFFF);
@@ -745,7 +743,8 @@ void Beacon::detectTimezone() {
 bool Beacon::isLocalDaylight(time_t utcTime) {
     // Convert UTC to local time
     time_t localTime = utcTime + (timezoneOffset * 3600);
-    struct tm* localTm = gmtime(&localTime);
+    struct tm localTm_buf;
+    struct tm* localTm = gmtime_r(&localTime, &localTm_buf);
     
     // Simple daylight detection: 6 AM to 6 PM local time
     // This could be improved with sunrise/sunset calculations
@@ -755,7 +754,8 @@ bool Beacon::isLocalDaylight(time_t utcTime) {
 
 int Beacon::getLocalHour(time_t utcTime) {
     time_t localTime = utcTime + (timezoneOffset * 3600);
-    struct tm* localTm = gmtime(&localTime);
+    struct tm localTm_buf;
+    struct tm* localTm = gmtime_r(&localTime, &localTm_buf);
     return localTm->tm_hour;
 }
 
@@ -771,7 +771,8 @@ Beacon::NextTransmissionInfo Beacon::getNextTransmissionInfo() const {
     info.secondsUntil = scheduler.getSecondsUntilNextTransmission();
     
     // Calculate the future time when transmission will occur
-    time_t nextTxTime = time(nullptr) + info.secondsUntil;
+    int64_t nowTime = ctx->time->getTime();
+    time_t nextTxTime = static_cast<time_t>(nowTime) + info.secondsUntil;
     
     // Predict which band will be selected for that time
     const char* nextBand = predictNextBand(nextTxTime);
@@ -806,8 +807,7 @@ bool Beacon::isBandEnabledForHour(const char* band, int hour) const {
 const char* Beacon::predictNextBand(time_t futureTime) const {
     if (!ctx->settings) return nullptr;
     
-    struct tm* utc = gmtime(&futureTime);
-    int futureHour = utc->tm_hour;
+    int futureHour = ctx->time->getUTCHour(static_cast<int64_t>(futureTime));
     
     // Get band selection mode from settings
     const char* modeStr = ctx->settings->getString("bandMode", "sequential");
@@ -908,11 +908,12 @@ void Beacon::startWSPRModulation() {
     
     ctx->logger->logInfo(tag, "Starting with symbol %d, freq %.2f Hz offset", 
                        wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
-    // Start the symbol stream visualization using printf with newlines for immediate output
-    printf("WSPR encoding: ");
-    // Output the first symbol (symbol 0)
-    char symbolChar = 'A' + wsprEncoder.symbols[0];
-    putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
+    // Start the symbol stream visualization
+    if (ctx->symbolOutput) {
+        ctx->symbolOutput->startSymbolStream(wsprEncoder.symbols[0]);
+        ctx->symbolOutput->outputSymbolArray(wsprEncoder.symbols, WSPREncoder::TxBufferSize);
+    }
+    ctx->logger->logInfo(tag, "WSPR encoding symbols starting with: %c", 'A' + wsprEncoder.symbols[0]);
     
     // Start platform-specific WSPR modulation
     bool started = ctx->wsprModulator->startModulation([this](int symbolIndex) {
@@ -940,8 +941,11 @@ void Beacon::stopWSPRModulation() {
         ctx->si5351->enableOutput(0, false);
     }
     
-    // End symbol stream with newline
-    putchar('\n'); fflush(stdout); fsync(fileno(stdout));
+    // End symbol stream logging
+    if (ctx->symbolOutput) {
+        ctx->symbolOutput->endSymbolStream();
+    }
+    ctx->logger->logInfo(tag, "WSPR symbol stream completed");
     
     ctx->logger->logInfo(tag, "WSPR modulation stopped after %d symbols", currentSymbolIndex);
 }
@@ -967,9 +971,14 @@ void Beacon::modulateSymbol(int symbolIndex) {
     // Update frequency using glitch-free method
     ctx->si5351->updateChannelFrequencyMinimal(0, symbolFreq);
     
-    // Output symbol letter with newline for immediate output (A=0, B=1, C=2, D=3)
+    // Output symbol through interface
+    if (ctx->symbolOutput) {
+        ctx->symbolOutput->outputSymbol(currentSymbolIndex, symbol);
+    }
+    
+    // Log symbol letter (A=0, B=1, C=2, D=3) - XXX FOR DEBUG
     char symbolChar = 'A' + symbol;
-    putchar(symbolChar); fflush(stdout); fsync(fileno(stdout));
+    ctx->logger->logInfo(tag, "Symbol %d: %c", currentSymbolIndex, symbolChar);
 }
 
 void Beacon::incrementTransmissionStats() {

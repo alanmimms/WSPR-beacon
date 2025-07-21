@@ -3,6 +3,7 @@
 #include "TimerIntf.h"
 #include "SettingsIntf.h"
 #include "LoggerIntf.h"
+#include "RandomIntf.h"
 #include <ctime>
 #include <functional>
 
@@ -10,7 +11,7 @@ class Scheduler {
 public:
     using TransmissionCallback = std::function<void()>;
 
-    explicit Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger = nullptr);
+    explicit Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger = nullptr, RandomIntf* random = nullptr);
     ~Scheduler();
 
     void setTransmissionStartCallback(TransmissionCallback callback);
@@ -41,6 +42,7 @@ private:
     TimerIntf* timer;
     SettingsIntf* settings;
     LoggerIntf* logger;
+    RandomIntf* random;
     
     TimerIntf::Timer* schedulerTimer;
     TimerIntf::Timer* transmissionEndTimer;

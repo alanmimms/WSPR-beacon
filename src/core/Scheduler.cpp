@@ -7,10 +7,11 @@
 static const char tag[] = "Scheduler";
 
 
-Scheduler::Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger)
+Scheduler::Scheduler(TimerIntf* timer, SettingsIntf* settings, LoggerIntf* logger, RandomIntf* random)
     : timer(timer),
       settings(settings),
       logger(logger),
+      random(random),
       schedulerTimer(nullptr),
       transmissionEndTimer(nullptr),
       transmissionInProgress(false),
@@ -145,7 +146,7 @@ void Scheduler::checkTransmissionOpportunity() {
         waitingForNextOpportunity = true; // Prevent multiple checks in same window
         
         int txPercent = settings ? settings->getInt("txPct", 0) : 0;
-        int diceRoll = rand() % 100;
+        int diceRoll = random ? random->randInt(100) : 0;
         bool shouldTransmit = (txPercent > 0) && (diceRoll < txPercent);
         
         // IMPORTANT: NO LOGGING IN TIMER CALLBACK - IT'S NOT SAFE!

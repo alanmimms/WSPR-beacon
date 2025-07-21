@@ -31,6 +31,12 @@ public:
   // Returns the last successful sync time (0 if never synced)
   int64_t getLastSyncTime() override;
 
+  // New time utility methods
+  bool getUTCTime(int64_t unixTime, struct tm* result) override;
+  int getCurrentUTCHour() override;
+  int getUTCHour(int64_t unixTime) override;
+  const char* formatTimeISO(int64_t unixTime) override;
+
   // Returns the time when this Time object was created (boot time)
   int64_t getStartTime();
 

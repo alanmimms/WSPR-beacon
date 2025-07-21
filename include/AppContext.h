@@ -13,6 +13,8 @@
 #include "TimeIntf.h"
 #include "WebServerIntf.h"
 #include "WSPRModulatorIntf.h"
+#include "SymbolOutputIntf.h"
+#include "RandomIntf.h"
 
 struct AppContext {
   LoggerIntf *logger;
@@ -28,6 +30,8 @@ struct AppContext {
   TaskIntf *task;
   EventGroupIntf *eventGroup;
   WSPRModulatorIntf *wsprModulator;
+  SymbolOutputIntf *symbolOutput;
+  RandomIntf *random;
 
   static constexpr int statusLEDGPIO = 8;
 
