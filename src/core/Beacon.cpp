@@ -895,10 +895,19 @@ void Beacon::startWSPRModulation() {
     currentSymbolIndex = 0;
     modulationActive = true;
     
-    // Set initial frequency (symbol 0) - ToneSpacing is in centi-Hz, so divide by 100
+    // Calculate all 4 WSPR frequencies for glitch-free switching
+    double wspr_freqs[4];
+    for (int i = 0; i < 4; i++) {
+        wspr_freqs[i] = baseFrequency + (i * WSPREncoder::ToneSpacing / 100.0); // Convert centi-Hz to Hz
+    }
+    
+    // Setup Si5351 for glitch-free WSPR frequency transitions
     uint32_t initialFreq = baseFrequency + (wsprEncoder.symbols[0] * WSPREncoder::ToneSpacing / 100);
-    ctx->si5351->setFrequency(0, initialFreq);
+    ctx->si5351->setupChannelSmooth(0, initialFreq, wspr_freqs);
     ctx->si5351->enableOutput(0, true);
+    
+    ctx->logger->logInfo(tag, "WSPR frequencies: %.2f, %.2f, %.2f, %.2f Hz", 
+                        wspr_freqs[0], wspr_freqs[1], wspr_freqs[2], wspr_freqs[3]);
     
     ctx->logger->logInfo(tag, "Starting with symbol %d, freq %.2f Hz offset", 
                        wsprEncoder.symbols[0], wsprEncoder.symbols[0] * 1.46);
@@ -958,8 +967,8 @@ void Beacon::modulateSymbol(int symbolIndex) {
     uint8_t symbol = wsprEncoder.symbols[symbolIndex];
     uint32_t symbolFreq = baseFrequency + (symbol * WSPREncoder::ToneSpacing / 100); // Convert centi-Hz to Hz
     
-    // Set the new frequency
-    ctx->si5351->setFrequency(0, symbolFreq);
+    // Update frequency using glitch-free method
+    ctx->si5351->updateChannelFrequencyMinimal(0, symbolFreq);
     
     // Output symbol letter with newline for immediate output (A=0, B=1, C=2, D=3)
     char symbolChar = 'A' + symbol;

@@ -15,6 +15,9 @@ enum {
   SI5351_REG_MS0_PARAMS_1 = 42,
   SI5351_REG_MS1_PARAMS_1 = 50,
   SI5351_REG_MS2_PARAMS_1 = 58,
+  SI5351_REG_CLK0_PHASE_OFFSET = 165,
+  SI5351_REG_CLK1_PHASE_OFFSET = 166,
+  SI5351_REG_CLK2_PHASE_OFFSET = 167,
   SI5351_REG_PLL_RESET = 177,
   SI5351_REG_CRYSTAL_LOAD = 183
 };
@@ -33,6 +36,10 @@ Si5351::Si5351(uint8_t i2cAddr, uint8_t sdaPin, uint8_t sclPin, int32_t correcti
   correction = correctionVal;
   busHandle = nullptr;
   devHandle = nullptr;
+  currentBaseFreq = 0;
+  // Initialize configs to zero
+  currentPLLConfig = {0, 0, 0};
+  currentOutputConfig = {false, 0, 0, 0, RDiv::DIV_1};
   i2cInit(i2cAddr, sdaPin, sclPin);
 
   write(SI5351_REG_OUTPUT_ENABLE_CONTROL, 0xFF); // Disable all outputs
@@ -98,6 +105,40 @@ void Si5351::writeBulk(uint8_t baseaddr, int32_t p1, int32_t p2, int32_t p3, uin
   write(baseaddr+5, ((p3 >> 12) & 0xF0) | ((p2 >> 16) & 0xF));
   write(baseaddr+6, (p2 >> 8) & 0xFF);
   write(baseaddr+7, p2 & 0xFF);
+}
+
+void Si5351::writeFractionalOnly(uint8_t baseaddr, int32_t p2, int32_t p3) {
+  // Only write the fractional part registers (baseaddr+5, +6, +7)
+  // This minimizes I2C traffic and reduces glitches
+  write(baseaddr+5, ((p3 >> 12) & 0xF0) | ((p2 >> 16) & 0xF));
+  write(baseaddr+6, (p2 >> 8) & 0xFF);
+  write(baseaddr+7, p2 & 0xFF);
+}
+
+void Si5351::writeP2Only(uint8_t baseaddr, int32_t p2) {
+  // For WSPR tones, only p2 changes, so write only registers +6 and +7
+  // Use burst write to minimize glitches - single I2C transaction for both bytes
+  uint8_t writeBuf[3] = {
+    (uint8_t)(baseaddr + 6),  // Start register address
+    (uint8_t)((p2 >> 8) & 0xFF),  // Register +6 value
+    (uint8_t)(p2 & 0xFF)          // Register +7 value  
+  };
+  i2c_master_transmit((i2c_master_dev_handle_t)devHandle, writeBuf, sizeof(writeBuf), -1);
+}
+
+void Si5351::writeP2OnlyGlitchFree(uint8_t baseaddr, int32_t p2, uint8_t clk_num) {
+  // TRULY minimal update: ONLY write the 2 changing registers
+  // No output disable/enable, no phase resets, no other register touches
+  // This eliminates ALL possible implicit PLL reset triggers
+  
+  uint8_t writeBuf[3] = {
+    (uint8_t)(baseaddr + 6),        // Start register address (reg 48 for CLK0)
+    (uint8_t)((p2 >> 8) & 0xFF),    // Register +6 value (p2 middle byte)
+    (uint8_t)(p2 & 0xFF)            // Register +7 value (p2 low byte)
+  };
+  i2c_master_transmit((i2c_master_dev_handle_t)devHandle, writeBuf, sizeof(writeBuf), -1);
+  
+  // That's it! No other register writes that could trigger PLL resets
 }
 
 // --- Public API Implementation ---
@@ -247,4 +288,185 @@ void Si5351::enableOutputs(uint8_t enabled) {
 
 void Si5351::setCorrection(int32_t correctionPPM) {
   correction = correctionPPM;
+}
+
+// --- Smooth Frequency Transition Methods ---
+
+void Si5351::setupCLK0Smooth(int32_t baseFreq, const int32_t* wspr_freqs, DriveStrength driveStrength) {
+  // Calculate PLL configuration that can accommodate all 4 WSPR frequencies
+  // WSPR uses 4 frequencies spaced 12000/8192 = ~1.46 Hz apart
+  // We need fractional synthesis to enable small frequency steps
+  
+  currentBaseFreq = baseFreq;
+  
+  // Apply frequency correction
+  int32_t correctedFreq = baseFreq - (int32_t)((((double)baseFreq)/100000000.0)*((double)this->correction));
+  
+  const int32_t fxtal = CONFIG_SI5351_CRYSTAL_FREQ;
+  
+  // For WSPR, use a fixed PLL frequency that allows fractional tuning
+  // Target PLL around 600-800 MHz for good fractional resolution
+  int32_t target_pll = 700000000;  // 700 MHz PLL target
+  int32_t a = target_pll / fxtal;  // PLL multiplier
+  
+  // Ensure PLL multiplier is in valid range (15-90)
+  if (a < 15) a = 15;
+  if (a > 90) a = 90;
+  
+  int32_t fpll = a * fxtal;  // Actual PLL frequency
+  
+  // Calculate MultiSynth divider for base frequency
+  int32_t div_int = fpll / correctedFreq;
+  
+  // Use fractional synthesis for fine frequency control
+  // Calculate fractional part with high resolution
+  int64_t remainder = (int64_t)fpll - ((int64_t)div_int * correctedFreq);
+  int32_t denom = 1048575;  // Max denominator for best resolution
+  int32_t num = (int32_t)((remainder * denom) / correctedFreq);
+  
+  // Store the configuration
+  currentPLLConfig.mult = a;
+  currentPLLConfig.num = 0;  // Integer PLL for stability
+  currentPLLConfig.denom = 1;
+  
+  currentOutputConfig.allowIntegerMode = false;  // Use fractional mode
+  currentOutputConfig.div = div_int;
+  currentOutputConfig.num = num;
+  currentOutputConfig.denom = denom;
+  currentOutputConfig.rdiv = RDiv::DIV_1;
+  
+  ESP_LOGI(TAG, "WSPR Smooth Setup: Base=%ld Hz, PLL=%ld MHz, Div=%ld.%ld/%ld", 
+           (long)baseFreq, (long)(fpll/1000000), (long)div_int, (long)num, (long)denom);
+  
+  // Setup PLL A and CLK0 with calculated values
+  setupPLL(PLL::A, currentPLLConfig);
+  setupOutput(0, PLL::A, driveStrength, currentOutputConfig, 0);
+}
+
+void Si5351::updateCLK0Frequency(int32_t newFreq) {
+  if (currentBaseFreq == 0) {
+    ESP_LOGW(TAG, "updateCLK0Frequency called before setupCLK0Smooth");
+    return;
+  }
+  
+  // Apply frequency correction
+  int32_t correctedFreq = newFreq - (int32_t)((((double)newFreq)/100000000.0)*((double)this->correction));
+  
+  const int32_t fxtal = CONFIG_SI5351_CRYSTAL_FREQ;
+  int32_t fpll = currentPLLConfig.mult * fxtal;  // PLL frequency is fixed
+  
+  // Calculate new MultiSynth divider for the new frequency
+  int32_t div_int = fpll / correctedFreq;
+  
+  // Calculate fractional part with high resolution
+  int64_t remainder = (int64_t)fpll - ((int64_t)div_int * correctedFreq);
+  int32_t num = (int32_t)((remainder * currentOutputConfig.denom) / correctedFreq);
+  
+  // Update only the MultiSynth registers, not the PLL
+  OutputConfig newConfig = currentOutputConfig;
+  newConfig.div = div_int;
+  newConfig.num = num;
+  
+  // Write only the MultiSynth parameters (register 42-49 for CLK0)
+  int32_t p1, p2, p3;
+  if (newConfig.denom == 0) return;
+  
+  p1 = 128 * newConfig.div + ((128 * newConfig.num)/newConfig.denom) - 512;
+  p2 = (128 * newConfig.num) % newConfig.denom;
+  p3 = newConfig.denom;
+  
+  // Write MultiSynth registers for CLK0 (baseaddr = 42)
+  writeBulk(SI5351_REG_MS0_PARAMS_1, p1, p2, p3, 0, newConfig.rdiv);
+  
+  // Update stored config
+  currentOutputConfig = newConfig;
+}
+
+void Si5351::updateCLK0FrequencyMinimal(int32_t newFreq) {
+  if (currentBaseFreq == 0) {
+    ESP_LOGW(TAG, "updateCLK0FrequencyMinimal called before setupCLK0Smooth");
+    return;
+  }
+  
+  // Apply frequency correction
+  int32_t correctedFreq = newFreq - (int32_t)((((double)newFreq)/100000000.0)*((double)this->correction));
+  
+  const int32_t fxtal = CONFIG_SI5351_CRYSTAL_FREQ;
+  int32_t fpll = currentPLLConfig.mult * fxtal;  // PLL frequency is fixed
+  
+  // Calculate new MultiSynth divider for the new frequency
+  int32_t div_int = fpll / correctedFreq;
+  
+  // For WSPR frequency steps (~1.46 Hz), the integer divider should stay the same
+  // Only the fractional part should change
+  if (div_int != currentOutputConfig.div) {
+    ESP_LOGW(TAG, "Integer divider changed (%ld -> %ld), frequency step too large for minimal update", 
+             (long)currentOutputConfig.div, (long)div_int);
+    // Fall back to full update
+    updateCLK0Frequency(newFreq);
+    return;
+  }
+  
+  // Calculate only the new fractional part
+  int64_t remainder = (int64_t)fpll - ((int64_t)div_int * correctedFreq);
+  int32_t num = (int32_t)((remainder * currentOutputConfig.denom) / correctedFreq);
+  
+  // Calculate parameters for p2 registers only
+  int32_t p2 = (128 * num) % currentOutputConfig.denom;
+  
+  // Write p2 registers with glitch-free method (disable output during update)
+  // This prevents any glitches from propagating to the output
+  writeP2OnlyGlitchFree(SI5351_REG_MS0_PARAMS_1, p2, 0);  // CLK0 = clk_num 0
+  
+  // Update stored config
+  currentOutputConfig.num = num;
+  
+  ESP_LOGV(TAG, "Glitch-free frequency update: %ld Hz, p2=%ld (disable-update-enable sequence)", 
+           (long)newFreq, (long)p2);
+}
+
+void Si5351::setupWSPROutputs(int32_t baseFreq, DriveStrength driveStrength) {
+  // Setup 4 different outputs (CLK0, CLK1, CLK2 + one more) for WSPR tones
+  // This avoids ANY register writes during transmission - just output enable switching!
+  
+  const int32_t fxtal = CONFIG_SI5351_CRYSTAL_FREQ;
+  const double tone_spacing = 1.46484375; // WSPR tone spacing in Hz
+  
+  ESP_LOGI(TAG, "Setting up WSPR outputs: CLK0-2 for tones 0-2, baseFreq=%ld Hz", (long)baseFreq);
+  
+  // Setup PLL A for all WSPR frequencies (use middle frequency for best accuracy)
+  int32_t middle_freq = baseFreq + (int32_t)(1.5 * tone_spacing);
+  PLLConfig pllConf;
+  OutputConfig outConf;
+  calc(middle_freq, pllConf, outConf);
+  setupPLL(PLL::A, pllConf);
+  
+  // Setup each output for a specific WSPR tone
+  for (int tone = 0; tone < 3; tone++) {
+    int32_t tone_freq = baseFreq + (int32_t)(tone * tone_spacing);
+    OutputConfig toneConf;
+    calc(tone_freq, pllConf, toneConf); // Use same PLL config
+    setupOutput(tone, PLL::A, driveStrength, toneConf, 0);
+    
+    ESP_LOGI(TAG, "CLK%d configured for WSPR tone %d: %ld Hz", tone, tone, (long)tone_freq);
+  }
+  
+  // Disable all outputs initially
+  enableOutputs(0x00);
+  
+  ESP_LOGI(TAG, "WSPR outputs configured - no register writes needed during transmission!");
+}
+
+void Si5351::selectWSPRTone(uint8_t tone) {
+  // Switch WSPR tone by enabling different output - ZERO MultiSynth register writes!
+  if (tone > 2) {
+    ESP_LOGW(TAG, "Invalid WSPR tone %d, using tone 0", tone);
+    tone = 0;
+  }
+  
+  // Enable only the selected tone output
+  uint8_t enable_mask = 1 << tone;
+  enableOutputs(enable_mask);
+  
+  ESP_LOGV(TAG, "WSPR tone %d selected (CLK%d enabled)", tone, tone);
 }

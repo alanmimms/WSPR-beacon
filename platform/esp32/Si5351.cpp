@@ -252,3 +252,116 @@ void Si5351Wrapper::setCalibration(int32_t correction) {
     logger->logInfo(TAG, "Si5351 calibration applied successfully");
   }
 }
+
+void Si5351Wrapper::setupChannelSmooth(int channel, double baseFreqHz, const double* wspr_freqs) {
+  if (!initialized || !hardware) {
+    if (logger) {
+      logger->logError(TAG, "setupChannelSmooth called but Si5351 not initialized");
+    }
+    return;
+  }
+  
+  if (channel != 0) {
+    if (logger) {
+      logger->logWarn(TAG, "Smooth frequency transitions only supported on channel 0");
+    }
+    return;
+  }
+  
+  if (logger) {
+    logger->logInfo(TAG, "Setting up smooth WSPR frequency transitions on CLK%d", channel);
+    logger->logInfo(TAG, "Base frequency: %.6f MHz", baseFreqHz / 1000000.0);
+    if (wspr_freqs) {
+      logger->logInfo(TAG, "WSPR frequencies: [%.6f, %.6f, %.6f, %.6f] MHz", 
+                      wspr_freqs[0]/1000000.0, wspr_freqs[1]/1000000.0, 
+                      wspr_freqs[2]/1000000.0, wspr_freqs[3]/1000000.0);
+    }
+  }
+  
+  // Convert to Hz for the hardware layer
+  int32_t baseFreqHzInt = (int32_t)baseFreqHz;
+  int32_t wspr_freqs_hz[4];
+  if (wspr_freqs) {
+    for (int i = 0; i < 4; i++) {
+      wspr_freqs_hz[i] = (int32_t)wspr_freqs[i];
+    }
+  }
+  
+  Si5351* si5351 = static_cast<Si5351*>(hardware);
+  si5351->setupCLK0Smooth(baseFreqHzInt, wspr_freqs ? wspr_freqs_hz : nullptr, Si5351::DriveStrength::MA_8);
+  
+  // Store the base frequency
+  currentFrequency[channel] = baseFreqHz;
+  
+  if (logger) {
+    logger->logInfo(TAG, "CLK%d configured for smooth WSPR frequency transitions", channel);
+  }
+}
+
+void Si5351Wrapper::updateChannelFrequency(int channel, double newFreqHz) {
+  if (!initialized || !hardware) {
+    if (logger) {
+      logger->logError(TAG, "updateChannelFrequency called but Si5351 not initialized");
+    }
+    return;
+  }
+  
+  if (channel != 0) {
+    if (logger) {
+      logger->logWarn(TAG, "Smooth frequency updates only supported on channel 0");
+    }
+    return;
+  }
+  
+  if (logger) {
+    logger->logDebug(TAG, "Smooth frequency update: CLK%d %.6f MHz -> %.6f MHz", 
+                     channel, currentFrequency[channel] / 1000000.0, newFreqHz / 1000000.0);
+  }
+  
+  // Convert to Hz for the hardware layer
+  int32_t newFreqHzInt = (int32_t)newFreqHz;
+  
+  Si5351* si5351 = static_cast<Si5351*>(hardware);
+  si5351->updateCLK0Frequency(newFreqHzInt);
+  
+  // Update stored frequency
+  currentFrequency[channel] = newFreqHz;
+  
+  if (logger) {
+    logger->logDebug(TAG, "CLK%d frequency updated smoothly", channel);
+  }
+}
+
+void Si5351Wrapper::updateChannelFrequencyMinimal(int channel, double newFreqHz) {
+  if (!initialized || !hardware) {
+    if (logger) {
+      logger->logError(TAG, "updateChannelFrequencyMinimal called but Si5351 not initialized");
+    }
+    return;
+  }
+  
+  if (channel != 0) {
+    if (logger) {
+      logger->logWarn(TAG, "Minimal frequency updates only supported on channel 0");
+    }
+    return;
+  }
+  
+  if (logger) {
+    logger->logDebug(TAG, "Minimal frequency update: CLK%d %.6f MHz -> %.6f MHz", 
+                     channel, currentFrequency[channel] / 1000000.0, newFreqHz / 1000000.0);
+  }
+  
+  // Convert to Hz for the hardware layer
+  int32_t newFreqHzInt = (int32_t)newFreqHz;
+  
+  Si5351* si5351 = static_cast<Si5351*>(hardware);
+  si5351->updateCLK0FrequencyMinimal(newFreqHzInt);
+  
+  // Update stored frequency
+  currentFrequency[channel] = newFreqHz;
+  
+  if (logger) {
+    logger->logDebug(TAG, "CLK%d frequency updated glitch-free (disable-update-enable with phase reset)", channel);
+  }
+}

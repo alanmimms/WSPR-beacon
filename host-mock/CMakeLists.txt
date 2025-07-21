@@ -33,6 +33,7 @@ add_executable(host-testbench
   ../platform/host-mock/Settings.cpp
   ../platform/host-mock/Si5351.cpp
   ../platform/host-mock/WebServer.cpp
+  ../platform/host-mock/HostMockHttpEndpointHandler.cpp
   ../platform/host-mock/Timer.cpp
   ../platform/host-mock/Task.cpp
   ../platform/host-mock/EventGroup.cpp

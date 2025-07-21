@@ -22,6 +22,9 @@ to the common code that runs atop the abstraction.
 
 Never commit changes unless I specifically tell you to do so.
 
+# WB7NAB specific items
+Use `source ~/esp/esp-idf/export.sh` to initialize the ESP IDF environment.
+
 
 ## Build Commands
 

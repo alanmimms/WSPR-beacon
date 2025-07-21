@@ -37,3 +37,4 @@ tests/webui-test/
 .DS_Store
 Thumbs.db
 ARTICLE*.html
+wspr_register_calc

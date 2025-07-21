@@ -64,17 +64,34 @@ public:
   void setupPLL(PLL pll, const PLLConfig& conf);
   int setupOutput(uint8_t output, PLL pllSource, DriveStrength driveStrength, const OutputConfig& conf, uint8_t phaseOffset);
   void setCorrection(int32_t correctionPPM);
+  
+  // --- Smooth Frequency Transition Methods ---
+  void setupCLK0Smooth(int32_t baseFreq, const int32_t* wspr_freqs, DriveStrength driveStrength);
+  void updateCLK0Frequency(int32_t newFreq);
+  void updateCLK0FrequencyMinimal(int32_t newFreq);
+  
+  // --- Zero-Register-Write WSPR Methods ---
+  void setupWSPROutputs(int32_t baseFreq, DriveStrength driveStrength);
+  void selectWSPRTone(uint8_t tone);
 
 private:
   // --- Private Methods ---
   void i2cInit(uint8_t i2cAddr, uint8_t sdaPin, uint8_t sclPin);
   uint8_t write(uint8_t reg, uint8_t data);
   void writeBulk(uint8_t baseaddr, int32_t p1, int32_t p2, int32_t p3, uint8_t divBy4, RDiv rdiv);
+  void writeFractionalOnly(uint8_t baseaddr, int32_t p2, int32_t p3);
+  void writeP2Only(uint8_t baseaddr, int32_t p2);
+  void writeP2OnlyGlitchFree(uint8_t baseaddr, int32_t p2, uint8_t clk_num);
 
   // --- Private Member Variables ---
   int32_t correction;
   void* busHandle; // Use void* to hide C-style handles from the header
   void* devHandle;
+  
+  // Stored configuration for smooth frequency updates
+  PLLConfig currentPLLConfig;
+  OutputConfig currentOutputConfig;
+  int32_t currentBaseFreq;
 };
 
 #endif // SI5351_H

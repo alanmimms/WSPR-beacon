@@ -16,6 +16,7 @@ idf_component_register(
     ../../platform/esp32/Settings.cpp
     ../../platform/esp32/Si5351.cpp
     ../../platform/esp32/WebServer.cpp
+    ../../platform/esp32/ESP32HttpEndpointHandler.cpp
     ../../platform/esp32/Timer.cpp
     ../../platform/esp32/Task.cpp
     ../../platform/esp32/EventGroup.cpp
@@ -25,6 +26,7 @@ idf_component_register(
     ../../src/core/Beacon.cpp
     ../../src/core/FSM.cpp
     ../../src/core/Scheduler.cpp
+    ../../src/core/HttpEndpointHandler.cpp
   REQUIRES 
     # ESP-IDF Framework Components
     esp_http_server
