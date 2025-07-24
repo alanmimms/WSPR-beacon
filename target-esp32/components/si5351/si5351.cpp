@@ -429,7 +429,6 @@ void Si5351::setupWSPROutputs(int32_t baseFreq, DriveStrength driveStrength) {
   // Setup 4 different outputs (CLK0, CLK1, CLK2 + one more) for WSPR tones
   // This avoids ANY register writes during transmission - just output enable switching!
   
-  const int32_t fxtal = CONFIG_SI5351_CRYSTAL_FREQ;
   const double tone_spacing = 1.46484375; // WSPR tone spacing in Hz
   
   ESP_LOGI(TAG, "Setting up WSPR outputs: CLK0-2 for tones 0-2, baseFreq=%ld Hz", (long)baseFreq);
